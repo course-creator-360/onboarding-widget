@@ -4,7 +4,7 @@ import cors from 'cors';
 import path from 'path';
 import oauthRouter from './oauth';
 import webhookRouter from './webhooks';
-import { getOnboardingStatus, setDismissed, updateOnboardingStatus } from './db';
+import { getOnboardingStatus, setDismissed, updateOnboardingStatus, getInstallation, hasAgencyAuthorization, getAgencyInstallation } from './db';
 import { sseBroker } from './sse';
 
 const app = express();
@@ -15,12 +15,61 @@ app.use(express.json({ limit: '1mb' }));
 app.use('/api/oauth', oauthRouter);
 app.use('/api/webhooks', webhookRouter);
 
+// Marketplace installation endpoint (direct mount for GHL compatibility)
+app.use('/oauth', oauthRouter);
+app.use('/install', oauthRouter);
+
 app.get('/api/healthz', (_req, res) => res.json({ ok: true }));
 
 app.get('/api/status', (req, res) => {
   const locationId = (req.query.locationId as string) || '';
   if (!locationId) return res.status(400).json({ error: 'locationId is required' });
   return res.json(getOnboardingStatus(locationId));
+});
+
+app.get('/api/installation/check', (req, res) => {
+  const locationId = (req.query.locationId as string) || '';
+  if (!locationId) return res.status(400).json({ error: 'locationId is required' });
+  
+  // Check if agency is authorized (takes precedence)
+  const hasAgency = hasAgencyAuthorization();
+  if (hasAgency) {
+    return res.json({
+      installed: true,
+      hasToken: true,
+      tokenType: 'agency'
+    });
+  }
+  
+  // Fall back to per-location check
+  const installation = getInstallation(locationId);
+  return res.json({
+    installed: !!installation,
+    hasToken: !!installation?.accessToken,
+    tokenType: installation?.tokenType || 'location'
+  });
+});
+
+app.get('/api/agency/status', (req, res) => {
+  const hasAgency = hasAgencyAuthorization();
+  const agencyInstallation = getAgencyInstallation();
+  
+  return res.json({
+    authorized: hasAgency,
+    installation: agencyInstallation ? {
+      accountId: agencyInstallation.accountId,
+      expiresAt: agencyInstallation.expiresAt,
+      createdAt: agencyInstallation.createdAt
+    } : null
+  });
+});
+
+app.delete('/api/installation', (req, res) => {
+  const locationId = (req.query.locationId as string) || '';
+  if (!locationId) return res.status(400).json({ error: 'locationId is required' });
+  const { deleteInstallation } = require('./db');
+  deleteInstallation(locationId);
+  return res.json({ success: true, message: 'Installation deleted' });
 });
 
 app.post('/api/dismiss', (req, res) => {
@@ -55,6 +104,11 @@ app.get('/api/events', (req, res) => {
 app.use('/public', express.static(path.join(process.cwd(), 'public')));
 app.get('/widget.js', (_req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'widget.js'));
+});
+
+// Serve demo page at root
+app.get('/', (_req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
 });
 
 export default app;

@@ -4,14 +4,16 @@ import { upsertInstallation } from './db';
 
 const router = express.Router();
 
-const DEFAULT_AUTHORIZE_URL = process.env.GHL_AUTHORIZE_URL || 'https://marketplace.gohighlevel.com/oauth/authorize';
+const DEFAULT_AUTHORIZE_URL = process.env.GHL_AUTHORIZE_URL || 'https://marketplace.leadconnectorhq.com/oauth/authorize';
+const MARKETPLACE_INSTALL_URL = process.env.GHL_MARKETPLACE_INSTALL_URL || 'https://marketplace.leadconnectorhq.com/oauth/chooselocation';
 const DEFAULT_TOKEN_URL = process.env.GHL_TOKEN_URL || 'https://services.leadconnectorhq.com/oauth/token';
 const REDIRECT_URI = process.env.GHL_REDIRECT_URI || 'http://localhost:4002/oauth/callback';
 
 const OAUTH_SCOPES = (
   process.env.GHL_SCOPES || [
     'courses.readonly',
-    'funnels.readonly',
+    'funnels/funnel.readonly',
+    'funnels/page.readonly',
     'products.readonly',
     'products/prices.readonly',
     'payments/orders.readonly',
@@ -20,12 +22,309 @@ const OAUTH_SCOPES = (
   ].join(' ')
 );
 
-const stateStore = new Map<string, { locationId?: string }>();
+const stateStore = new Map<string, { locationId?: string; tokenType?: 'agency' | 'location' }>();
+
+// Agency OAuth endpoints
+router.get('/agency/install', (req, res) => {
+  const clientId = process.env.GHL_CLIENT_ID;
+  if (!clientId || clientId === 'your_ghl_client_id_here') {
+    return res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Agency Setup</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              height: 100vh;
+              margin: 0;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: white;
+              text-align: center;
+              padding: 20px;
+            }
+            .container {
+              max-width: 600px;
+            }
+            h1 {
+              margin: 0 0 16px 0;
+              font-size: 24px;
+            }
+            p {
+              margin: 0 0 24px 0;
+              opacity: 0.9;
+              line-height: 1.5;
+            }
+            .info {
+              background: rgba(255, 255, 255, 0.1);
+              border-radius: 8px;
+              padding: 16px;
+              margin-top: 24px;
+              font-size: 14px;
+              text-align: left;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>⚙️ Agency Setup Required</h1>
+            <p>
+              OAuth credentials are not configured. Please set GHL_CLIENT_ID and 
+              GHL_CLIENT_SECRET in your environment variables.
+            </p>
+            <div class="info">
+              <strong>Setup Steps:</strong><br>
+              1. Create app in GHL Marketplace<br>
+              2. Get Client ID and Secret<br>
+              3. Add to .env file<br>
+              4. Restart the server<br>
+              5. Return to this page
+            </div>
+          </div>
+        </body>
+      </html>
+    `);
+  }
+
+  const companyId = req.query.companyId as string | undefined;
+  const state = crypto.randomBytes(16).toString('hex');
+  stateStore.set(state, { locationId: companyId || 'agency', tokenType: 'agency' });
+  
+  // Extract version_id from client_id (part before the hyphen)
+  const versionId = clientId.split('-')[0];
+  
+  // Use marketplace installation URL for location selection
+  const authorizeUrl = new URL(MARKETPLACE_INSTALL_URL);
+  authorizeUrl.searchParams.set('response_type', 'code');
+  authorizeUrl.searchParams.set('client_id', clientId);  // Full ID with suffix
+  authorizeUrl.searchParams.set('redirect_uri', REDIRECT_URI);
+  authorizeUrl.searchParams.set('scope', OAUTH_SCOPES);
+  authorizeUrl.searchParams.set('state', state);
+  authorizeUrl.searchParams.set('version_id', versionId);  // ID without suffix
+  
+  res.redirect(authorizeUrl.toString());
+});
+
+// Debug endpoint to check OAuth configuration
+router.get('/debug', (req, res) => {
+  const clientId = process.env.GHL_CLIENT_ID;
+  const clientSecret = process.env.GHL_CLIENT_SECRET;
+  
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>OAuth Debug Info</title>
+        <style>
+          body {
+            font-family: monospace;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+          }
+          h1 { color: #333; }
+          .section {
+            background: #f5f5f5;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+          }
+          .good { color: green; }
+          .bad { color: red; }
+          .warning { color: orange; }
+          pre {
+            background: white;
+            padding: 10px;
+            border: 1px solid #ddd;
+            overflow-x: auto;
+          }
+          button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+          }
+        </style>
+      </head>
+      <body>
+        <h1>🔍 OAuth Configuration Debug</h1>
+        
+        <div class="section">
+          <h2>Environment Variables</h2>
+          <p><strong>GHL_CLIENT_ID:</strong> ${clientId ? '<span class="good">✓ Set</span>' : '<span class="bad">✗ Not set</span>'}</p>
+          <p><strong>Value:</strong> <code>${clientId || 'Not configured'}</code></p>
+          <p><strong>GHL_CLIENT_SECRET:</strong> ${clientSecret ? '<span class="good">✓ Set</span>' : '<span class="bad">✗ Not set</span>'}</p>
+          <p><strong>Value:</strong> <code>${clientSecret ? clientSecret.substring(0, 10) + '...' : 'Not configured'}</code></p>
+          <p><strong>Redirect URI:</strong> <code>${REDIRECT_URI}</code></p>
+        </div>
+        
+        <div class="section">
+          <h2>OAuth Authorization URL</h2>
+          <p>This is the URL users will be redirected to:</p>
+          <pre>${DEFAULT_AUTHORIZE_URL}?
+response_type=code&
+client_id=${clientId || 'NOT_SET'}&
+redirect_uri=${encodeURIComponent(REDIRECT_URI)}&
+scope=${encodeURIComponent(OAUTH_SCOPES)}&
+state=RANDOM_STATE</pre>
+        </div>
+        
+        <div class="section">
+          <h2>⚠️ Checklist</h2>
+          <p>Verify in your GHL Marketplace App Settings:</p>
+          <ol>
+            <li>Redirect URI matches exactly: <code>${REDIRECT_URI}</code></li>
+            <li>All required scopes are enabled</li>
+            <li>App is in development/testing mode or published</li>
+            <li>Client ID matches: <code>${clientId}</code></li>
+          </ol>
+        </div>
+        
+        <div class="section">
+          <h2>Test OAuth Flow</h2>
+          <button onclick="testOAuth()">Test OAuth in New Window</button>
+          <button onclick="testOAuthPopup()">Test OAuth in Popup</button>
+          <p id="result"></p>
+        </div>
+        
+        <script>
+          function testOAuth() {
+            const url = '/api/oauth/install?locationId=test-debug';
+            window.open(url, '_blank');
+          }
+          
+          function testOAuthPopup() {
+            const url = '/api/oauth/install?locationId=test-debug';
+            const popup = window.open(url, 'OAuth', 'width=600,height=700');
+            
+            if (!popup) {
+              document.getElementById('result').innerHTML = '<span class="bad">Popup blocked! Allow popups for this site.</span>';
+            } else {
+              document.getElementById('result').innerHTML = '<span class="good">Popup opened. Check if OAuth page loads.</span>';
+            }
+          }
+        </script>
+      </body>
+    </html>
+  `);
+});
 
 router.get('/install', (req, res) => {
   const clientId = process.env.GHL_CLIENT_ID;
-  if (!clientId) return res.status(500).send('Missing GHL_CLIENT_ID');
   const locationId = (req.query.locationId as string) || undefined;
+  const testMode = req.query.test === 'true';
+  
+  // Testing mode - bypass real OAuth
+  if (testMode || !clientId || clientId === 'your_ghl_client_id_here') {
+    console.log('[OAuth] Running in TEST MODE - bypassing real OAuth');
+    return res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Test Mode - OAuth Bypass</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              height: 100vh;
+              margin: 0;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: white;
+              text-align: center;
+              padding: 20px;
+            }
+            .container {
+              max-width: 500px;
+            }
+            .icon {
+              font-size: 64px;
+              margin-bottom: 20px;
+            }
+            h1 {
+              margin: 0 0 16px 0;
+              font-size: 24px;
+            }
+            p {
+              margin: 0 0 24px 0;
+              opacity: 0.9;
+              line-height: 1.5;
+            }
+            button {
+              background: white;
+              color: #667eea;
+              border: none;
+              padding: 12px 32px;
+              border-radius: 8px;
+              font-size: 16px;
+              font-weight: 600;
+              cursor: pointer;
+              transition: transform 0.2s;
+            }
+            button:hover {
+              transform: scale(1.05);
+            }
+            .info {
+              background: rgba(255, 255, 255, 0.1);
+              border-radius: 8px;
+              padding: 16px;
+              margin-top: 24px;
+              font-size: 14px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="icon">🧪</div>
+            <h1>Test Mode</h1>
+            <p>
+              Real OAuth credentials are not configured. Click below to create a 
+              test installation for development.
+            </p>
+            <button onclick="createTestInstallation()">Create Test Installation</button>
+            <div class="info">
+              <strong>For Production:</strong><br>
+              Configure GHL_CLIENT_ID and GHL_CLIENT_SECRET in your .env file
+            </div>
+          </div>
+          <script>
+            function createTestInstallation() {
+              fetch('/api/oauth/test-install?locationId=${locationId || 'test-location'}', {
+                method: 'POST'
+              })
+              .then(res => res.json())
+              .then(() => {
+                // Notify parent window
+                if (window.opener) {
+                  window.opener.postMessage({
+                    type: 'oauth_complete',
+                    locationId: '${locationId || 'test-location'}'
+                  }, '*');
+                }
+                setTimeout(() => window.close(), 500);
+              })
+              .catch(err => {
+                alert('Error: ' + err.message);
+              });
+            }
+          </script>
+        </body>
+      </html>
+    `);
+  }
+  
+  // Real OAuth flow
+  if (!clientId) return res.status(500).send('Missing GHL_CLIENT_ID');
   const state = crypto.randomBytes(16).toString('hex');
   stateStore.set(state, { locationId });
   const authorizeUrl = new URL(DEFAULT_AUTHORIZE_URL);
@@ -35,6 +334,29 @@ router.get('/install', (req, res) => {
   authorizeUrl.searchParams.set('scope', OAUTH_SCOPES);
   authorizeUrl.searchParams.set('state', state);
   res.redirect(authorizeUrl.toString());
+});
+
+// Test installation endpoint (for development without real OAuth)
+router.post('/test-install', async (req, res) => {
+  const locationId = (req.query.locationId as string) || 'test-location';
+  
+  try {
+    // Create a fake installation for testing
+    upsertInstallation({
+      locationId,
+      accountId: 'test-account',
+      accessToken: 'test_access_token_' + Date.now(),
+      refreshToken: 'test_refresh_token',
+      expiresAt: Date.now() + (365 * 24 * 60 * 60 * 1000), // 1 year
+      scope: OAUTH_SCOPES
+    });
+    
+    console.log('[OAuth] Test installation created for location:', locationId);
+    res.json({ success: true, locationId, message: 'Test installation created' });
+  } catch (err) {
+    console.error('[OAuth] Error creating test installation:', err);
+    res.status(500).json({ success: false, error: 'Failed to create test installation' });
+  }
 });
 
 router.get('/callback', async (req, res) => {
@@ -64,6 +386,7 @@ router.get('/callback', async (req, res) => {
     });
     const tokenJson = (await tokenResp.json()) as any;
     const locationId = context.locationId || tokenJson?.locationId || tokenJson?.location_id || 'unknown';
+    const tokenType = context.tokenType || 'location';
 
     upsertInstallation({
       locationId,
@@ -71,11 +394,130 @@ router.get('/callback', async (req, res) => {
       accessToken: tokenJson.access_token,
       refreshToken: tokenJson.refresh_token,
       expiresAt: tokenJson.expires_in ? Date.now() + tokenJson.expires_in * 1000 : undefined,
-      scope: tokenJson.scope
+      scope: tokenJson.scope,
+      tokenType
     });
-    res.send('Authorization successful. You may close this window.');
+    
+    // Determine redirect based on environment
+    const returnUrl = process.env.OAUTH_SUCCESS_REDIRECT || '/';
+    
+    // For same-window flow, redirect back with success parameter
+    if (!req.headers.referer?.includes('popup')) {
+      // Same window redirect
+      const redirectUrl = `${returnUrl}?oauth_success=true&oauth_type=${tokenType}`;
+      return res.redirect(redirectUrl);
+    }
+    
+    // For popup flow, show success page
+    const successMessage = tokenType === 'agency' 
+      ? 'Agency Authorization Successful!' 
+      : 'Authorization Successful!';
+    
+    const redirectMessage = tokenType === 'agency'
+      ? 'You can now close this window. All sub-accounts will have access to the widget.'
+      : 'Closing window...';
+
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Authorization Successful</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              height: 100vh;
+              margin: 0;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: white;
+              text-align: center;
+            }
+            .container {
+              padding: 40px;
+            }
+            .checkmark {
+              font-size: 64px;
+              margin-bottom: 20px;
+            }
+            h1 {
+              margin: 0 0 10px 0;
+              font-size: 24px;
+            }
+            p {
+              margin: 0;
+              opacity: 0.9;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="checkmark">✓</div>
+            <h1>${successMessage}</h1>
+            <p>${redirectMessage}</p>
+          </div>
+          <script>
+            // Notify parent window of successful OAuth
+            if (window.opener) {
+              window.opener.postMessage({
+                type: 'oauth_complete',
+                locationId: '${locationId}',
+                tokenType: '${tokenType}'
+              }, '*');
+            }
+            
+            // Close window after delay (longer for agency setup)
+            setTimeout(() => {
+              window.close();
+            }, ${tokenType === 'agency' ? 3000 : 1500});
+          </script>
+        </body>
+      </html>
+    `);
   } catch (err) {
-    res.status(500).send('OAuth exchange failed');
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Authorization Failed</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              height: 100vh;
+              margin: 0;
+              background: #f8f9fa;
+              text-align: center;
+            }
+            .container {
+              padding: 40px;
+            }
+            .error {
+              font-size: 64px;
+              margin-bottom: 20px;
+              color: #dc3545;
+            }
+            h1 {
+              margin: 0 0 10px 0;
+              color: #333;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="error">✗</div>
+            <h1>Authorization Failed</h1>
+            <p>Please close this window and try again.</p>
+          </div>
+        </body>
+      </html>
+    `);
   }
 });
 

@@ -20,6 +20,7 @@ export type Installation = {
   refreshToken?: string;
   expiresAt?: number;
   scope?: string;
+  tokenType?: 'agency' | 'location'; // Track if it's agency-level or location-specific
   updatedAt: number;
   createdAt: number;
 };
@@ -42,6 +43,7 @@ CREATE TABLE IF NOT EXISTS installations (
   refresh_token TEXT,
   expires_at INTEGER,
   scope TEXT,
+  token_type TEXT DEFAULT 'location',
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -146,14 +148,15 @@ export function upsertInstallation(data: Omit<Installation, 'createdAt' | 'updat
   const now = Date.now();
   db.prepare(`
     INSERT INTO installations (
-      location_id, account_id, access_token, refresh_token, expires_at, scope, created_at, updated_at
-    ) VALUES (@location_id, @account_id, @access_token, @refresh_token, @expires_at, @scope, @created_at, @updated_at)
+      location_id, account_id, access_token, refresh_token, expires_at, scope, token_type, created_at, updated_at
+    ) VALUES (@location_id, @account_id, @access_token, @refresh_token, @expires_at, @scope, @token_type, @created_at, @updated_at)
     ON CONFLICT(location_id) DO UPDATE SET
       account_id = excluded.account_id,
       access_token = excluded.access_token,
       refresh_token = excluded.refresh_token,
       expires_at = excluded.expires_at,
       scope = excluded.scope,
+      token_type = excluded.token_type,
       updated_at = excluded.updated_at
   `).run({
     location_id: data.locationId,
@@ -162,6 +165,7 @@ export function upsertInstallation(data: Omit<Installation, 'createdAt' | 'updat
     refresh_token: data.refreshToken ?? null,
     expires_at: data.expiresAt ?? null,
     scope: data.scope ?? null,
+    token_type: data.tokenType ?? 'location',
     created_at: now,
     updated_at: now
   });
@@ -170,7 +174,7 @@ export function upsertInstallation(data: Omit<Installation, 'createdAt' | 'updat
 
 export function getInstallation(locationId: string): Installation | undefined {
   const row = db.prepare(`
-    SELECT location_id, account_id, access_token, refresh_token, expires_at, scope, created_at, updated_at
+    SELECT location_id, account_id, access_token, refresh_token, expires_at, scope, token_type, created_at, updated_at
     FROM installations WHERE location_id = ?
   `).get(locationId) as any;
   if (!row) return undefined;
@@ -181,6 +185,7 @@ export function getInstallation(locationId: string): Installation | undefined {
     refreshToken: row.refresh_token ?? undefined,
     expiresAt: row.expires_at ?? undefined,
     scope: row.scope ?? undefined,
+    tokenType: row.token_type as 'agency' | 'location' | undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -188,7 +193,7 @@ export function getInstallation(locationId: string): Installation | undefined {
 
 export function findInstallationByAccountId(accountId: string): Installation | undefined {
   const row = db.prepare(`
-    SELECT location_id, account_id, access_token, refresh_token, expires_at, scope, created_at, updated_at
+    SELECT location_id, account_id, access_token, refresh_token, expires_at, scope, token_type, created_at, updated_at
     FROM installations WHERE account_id = ?
   `).get(accountId) as any;
   if (!row) return undefined;
@@ -199,9 +204,38 @@ export function findInstallationByAccountId(accountId: string): Installation | u
     refreshToken: row.refresh_token ?? undefined,
     expiresAt: row.expires_at ?? undefined,
     scope: row.scope ?? undefined,
+    tokenType: row.token_type as 'agency' | 'location' | undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
+}
+
+export function getAgencyInstallation(): Installation | undefined {
+  const row = db.prepare(`
+    SELECT location_id, account_id, access_token, refresh_token, expires_at, scope, token_type, created_at, updated_at
+    FROM installations WHERE token_type = 'agency' LIMIT 1
+  `).get() as any;
+  if (!row) return undefined;
+  return {
+    locationId: row.location_id,
+    accountId: row.account_id ?? undefined,
+    accessToken: row.access_token,
+    refreshToken: row.refresh_token ?? undefined,
+    expiresAt: row.expires_at ?? undefined,
+    scope: row.scope ?? undefined,
+    tokenType: row.token_type as 'agency' | 'location' | undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+export function hasAgencyAuthorization(): boolean {
+  const installation = getAgencyInstallation();
+  return !!installation && !!installation.accessToken;
+}
+
+export function deleteInstallation(locationId: string): void {
+  db.prepare('DELETE FROM installations WHERE location_id = ?').run(locationId);
 }
 
 export default db;
