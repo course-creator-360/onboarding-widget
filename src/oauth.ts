@@ -4,13 +4,14 @@ import { upsertInstallation } from './db';
 
 const router = express.Router();
 
-const DEFAULT_AUTHORIZE_URL = process.env.GHL_AUTHORIZE_URL || 'https://marketplace.leadconnectorhq.com/oauth/authorize';
-const MARKETPLACE_INSTALL_URL = process.env.GHL_MARKETPLACE_INSTALL_URL || 'https://marketplace.leadconnectorhq.com/oauth/chooselocation';
+const DEFAULT_AUTHORIZE_URL = process.env.GHL_AUTHORIZE_URL || 'https://marketplace.gohighlevel.com/oauth/authorize';
+const MARKETPLACE_INSTALL_URL = process.env.GHL_MARKETPLACE_INSTALL_URL || 'https://marketplace.gohighlevel.com/oauth/chooselocation';
 const DEFAULT_TOKEN_URL = process.env.GHL_TOKEN_URL || 'https://services.leadconnectorhq.com/oauth/token';
 const REDIRECT_URI = process.env.GHL_REDIRECT_URI || 'http://localhost:4002/oauth/callback';
 
 const OAUTH_SCOPES = (
   process.env.GHL_SCOPES || [
+    'locations.readonly',
     'courses.readonly',
     'funnels/funnel.readonly',
     'funnels/page.readonly',

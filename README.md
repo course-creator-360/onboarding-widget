@@ -8,6 +8,12 @@ A persistent onboarding checklist widget for CourseCreator360 sub-accounts. Trac
 - ✓ Connect product to site/funnel  
 - ✓ Connect payment processor
 
+## Documentation
+
+- **[WORKFLOW.md](WORKFLOW.md)** - Complete installation workflow and step-by-step guide
+- **[SETUP.md](SETUP.md)** - Detailed setup instructions and troubleshooting
+- **README.md** (this file) - Quick reference and API documentation
+
 ## Local Development
 
 ### Quick Start (Using Makefile)
