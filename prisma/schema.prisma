@@ -1,6 +1,3 @@
-// Prisma Schema for CC360 Onboarding Widget
-// Database: PostgreSQL (Vercel Postgres compatible)
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,16 +9,16 @@ datasource db {
 }
 
 model Installation {
-  id            String   @id @default(cuid())
-  locationId    String   @unique @map("location_id")
-  accountId     String?  @map("account_id")
-  accessToken   String   @map("access_token")
-  refreshToken  String?  @map("refresh_token")
-  expiresAt     BigInt?  @map("expires_at")
-  scope         String?
-  tokenType     String   @default("location") @map("token_type") // 'agency' or 'location'
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id           String   @id @default(cuid())
+  locationId   String   @unique @map("location_id")
+  accountId    String?  @map("account_id")
+  accessToken  String   @map("access_token")
+  refreshToken String?  @map("refresh_token")
+  expiresAt    BigInt?  @map("expires_at")
+  scope        String?
+  tokenType    String   @default("location") @map("token_type")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   @@index([accountId])
   @@index([tokenType])
@@ -29,15 +26,15 @@ model Installation {
 }
 
 model Onboarding {
-  id                 String   @id @default(cuid())
-  locationId         String   @unique @map("location_id")
-  domainConnected    Boolean  @default(false) @map("domain_connected")
-  courseCreated      Boolean  @default(false) @map("course_created")
-  productAttached    Boolean  @default(false) @map("product_attached")
-  paymentIntegrated  Boolean  @default(false) @map("payment_integrated")
-  dismissed          Boolean  @default(false)
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  id                String   @id @default(cuid())
+  locationId        String   @unique @map("location_id")
+  domainConnected   Boolean  @default(false) @map("domain_connected")
+  courseCreated     Boolean  @default(false) @map("course_created")
+  productAttached   Boolean  @default(false) @map("product_attached")
+  paymentIntegrated Boolean  @default(false) @map("payment_integrated")
+  dismissed         Boolean  @default(false)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
   @@index([locationId])
   @@map("onboarding")
@@ -55,4 +52,3 @@ model EventLog {
   @@index([createdAt])
   @@map("event_log")
 }
-
