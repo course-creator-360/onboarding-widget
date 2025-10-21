@@ -4,9 +4,10 @@ import cors from 'cors';
 import path from 'path';
 import oauthRouter from './oauth';
 import webhookRouter from './webhooks';
-import { getOnboardingStatus, setDismissed, updateOnboardingStatus, getInstallation, hasAgencyAuthorization, getAgencyInstallation } from './db';
+import { getOnboardingStatus, setDismissed, updateOnboardingStatus, getInstallation, hasAgencyAuthorization, getAgencyInstallation, deleteInstallation } from './db';
 import { sseBroker } from './sse';
 import { checkLocationDomain, checkLocationProducts, checkPaymentIntegration, validateToken } from './ghl-api';
+import { getBaseUrl, getEnvironment } from './config';
 
 const app = express();
 app.use(cors());
@@ -24,9 +25,8 @@ app.get('/api/healthz', (_req, res) => res.json({ ok: true }));
 
 app.get('/api/config', (_req, res) => {
   return res.json({
-    testLocationId: process.env.GHL_SUBACCOUNT_TEST_LOCATION_ID || 'kgREXsjAvhag6Qn8Yjqn',
-    apiBase: process.env.API_BASE || 'http://localhost:4002',
-    environment: process.env.NODE_ENV || 'development'
+    apiBase: getBaseUrl(),
+    environment: getEnvironment()
   });
 });
 
@@ -34,15 +34,15 @@ app.get('/api/status', async (req, res) => {
   const locationId = (req.query.locationId as string) || '';
   if (!locationId) return res.status(400).json({ error: 'locationId is required' });
   
-  let status = getOnboardingStatus(locationId);
+  let status = await getOnboardingStatus(locationId);
   
   // Proactively check all onboarding steps via GHL API if authorized
-  const isAuthorized = hasAgencyAuthorization();
+  const isAuthorized = await hasAgencyAuthorization();
   console.log(`[Status] Checking status for ${locationId}, agency authorized: ${isAuthorized}`);
   
   if (isAuthorized) {
     try {
-      // Check domain and payment statuses via API (products use fetch interception)
+      // Check domain and payment statuses via API (products use webhooks)
       const [hasDomain, hasPayment] = await Promise.all([
         checkLocationDomain(locationId),
         checkPaymentIntegration(locationId)
@@ -66,15 +66,15 @@ app.get('/api/status', async (req, res) => {
         statusChanged = true;
       }
       
-      // Note: Product/course status is now checked via fetch interception only
+      // Note: Product/course status is now checked via webhooks only
       // This prevents false positives and only updates when products are actually created
       
       // Update database if any status changed
       if (statusChanged) {
-        status = updateOnboardingStatus(locationId, updates);
+        status = await updateOnboardingStatus(locationId, updates);
         
         // Broadcast update to other connected clients
-        sseBroker.broadcastStatus(locationId);
+        await sseBroker.broadcastStatus(locationId);
       }
     } catch (error) {
       console.error('[Status] Error checking API statuses:', error);
@@ -84,6 +84,9 @@ app.get('/api/status', async (req, res) => {
     console.log('[Status] Agency not authorized, skipping API checks');
   }
   
+  // Log widget visibility decision
+  console.log(`[Status] Widget visibility for ${locationId}: ${status.shouldShowWidget} (age: ${Math.floor((Date.now() - status.createdAt) / (24 * 60 * 60 * 1000))} days, completed: ${status.domainConnected && status.courseCreated && status.paymentIntegrated})`);
+  
   return res.json(status);
 });
 
@@ -92,37 +95,19 @@ app.get('/api/installation/check', async (req, res) => {
   if (!locationId) return res.status(400).json({ error: 'locationId is required' });
   
   // Check if agency is authorized (takes precedence)
-  const hasAgency = hasAgencyAuthorization();
+  const hasAgency = await hasAgencyAuthorization();
   if (hasAgency) {
-    // Optionally validate token (don't block if validation fails due to missing scope)
-    try {
-      const tokenValid = await validateToken(locationId);
-      
-      if (!tokenValid) {
-        console.log('[Installation Check] Token validation failed, but allowing widget to work');
-        // Return as installed but with warning
-        return res.json({
-          installed: true,
-          hasToken: true,
-          tokenType: 'agency',
-          tokenValid: false,
-          warning: 'Token may be missing required scopes. Add locations.readonly scope for full functionality.'
-        });
-      }
-    } catch (error) {
-      console.log('[Installation Check] Token validation error, proceeding anyway:', error);
-    }
-    
+    // Agency is authorized, allow widget to work
+    console.log('[Installation Check] Agency authorized for location:', locationId);
     return res.json({
       installed: true,
       hasToken: true,
-      tokenType: 'agency',
-      tokenValid: true
+      tokenType: 'agency'
     });
   }
   
   // Fall back to per-location check
-  const installation = getInstallation(locationId);
+  const installation = await getInstallation(locationId);
   return res.json({
     installed: !!installation,
     hasToken: !!installation?.accessToken,
@@ -130,9 +115,9 @@ app.get('/api/installation/check', async (req, res) => {
   });
 });
 
-app.get('/api/agency/status', (req, res) => {
-  const hasAgency = hasAgencyAuthorization();
-  const agencyInstallation = getAgencyInstallation();
+app.get('/api/agency/status', async (req, res) => {
+  const hasAgency = await hasAgencyAuthorization();
+  const agencyInstallation = await getAgencyInstallation();
   
   return res.json({
     authorized: hasAgency,
@@ -144,15 +129,14 @@ app.get('/api/agency/status', (req, res) => {
   });
 });
 
-app.delete('/api/installation', (req, res) => {
+app.delete('/api/installation', async (req, res) => {
   const locationId = (req.query.locationId as string) || '';
   if (!locationId) return res.status(400).json({ error: 'locationId is required' });
-  const { deleteInstallation } = require('./db');
-  deleteInstallation(locationId);
+  await deleteInstallation(locationId);
   return res.json({ success: true, message: 'Installation deleted' });
 });
 
-app.post('/api/test/clear-location', (req, res) => {
+app.post('/api/test/clear-location', async (req, res) => {
   const { locationId } = req.body as { locationId?: string };
   if (!locationId) return res.status(400).json({ error: 'locationId is required' });
   
@@ -160,20 +144,18 @@ app.post('/api/test/clear-location', (req, res) => {
   
   try {
     // Clear onboarding status for this location
-    updateOnboardingStatus(locationId, {
+    await updateOnboardingStatus(locationId, {
       domainConnected: false,
       courseCreated: false,
-      productAttached: false,
       paymentIntegrated: false,
       dismissed: false
     });
     
     // Clear location-specific installation (but keep agency)
-    const { deleteInstallation } = require('./db');
-    deleteInstallation(locationId);
+    await deleteInstallation(locationId);
     
     // Broadcast the reset to any connected clients
-    sseBroker.broadcastStatus(locationId);
+    await sseBroker.broadcastStatus(locationId);
     
     console.log(`[Test] Successfully cleared data for location: ${locationId}`);
     
@@ -202,15 +184,15 @@ app.get('/api/onboarding/:locationId/check-products', async (req, res) => {
     const hasProducts = await checkLocationProducts(locationId);
     
     // Get current status
-    let status = getOnboardingStatus(locationId);
+    let status = await getOnboardingStatus(locationId);
     
     // Update if status changed
     if (hasProducts !== status.courseCreated) {
       console.log(`[Check Products] Status changed for ${locationId}: ${status.courseCreated} -> ${hasProducts}`);
-      status = updateOnboardingStatus(locationId, { courseCreated: hasProducts });
+      status = await updateOnboardingStatus(locationId, { courseCreated: hasProducts });
       
       // Broadcast update to connected clients
-      sseBroker.broadcastStatus(locationId);
+      await sseBroker.broadcastStatus(locationId);
     } else {
       console.log(`[Check Products] No change for ${locationId}: courseCreated = ${hasProducts}`);
     }
@@ -229,33 +211,32 @@ app.get('/api/onboarding/:locationId/check-products', async (req, res) => {
   }
 });
 
-app.post('/api/dismiss', (req, res) => {
+app.post('/api/dismiss', async (req, res) => {
   const { locationId } = req.body as { locationId?: string };
   if (!locationId) return res.status(400).json({ error: 'locationId is required' });
-  const status = setDismissed(locationId, true);
-  sseBroker.broadcastStatus(locationId);
+  const status = await setDismissed(locationId, true);
+  await sseBroker.broadcastStatus(locationId);
   res.json(status);
 });
 
-app.post('/api/mock/set', (req, res) => {
+app.post('/api/mock/set', async (req, res) => {
   const { locationId, updates } = req.body as { locationId?: string; updates?: Record<string, unknown> };
   if (!locationId) return res.status(400).json({ error: 'locationId is required' });
-  const status = updateOnboardingStatus(locationId, {
+  const status = await updateOnboardingStatus(locationId, {
     domainConnected: updates?.domainConnected as boolean | undefined,
     courseCreated: updates?.courseCreated as boolean | undefined,
-    productAttached: updates?.productAttached as boolean | undefined,
     paymentIntegrated: updates?.paymentIntegrated as boolean | undefined,
     dismissed: updates?.dismissed as boolean | undefined
   });
-  sseBroker.broadcastStatus(locationId);
+  await sseBroker.broadcastStatus(locationId);
   res.json(status);
 });
 
-app.get('/api/events', (req, res) => {
+app.get('/api/events', async (req, res) => {
   const locationId = (req.query.locationId as string) || '';
   if (!locationId) return res.status(400).end();
   sseBroker.addClient(locationId, res);
-  sseBroker.broadcastStatus(locationId);
+  await sseBroker.broadcastStatus(locationId);
 });
 
 app.use('/public', express.static(path.join(process.cwd(), 'public')));
@@ -266,11 +247,6 @@ app.get('/widget.js', (_req, res) => {
 // Serve demo page at root
 app.get('/', (_req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
-});
-
-// Serve test account page
-app.get('/test', (_req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'test-account.html'));
 });
 
 export default app;

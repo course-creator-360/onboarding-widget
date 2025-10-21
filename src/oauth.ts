@@ -1,13 +1,14 @@
 import express from 'express';
 import crypto from 'crypto';
 import { upsertInstallation } from './db';
+import { getRedirectUri, getBaseUrl } from './config';
 
 const router = express.Router();
 
 const DEFAULT_AUTHORIZE_URL = process.env.GHL_AUTHORIZE_URL || 'https://marketplace.gohighlevel.com/oauth/authorize';
 const MARKETPLACE_INSTALL_URL = process.env.GHL_MARKETPLACE_INSTALL_URL || 'https://marketplace.gohighlevel.com/oauth/chooselocation';
 const DEFAULT_TOKEN_URL = process.env.GHL_TOKEN_URL || 'https://services.leadconnectorhq.com/oauth/token';
-const REDIRECT_URI = process.env.GHL_REDIRECT_URI || 'http://localhost:4002/oauth/callback';
+const REDIRECT_URI = getRedirectUri();
 
 const OAUTH_SCOPES = (
   process.env.GHL_SCOPES || [
@@ -343,7 +344,7 @@ router.post('/test-install', async (req, res) => {
   
   try {
     // Create a fake installation for testing
-    upsertInstallation({
+    await upsertInstallation({
       locationId,
       accountId: 'test-account',
       accessToken: 'test_access_token_' + Date.now(),
@@ -389,7 +390,7 @@ router.get('/callback', async (req, res) => {
     const locationId = context.locationId || tokenJson?.locationId || tokenJson?.location_id || 'unknown';
     const tokenType = context.tokenType || 'location';
 
-    upsertInstallation({
+    await upsertInstallation({
       locationId,
       accountId: tokenJson?.accountId ?? tokenJson?.account_id,
       accessToken: tokenJson.access_token,
@@ -400,7 +401,8 @@ router.get('/callback', async (req, res) => {
     });
     
     // Determine redirect based on environment
-    const returnUrl = process.env.OAUTH_SUCCESS_REDIRECT || '/';
+    const baseUrl = getBaseUrl();
+    const returnUrl = process.env.OAUTH_SUCCESS_REDIRECT || `${baseUrl}/`;
     
     // For same-window flow, redirect back with success parameter
     if (!req.headers.referer?.includes('popup')) {

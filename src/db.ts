@@ -1,16 +1,20 @@
-import Database from 'better-sqlite3';
-import fs from 'fs';
-import path from 'path';
+import { PrismaClient } from '@prisma/client';
 
+// Initialize Prisma Client
+const prisma = new PrismaClient({
+  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+});
+
+// Export types
 export type OnboardingStatus = {
   locationId: string;
   domainConnected: boolean;
   courseCreated: boolean;
-  productAttached: boolean;
   paymentIntegrated: boolean;
   dismissed: boolean;
   updatedAt: number;
   createdAt: number;
+  shouldShowWidget: boolean;
 };
 
 export type Installation = {
@@ -20,225 +24,280 @@ export type Installation = {
   refreshToken?: string;
   expiresAt?: number;
   scope?: string;
-  tokenType?: 'agency' | 'location'; // Track if it's agency-level or location-specific
+  tokenType?: 'agency' | 'location';
   updatedAt: number;
   createdAt: number;
 };
 
-const dataRoot = process.env.DATA_DIR || (process.env.VERCEL ? '/tmp/onboarding-data' : path.join(process.cwd(), 'data'));
-const dataDir = dataRoot;
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+// Helper to convert Date to timestamp
+function dateToTimestamp(date: Date): number {
+  return date.getTime();
 }
 
-const dbPath = path.join(dataDir, 'app.db');
-const db = new Database(dbPath);
-db.pragma('journal_mode = WAL');
+// Helper to convert BigInt to number (for expiresAt)
+function bigIntToNumber(value: bigint | null | undefined): number | undefined {
+  if (value === null || value === undefined) return undefined;
+  return Number(value);
+}
 
-db.exec(`
-CREATE TABLE IF NOT EXISTS installations (
-  location_id TEXT PRIMARY KEY,
-  account_id TEXT,
-  access_token TEXT NOT NULL,
-  refresh_token TEXT,
-  expires_at INTEGER,
-  scope TEXT,
-  token_type TEXT DEFAULT 'location',
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS onboarding (
-  location_id TEXT PRIMARY KEY,
-  domain_connected INTEGER NOT NULL DEFAULT 0,
-  course_created INTEGER NOT NULL DEFAULT 0,
-  product_attached INTEGER NOT NULL DEFAULT 0,
-  payment_integrated INTEGER NOT NULL DEFAULT 0,
-  dismissed INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS event_log (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  location_id TEXT,
-  event_type TEXT,
-  payload TEXT,
-  created_at INTEGER NOT NULL
-);
-`);
-
-export function ensureOnboardingRow(locationId: string): void {
+/**
+ * Calculate if widget should be shown based on age and completion status
+ * Widget shows if:
+ * - Location was created within last 30 days (from onboarding.createdAt)
+ * - AND not all 3 tasks are completed
+ */
+function calculateShouldShowWidget(
+  createdAt: number,
+  domainConnected: boolean,
+  courseCreated: boolean,
+  paymentIntegrated: boolean
+): boolean {
+  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
   const now = Date.now();
-  const insert = db.prepare(`
-    INSERT OR IGNORE INTO onboarding (
-      location_id, domain_connected, course_created, product_attached,
-      payment_integrated, dismissed, created_at, updated_at
-    ) VALUES (@location_id, 0, 0, 0, 0, 0, @created_at, @updated_at)
-  `);
-  insert.run({ location_id: locationId, created_at: now, updated_at: now });
+  const age = now - createdAt;
+  
+  // Hide if older than 30 days
+  if (age > THIRTY_DAYS_MS) {
+    return false;
+  }
+  
+  // Hide if all tasks completed
+  const allCompleted = domainConnected && courseCreated && paymentIntegrated;
+  if (allCompleted) {
+    return false;
+  }
+  
+  // Show widget if within 30 days and not all completed
+  return true;
 }
 
-export function getOnboardingStatus(locationId: string): OnboardingStatus {
-  ensureOnboardingRow(locationId);
-  const row = db.prepare(`
-    SELECT location_id, domain_connected, course_created, product_attached,
-           payment_integrated, dismissed, created_at, updated_at
-    FROM onboarding WHERE location_id = ?
-  `).get(locationId) as any;
+/**
+ * Ensure onboarding row exists for a location
+ */
+export async function ensureOnboardingRow(locationId: string): Promise<void> {
+  await prisma.onboarding.upsert({
+    where: { locationId },
+    update: {},
+    create: {
+      locationId,
+      domainConnected: false,
+      courseCreated: false,
+      paymentIntegrated: false,
+      dismissed: false,
+    },
+  });
+}
+
+/**
+ * Get onboarding status for a location
+ */
+export async function getOnboardingStatus(locationId: string): Promise<OnboardingStatus> {
+  await ensureOnboardingRow(locationId);
+  
+  const row = await prisma.onboarding.findUnique({
+    where: { locationId },
+  });
+
+  if (!row) {
+    throw new Error(`Onboarding status not found for location: ${locationId}`);
+  }
+
+  const createdAt = dateToTimestamp(row.createdAt);
+  const shouldShowWidget = calculateShouldShowWidget(
+    createdAt,
+    row.domainConnected,
+    row.courseCreated,
+    row.paymentIntegrated
+  );
 
   return {
-    locationId: row.location_id,
-    domainConnected: !!row.domain_connected,
-    courseCreated: !!row.course_created,
-    productAttached: !!row.product_attached,
-    paymentIntegrated: !!row.payment_integrated,
-    dismissed: !!row.dismissed,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
+    locationId: row.locationId,
+    domainConnected: row.domainConnected,
+    courseCreated: row.courseCreated,
+    paymentIntegrated: row.paymentIntegrated,
+    dismissed: row.dismissed,
+    createdAt,
+    updatedAt: dateToTimestamp(row.updatedAt),
+    shouldShowWidget,
   };
 }
 
-export function updateOnboardingStatus(
+/**
+ * Update onboarding status for a location
+ */
+export async function updateOnboardingStatus(
   locationId: string,
   updates: Partial<Omit<OnboardingStatus, 'locationId' | 'createdAt' | 'updatedAt'>>
-): OnboardingStatus {
-  ensureOnboardingRow(locationId);
-  const current = getOnboardingStatus(locationId);
-  const merged = {
-    domainConnected: updates.domainConnected ?? current.domainConnected,
-    courseCreated: updates.courseCreated ?? current.courseCreated,
-    productAttached: updates.productAttached ?? current.productAttached,
-    paymentIntegrated: updates.paymentIntegrated ?? current.paymentIntegrated,
-    dismissed: updates.dismissed ?? current.dismissed
-  };
-  const now = Date.now();
-  db.prepare(`
-    UPDATE onboarding SET
-      domain_connected = @domain_connected,
-      course_created = @course_created,
-      product_attached = @product_attached,
-      payment_integrated = @payment_integrated,
-      dismissed = @dismissed,
-      updated_at = @updated_at
-    WHERE location_id = @location_id
-  `).run({
-    domain_connected: merged.domainConnected ? 1 : 0,
-    course_created: merged.courseCreated ? 1 : 0,
-    product_attached: merged.productAttached ? 1 : 0,
-    payment_integrated: merged.paymentIntegrated ? 1 : 0,
-    dismissed: merged.dismissed ? 1 : 0,
-    updated_at: now,
-    location_id: locationId
+): Promise<OnboardingStatus> {
+  await ensureOnboardingRow(locationId);
+
+  await prisma.onboarding.update({
+    where: { locationId },
+    data: {
+      domainConnected: updates.domainConnected,
+      courseCreated: updates.courseCreated,
+      paymentIntegrated: updates.paymentIntegrated,
+      dismissed: updates.dismissed,
+    },
   });
+
   return getOnboardingStatus(locationId);
 }
 
-export function setDismissed(locationId: string, dismissed: boolean): OnboardingStatus {
+/**
+ * Set dismissed status for a location
+ */
+export async function setDismissed(locationId: string, dismissed: boolean): Promise<OnboardingStatus> {
   return updateOnboardingStatus(locationId, { dismissed });
 }
 
-export function logEvent(locationId: string, eventType: string, payload: unknown): void {
-  db.prepare(`INSERT INTO event_log (location_id, event_type, payload, created_at)
-              VALUES (?, ?, ?, ?)`)
-    .run(locationId, eventType, JSON.stringify(payload ?? {}), Date.now());
-}
-
-export function upsertInstallation(data: Omit<Installation, 'createdAt' | 'updatedAt'>): Installation {
-  const now = Date.now();
-  db.prepare(`
-    INSERT INTO installations (
-      location_id, account_id, access_token, refresh_token, expires_at, scope, token_type, created_at, updated_at
-    ) VALUES (@location_id, @account_id, @access_token, @refresh_token, @expires_at, @scope, @token_type, @created_at, @updated_at)
-    ON CONFLICT(location_id) DO UPDATE SET
-      account_id = excluded.account_id,
-      access_token = excluded.access_token,
-      refresh_token = excluded.refresh_token,
-      expires_at = excluded.expires_at,
-      scope = excluded.scope,
-      token_type = excluded.token_type,
-      updated_at = excluded.updated_at
-  `).run({
-    location_id: data.locationId,
-    account_id: data.accountId ?? null,
-    access_token: data.accessToken,
-    refresh_token: data.refreshToken ?? null,
-    expires_at: data.expiresAt ?? null,
-    scope: data.scope ?? null,
-    token_type: data.tokenType ?? 'location',
-    created_at: now,
-    updated_at: now
+/**
+ * Log a webhook event
+ */
+export async function logEvent(locationId: string, eventType: string, payload: unknown): Promise<void> {
+  await prisma.eventLog.create({
+    data: {
+      locationId,
+      eventType,
+      payload: payload as any, // Prisma Json type
+    },
   });
-  return getInstallation(data.locationId)!;
 }
 
-export function getInstallation(locationId: string): Installation | undefined {
-  const row = db.prepare(`
-    SELECT location_id, account_id, access_token, refresh_token, expires_at, scope, token_type, created_at, updated_at
-    FROM installations WHERE location_id = ?
-  `).get(locationId) as any;
-  if (!row) return undefined;
+/**
+ * Upsert (create or update) an installation
+ */
+export async function upsertInstallation(
+  data: Omit<Installation, 'createdAt' | 'updatedAt'>
+): Promise<Installation> {
+  const expiresAtBigInt = data.expiresAt ? BigInt(data.expiresAt) : null;
+
+  const result = await prisma.installation.upsert({
+    where: { locationId: data.locationId },
+    update: {
+      accountId: data.accountId ?? null,
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken ?? null,
+      expiresAt: expiresAtBigInt,
+      scope: data.scope ?? null,
+      tokenType: data.tokenType ?? 'location',
+    },
+    create: {
+      locationId: data.locationId,
+      accountId: data.accountId ?? null,
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken ?? null,
+      expiresAt: expiresAtBigInt,
+      scope: data.scope ?? null,
+      tokenType: data.tokenType ?? 'location',
+    },
+  });
+
   return {
-    locationId: row.location_id,
-    accountId: row.account_id ?? undefined,
-    accessToken: row.access_token,
-    refreshToken: row.refresh_token ?? undefined,
-    expiresAt: row.expires_at ?? undefined,
-    scope: row.scope ?? undefined,
-    tokenType: row.token_type as 'agency' | 'location' | undefined,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
+    locationId: result.locationId,
+    accountId: result.accountId ?? undefined,
+    accessToken: result.accessToken,
+    refreshToken: result.refreshToken ?? undefined,
+    expiresAt: bigIntToNumber(result.expiresAt),
+    scope: result.scope ?? undefined,
+    tokenType: (result.tokenType as 'agency' | 'location') ?? 'location',
+    createdAt: dateToTimestamp(result.createdAt),
+    updatedAt: dateToTimestamp(result.updatedAt),
   };
 }
 
-export function findInstallationByAccountId(accountId: string): Installation | undefined {
-  const row = db.prepare(`
-    SELECT location_id, account_id, access_token, refresh_token, expires_at, scope, token_type, created_at, updated_at
-    FROM installations WHERE account_id = ?
-  `).get(accountId) as any;
-  if (!row) return undefined;
+/**
+ * Get installation by location ID
+ */
+export async function getInstallation(locationId: string): Promise<Installation | undefined> {
+  const result = await prisma.installation.findUnique({
+    where: { locationId },
+  });
+
+  if (!result) return undefined;
+
   return {
-    locationId: row.location_id,
-    accountId: row.account_id ?? undefined,
-    accessToken: row.access_token,
-    refreshToken: row.refresh_token ?? undefined,
-    expiresAt: row.expires_at ?? undefined,
-    scope: row.scope ?? undefined,
-    tokenType: row.token_type as 'agency' | 'location' | undefined,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
+    locationId: result.locationId,
+    accountId: result.accountId ?? undefined,
+    accessToken: result.accessToken,
+    refreshToken: result.refreshToken ?? undefined,
+    expiresAt: bigIntToNumber(result.expiresAt),
+    scope: result.scope ?? undefined,
+    tokenType: (result.tokenType as 'agency' | 'location') ?? 'location',
+    createdAt: dateToTimestamp(result.createdAt),
+    updatedAt: dateToTimestamp(result.updatedAt),
   };
 }
 
-export function getAgencyInstallation(): Installation | undefined {
-  const row = db.prepare(`
-    SELECT location_id, account_id, access_token, refresh_token, expires_at, scope, token_type, created_at, updated_at
-    FROM installations WHERE token_type = 'agency' LIMIT 1
-  `).get() as any;
-  if (!row) return undefined;
+/**
+ * Find installation by account ID
+ */
+export async function findInstallationByAccountId(accountId: string): Promise<Installation | undefined> {
+  const result = await prisma.installation.findFirst({
+    where: { accountId },
+  });
+
+  if (!result) return undefined;
+
   return {
-    locationId: row.location_id,
-    accountId: row.account_id ?? undefined,
-    accessToken: row.access_token,
-    refreshToken: row.refresh_token ?? undefined,
-    expiresAt: row.expires_at ?? undefined,
-    scope: row.scope ?? undefined,
-    tokenType: row.token_type as 'agency' | 'location' | undefined,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
+    locationId: result.locationId,
+    accountId: result.accountId ?? undefined,
+    accessToken: result.accessToken,
+    refreshToken: result.refreshToken ?? undefined,
+    expiresAt: bigIntToNumber(result.expiresAt),
+    scope: result.scope ?? undefined,
+    tokenType: (result.tokenType as 'agency' | 'location') ?? 'location',
+    createdAt: dateToTimestamp(result.createdAt),
+    updatedAt: dateToTimestamp(result.updatedAt),
   };
 }
 
-export function hasAgencyAuthorization(): boolean {
-  const installation = getAgencyInstallation();
+/**
+ * Get agency-level installation
+ */
+export async function getAgencyInstallation(): Promise<Installation | undefined> {
+  const result = await prisma.installation.findFirst({
+    where: { tokenType: 'agency' },
+  });
+
+  if (!result) return undefined;
+
+  return {
+    locationId: result.locationId,
+    accountId: result.accountId ?? undefined,
+    accessToken: result.accessToken,
+    refreshToken: result.refreshToken ?? undefined,
+    expiresAt: bigIntToNumber(result.expiresAt),
+    scope: result.scope ?? undefined,
+    tokenType: (result.tokenType as 'agency' | 'location') ?? 'location',
+    createdAt: dateToTimestamp(result.createdAt),
+    updatedAt: dateToTimestamp(result.updatedAt),
+  };
+}
+
+/**
+ * Check if agency authorization exists
+ */
+export async function hasAgencyAuthorization(): Promise<boolean> {
+  const installation = await getAgencyInstallation();
   return !!installation && !!installation.accessToken;
 }
 
-export function deleteInstallation(locationId: string): void {
-  db.prepare('DELETE FROM installations WHERE location_id = ?').run(locationId);
+/**
+ * Delete installation by location ID
+ */
+export async function deleteInstallation(locationId: string): Promise<void> {
+  await prisma.installation.delete({
+    where: { locationId },
+  }).catch(() => {
+    // Ignore if doesn't exist
+  });
 }
 
-export default db;
+// Export Prisma client for direct usage if needed
+export default prisma;
 
-
-
+// Graceful shutdown
+process.on('beforeExit', async () => {
+  await prisma.$disconnect();
+});

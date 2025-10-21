@@ -34,10 +34,10 @@ class SSEBroker {
     });
   }
 
-  broadcastStatus(locationId: string): void {
+  async broadcastStatus(locationId: string): Promise<void> {
     const clients = this.locationIdToClients.get(locationId);
     if (!clients || clients.size === 0) return;
-    const status = getOnboardingStatus(locationId);
+    const status = await getOnboardingStatus(locationId);
     const payload = JSON.stringify({ type: 'status', payload: status });
     for (const client of clients) {
       try {

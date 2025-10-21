@@ -1,7 +1,8 @@
 import express from 'express';
-import { logEvent, updateOnboardingStatus } from './db';
+import { logEvent, updateOnboardingStatus, getOnboardingStatus } from './db';
 import { sseBroker } from './sse';
 import { sendUserpilotEvent } from './userpilot';
+import { checkPaymentIntegration } from './ghl-api';
 
 const router = express.Router();
 
@@ -9,7 +10,7 @@ router.post('/ghl', async (req, res) => {
   const eventType: string = (req.body?.event || req.body?.type || '').toString();
   const payload = req.body || {};
   const locationId: string | undefined =
-    payload?.locationId || payload?.location_id || payload?.account?.locationId || payload?.location || payload?.accountId;
+    payload?.locationId || payload?.location_id || payload?.id || payload?.account?.locationId || payload?.location || payload?.accountId;
 
   // Log incoming webhook
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -42,24 +43,56 @@ router.post('/ghl', async (req, res) => {
       const hasDomain = !!domain && domain !== '' && domain !== null;
       
       console.log('   Domain value:', domain, '→ hasDomain:', hasDomain);
-      updateOnboardingStatus(locationId, { domainConnected: hasDomain });
+      await updateOnboardingStatus(locationId, { domainConnected: hasDomain });
       await sendUserpilotEvent('locationId', locationId, 
         hasDomain ? 'domain_connected' : 'domain_removed'
       );
       updated = true;
     }
     
-    if (/ExternalAuthConnected/i.test(eventType)) {
-      console.log('✅ Matched: Payment Integration webhook');
-      updateOnboardingStatus(locationId, { paymentIntegrated: true });
-      await sendUserpilotEvent('locationId', locationId, 'payment_integrated');
-      updated = true;
+    // Product/Course creation webhook
+    if (/Product(Create|Update)/i.test(eventType)) {
+      console.log('✅ Matched: Product Create/Update webhook');
+      
+      // Check current status before updating
+      const currentStatus = await getOnboardingStatus(locationId);
+      
+      // Only update if courseCreated is currently false
+      if (!currentStatus.courseCreated) {
+        console.log('   courseCreated was false, updating to true');
+        await updateOnboardingStatus(locationId, { courseCreated: true });
+        await sendUserpilotEvent('locationId', locationId, 'course_created');
+        updated = true;
+      } else {
+        console.log('   courseCreated already true, skipping update');
+      }
     }
-    if (/OrderCreate/i.test(eventType)) {
-      console.log('✅ Matched: Order Create webhook');
-      updateOnboardingStatus(locationId, { productAttached: true });
-      await sendUserpilotEvent('locationId', locationId, 'product_attached');
-      updated = true;
+    
+    if (/LocationUpdate/i.test(eventType)) {
+      console.log('✅ Matched: LocationUpdate webhook');
+      
+      // LocationUpdate webhooks don't include payment provider info in payload
+      // Query the API to check current payment integration status
+      try {
+        const hasPayment = await checkPaymentIntegration(locationId);
+        console.log('   Payment integration detected via API:', hasPayment);
+        
+        // Get current status to see if it changed
+        const currentStatus = await getOnboardingStatus(locationId);
+        
+        if (hasPayment !== currentStatus.paymentIntegrated) {
+          console.log(`   Payment status changed: ${currentStatus.paymentIntegrated} -> ${hasPayment}`);
+          await updateOnboardingStatus(locationId, { paymentIntegrated: hasPayment });
+          await sendUserpilotEvent('locationId', locationId, 
+            hasPayment ? 'payment_integrated' : 'payment_disconnected'
+          );
+          updated = true;
+        } else {
+          console.log('   Payment status unchanged, skipping update');
+        }
+      } catch (error) {
+        console.error('   Error checking payment integration:', error);
+      }
     }
 
     if (!updated) {
@@ -71,7 +104,7 @@ router.post('/ghl', async (req, res) => {
 
   if (updated) {
     console.log('📡 Broadcasting update via SSE to locationId:', locationId);
-    sseBroker.broadcastStatus(locationId);
+    await sseBroker.broadcastStatus(locationId);
   }
   
   console.log('✓ Webhook processed successfully\n');

@@ -44,7 +44,7 @@ async function refreshAccessToken(installation: any): Promise<string | null> {
     const tokenJson = await response.json() as any;
     
     // Update installation with new tokens
-    const updatedInstallation = upsertInstallation({
+    const updatedInstallation = await upsertInstallation({
       locationId: installation.locationId,
       accountId: installation.accountId,
       accessToken: tokenJson.access_token,
@@ -86,7 +86,7 @@ function isTokenExpired(installation: any): boolean {
  */
 async function getAuthToken(locationId: string): Promise<string | null> {
   // Try agency token first (preferred)
-  let agencyInstall = getAgencyInstallation();
+  let agencyInstall = await getAgencyInstallation();
   if (agencyInstall?.accessToken) {
     // Check if token is expired
     if (isTokenExpired(agencyInstall)) {
@@ -104,7 +104,7 @@ async function getAuthToken(locationId: string): Promise<string | null> {
   }
   
   // Fall back to location-specific token
-  let locationInstall = getInstallation(locationId);
+  let locationInstall = await getInstallation(locationId);
   if (locationInstall?.accessToken) {
     // Check if token is expired
     if (isTokenExpired(locationInstall)) {
@@ -278,7 +278,16 @@ export async function checkLocationProducts(locationId: string): Promise<boolean
 
 /**
  * Check if a location has payment integration connected
- * Returns true if any payment provider is connected
+ * Detects all GHL payment providers including:
+ * - Stripe, PayPal, Authorize.net, NMI, Square
+ * - Easy Pay Direct, Noomerik, Deposyt, PayTabs, PayMob
+ * - Madison, Eway, MOYASAR, PayPlus, Cybersource
+ * - Meps, GoCardless, Razorpay, Clover, Paystack
+ * - Payfast, PagBank, linked2checkout, PPayOS, MontyPay
+ * - AdminiPay, Coastal Pay, CWA, ECI EZPay, NGnair
+ * - Sumit Payments, Dime Pay, Padlock Pay
+ * - Manual Payment Methods (Cash on Delivery, Custom Payment Methods)
+ * Returns true if any payment provider or manual payment method is connected
  */
 export async function checkPaymentIntegration(locationId: string): Promise<boolean> {
   const token = await getAuthToken(locationId);
@@ -311,15 +320,75 @@ export async function checkPaymentIntegration(locationId: string): Promise<boole
     const data = await response.json();
     const location = data.location || data;
     
-    // Check for Stripe, PayPal, or other payment integrations
+    // Log full location object to see available fields (only in development)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[GHL API] Location object keys:', Object.keys(location));
+    }
+    
+    // Check for any payment provider integration
+    // Supports: Stripe, PayPal, Authorize.net, NMI, Square, 40+ other providers, and Manual Payment Methods
     const hasPayment = !!(
+      // Generic payment fields
+      location.paymentIntegration ||
+      location.paymentProviders ||
+      location.paymentProvider ||
+      location.paymentGateway ||
+      location.merchantAccount ||
+      
+      // Manual Payment Methods (Cash on Delivery, Custom Payment Methods)
+      location.manualPaymentMethods ||
+      location.customPaymentMethods ||
+      location.manualPayment ||
+      location.cashOnDelivery ||
+      location.customPayment ||
+      location.manualPaymentEnabled ||
+      
+      // Stripe
       location.stripeAccountId ||
       location.stripeConnected ||
-      location.paymentIntegration ||
-      location.paymentProviders
+      location.stripe ||
+      
+      // PayPal
+      location.paypalAccountId ||
+      location.paypalConnected ||
+      location.paypal ||
+      
+      // Authorize.net
+      location.authorizeNetAccountId ||
+      location.authorizeNetConnected ||
+      
+      // NMI
+      location.nmiAccountId ||
+      location.nmiConnected ||
+      
+      // Square
+      location.squareAccountId ||
+      location.squareConnected ||
+      location.square ||
+      
+      // Other providers (generic check)
+      location.merchantId ||
+      location.gatewayId ||
+      location.processorId
     );
     
-    console.log(`[GHL API] Payment check for ${locationId}: ${hasPayment}`);
+    // Log which specific fields were found
+    if (hasPayment) {
+      const foundFields = Object.keys(location).filter(key => 
+        key.toLowerCase().includes('payment') ||
+        key.toLowerCase().includes('stripe') ||
+        key.toLowerCase().includes('paypal') ||
+        key.toLowerCase().includes('merchant') ||
+        key.toLowerCase().includes('gateway') ||
+        key.toLowerCase().includes('processor') ||
+        key.toLowerCase().includes('manual') ||
+        key.toLowerCase().includes('cash') ||
+        key.toLowerCase().includes('custom')
+      );
+      console.log(`[GHL API] Payment check for ${locationId}: TRUE - Fields found:`, foundFields);
+    } else {
+      console.log(`[GHL API] Payment check for ${locationId}: FALSE - No payment fields found`);
+    }
     
     return hasPayment;
     
@@ -338,7 +407,7 @@ export async function checkAllOnboardingSteps(locationId: string): Promise<{
   courseCreated: boolean;
   paymentIntegrated: boolean;
 }> {
-  const token = getAuthToken(locationId);
+  const token = await getAuthToken(locationId);
   
   if (!token) {
     return { 
