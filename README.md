@@ -1,22 +1,45 @@
-Onboarding Widget (GHL Marketplace)
+# CourseCreator360 Onboarding Widget
 
-## Overview
+A persistent onboarding checklist widget for CourseCreator360 sub-accounts. Tracks 4 onboarding steps with real-time updates via webhooks and SSE.
 
-A persistent onboarding checklist widget for CourseCreator360 sub-accounts. Tracks 4 onboarding steps:
-- ✓ Connect a domain
-- ✓ Create a course
-- ✓ Connect product to site/funnel  
-- ✓ Connect payment processor
+## Features
 
-## Documentation
+- ✅ **4-Step Onboarding Checklist**: Domain, Course, Product, Payment
+- ✅ **Real-time Updates**: SSE streaming for instant UI updates
+- ✅ **Agency-Level OAuth**: One authorization for all sub-accounts
+- ✅ **Prisma + PostgreSQL**: Cloud-ready database with type-safe ORM
+- ✅ **Vercel Ready**: Auto-detects environment, deploys seamlessly
+- ✅ **Draggable & Resizable**: User-friendly widget positioning
+- ✅ **Automatic Token Refresh**: No re-authorization needed
 
-- **[WORKFLOW.md](WORKFLOW.md)** - Complete installation workflow and step-by-step guide
-- **[SETUP.md](SETUP.md)** - Detailed setup instructions and troubleshooting
-- **README.md** (this file) - Quick reference and API documentation
+---
 
-## Local Development
+## Table of Contents
 
-### Quick Start (Using Makefile)
+- [Quick Start](#quick-start)
+- [Installation & Setup](#installation--setup)
+  - [1. GHL Marketplace Setup](#1-ghl-marketplace-setup)
+  - [2. Local Development](#2-local-development)
+  - [3. Agency Authorization](#3-agency-authorization)
+  - [4. Widget Deployment](#4-widget-deployment)
+- [Deployment](#deployment)
+  - [Vercel Deployment](#vercel-deployment)
+  - [Environment Variables](#environment-variables)
+- [Database](#database)
+  - [Prisma + PostgreSQL](#prisma--postgresql)
+  - [Schema](#schema)
+  - [Commands](#commands)
+- [API Documentation](#api-documentation)
+- [Widget Features](#widget-features)
+- [Webhooks](#webhooks)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
+
+---
+
+## Quick Start
+
+### Using Makefile (Recommended)
 
 ```bash
 # Initial setup
@@ -46,101 +69,755 @@ make agency-setup   # Open agency OAuth setup
 make help           # Show all available commands
 ```
 
-### Manual Setup (Without Makefile)
+---
 
-1. Copy `env.template` to `.env`
-2. Add your GHL OAuth credentials (see SETUP.md)
-3. Start with Docker Compose: `docker-compose up --build`
-4. Open demo page: `http://localhost:4002`
+## Installation & Setup
 
-## Quick Setup
+### 1. GHL Marketplace Setup
 
-### Agency-Level Authorization (Recommended)
+#### Create App in GHL Marketplace
 
-1. Open `http://localhost:4002`
-2. Click "🔑 Setup Agency OAuth"
-3. Authorize the app once for all sub-accounts
-4. Widget automatically works for all locations
+1. Go to **https://marketplace.gohighlevel.com/**
+2. Navigate to **"My Apps"** → **"Create New App"**
+3. Fill in basic information:
+   - **App Name**: `CourseCreator360 Onboarding Widget`
+   - **Description**: `Onboarding checklist for new CC360 users`
+   - **Category**: `Tools & Utilities`
 
-### Widget Integration
+#### Configure OAuth Settings
 
-The widget auto-loads in GHL dashboards via Custom Values or embedded script:
+1. Go to **Advanced Settings → Auth**
+2. Set **Redirect URI**:
+   ```
+   http://localhost:4002/oauth/callback
+   ```
+   (For production: `https://your-domain.com/oauth/callback`)
 
-```html
-<script>
-  (function() {
-    const match = window.location.pathname.match(/\/location\/([^\/]+)/);
-    if (!match) return;
-    
-    const script = document.createElement('script');
-    script.src = 'https://your-widget.com/widget.js';
-    script.setAttribute('data-location', match[1]);
-    script.setAttribute('data-api', 'https://your-api.com');
-    document.body.appendChild(script);
-  })();
-</script>
+3. Select **OAuth Scopes**:
+   - ✅ `courses.readonly`
+   - ✅ `funnels/funnel.readonly`
+   - ✅ `funnels/page.readonly`
+   - ✅ `products.readonly`
+   - ✅ `products/prices.readonly`
+   - ✅ `payments/orders.readonly`
+   - ✅ `payments/transactions.readonly`
+   - ✅ `payments/custom-provider.readonly`
+
+4. **Save** and copy your credentials:
+   - Client ID
+   - Client Secret
+
+### 2. Local Development
+
+#### Option A: Using Docker (Recommended)
+
+1. **Copy environment template:**
+   ```bash
+   cp env.template .env
+   ```
+
+2. **Edit `.env` with your credentials:**
+   ```env
+   PORT=4002
+   NODE_ENV=development
+   
+   # GHL OAuth Credentials
+   GHL_CLIENT_ID=your_client_id_here
+   GHL_CLIENT_SECRET=your_client_secret_here
+   GHL_REDIRECT_URI=http://localhost:4002/oauth/callback
+   
+   # Database (auto-configured by Docker)
+   DATABASE_URL=postgresql://user:password@postgres:5432/onboarding?schema=public
+   ```
+
+3. **Start the server:**
+   ```bash
+   docker-compose up --build
+   ```
+
+4. **Verify it's running:**
+   ```bash
+   curl http://localhost:4002/api/healthz
+   # Should return: {"ok":true}
+   ```
+
+#### Option B: Without Docker
+
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+2. **Set up PostgreSQL** (locally or use cloud service)
+
+3. **Update `.env`** with your database URL
+
+4. **Run migrations:**
+   ```bash
+   npm run db:migrate
+   ```
+
+5. **Start dev server:**
+   ```bash
+   npm run dev
+   ```
+
+### 3. Agency Authorization
+
+This is a **ONE-TIME setup** that allows the widget to work for ALL sub-accounts.
+
+#### Why Agency-Level Authorization?
+
+- ✅ Authorize once for entire agency
+- ✅ Works automatically for all sub-accounts
+- ✅ No per-user OAuth popups
+- ✅ Simpler user experience
+
+#### Setup Steps
+
+1. **Open the demo page:**
+   ```
+   http://localhost:4002
+   ```
+
+2. **Click "🔑 Setup Agency OAuth"**
+
+3. **Authorize in GoHighLevel:**
+   - Select a location or agency-wide option
+   - Review permissions
+   - Click "Allow"
+
+4. **Verify authorization:**
+   - Success message appears
+   - Click "Check Agency Status" → Should show "✓ Authorized"
+
+### 4. Widget Deployment
+
+#### Add to GHL Custom Values
+
+1. **Go to Agency Settings:**
+   ```
+   GHL Agency Dashboard → Settings → Custom Values
+   ```
+
+2. **Add Custom JavaScript:**
+   - Click "Add Custom Value" → Select "JavaScript"
+
+3. **Paste this code:**
+
+   ```html
+   <script>
+   (function() {
+     'use strict';
+     
+     // Extract locationId from GHL dashboard URL
+     const match = window.location.pathname.match(/\/location\/([^\/]+)/);
+     if (!match) return;
+     
+     const locationId = match[1];
+     console.log('[CC360] Loading widget for location:', locationId);
+     
+     // Load widget script
+     const script = document.createElement('script');
+     script.src = 'http://localhost:4002/widget.js';  // Update for production
+     script.setAttribute('data-location', locationId);
+     script.setAttribute('data-api', 'http://localhost:4002');  // Update for production
+     
+     document.body.appendChild(script);
+   })();
+   </script>
+   ```
+
+4. **Apply to "All Locations"** and **Save**
+
+---
+
+## Deployment
+
+### Vercel Deployment
+
+The app automatically detects Vercel environment and configures URLs accordingly.
+
+#### Step 1: Create Vercel Postgres Database
+
+1. Go to Vercel Dashboard → Your Project → **Storage**
+2. Click **Create Database** → **Postgres**
+3. Select plan (free tier available) and create
+
+Vercel automatically sets these environment variables:
+- `POSTGRES_URL` - Direct connection
+- `POSTGRES_PRISMA_URL` - Pooled connection for Prisma
+- `POSTGRES_URL_NON_POOLING` - Non-pooled for migrations
+
+#### Step 2: Deploy
+
+```bash
+# Install Vercel CLI
+npm i -g vercel
+
+# Deploy
+vercel --prod
 ```
 
-For testing with a specific location:
-```html
-<script
-  src="http://localhost:4002/widget.js"
-  data-location="kgREXsjAvhag6Qn8Yjqn"
-  data-api="http://localhost:4002"
-></script>
+The deployment automatically:
+1. Installs Prisma dependencies
+2. Generates Prisma Client (via `postinstall` script)
+3. Runs migrations
+4. Starts your app
+
+#### Step 3: Update GHL Marketplace
+
+After deployment, update your GHL app settings:
+
+1. **OAuth Redirect URI**: `https://your-app.vercel.app/oauth/callback`
+2. **Webhook URL**: `https://your-app.vercel.app/api/webhooks/ghl`
+3. Re-authorize agency with production URL
+4. Update Custom Values script with production URLs
+
+### Environment Variables
+
+Set these in Vercel Dashboard (Settings → Environment Variables):
+
+```bash
+# Required
+GHL_CLIENT_ID=your_ghl_client_id
+GHL_CLIENT_SECRET=your_ghl_client_secret
+
+# Optional (auto-detected from VERCEL_URL)
+# APP_BASE_URL=https://your-custom-domain.com
+# GHL_REDIRECT_URI=https://your-app.vercel.app/oauth/callback
+
+# Testing
+GHL_SUBACCOUNT_TEST_LOCATION_ID=your_test_location
+
+# Analytics (optional)
+USERPILOT_API_KEY=your_production_key
+USERPILOT_STAGE_API_KEY=your_staging_key
 ```
 
-## API Endpoints
+### Environment Auto-Detection
 
-**Onboarding:**
+The app automatically detects its environment:
+- **Local**: `http://localhost:4002`
+- **Vercel**: `https://{VERCEL_URL}` (auto-detected)
+- **Custom**: Set `APP_BASE_URL` to override
+
+---
+
+## Database
+
+### Prisma + PostgreSQL
+
+The app uses **Prisma ORM** with **PostgreSQL** for cloud-ready, type-safe database operations.
+
+**Why Prisma?**
+- Type-safe database access with auto-completion
+- Automatic migrations on deployment
+- Async operations for scalability
+- PostgreSQL support for production-ready deployments
+
+### Schema
+
+Location: `prisma/schema.prisma`
+
+```prisma
+model Installation {
+  id            String   @id @default(cuid())
+  locationId    String   @unique
+  accountId     String?
+  accessToken   String
+  refreshToken  String?
+  expiresAt     BigInt?
+  scope         String?
+  tokenType     String   @default("location")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Onboarding {
+  id                 String   @id @default(cuid())
+  locationId         String   @unique
+  domainConnected    Boolean  @default(false)
+  courseCreated      Boolean  @default(false)
+  paymentIntegrated  Boolean  @default(false)
+  dismissed          Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model EventLog {
+  id         String   @id @default(cuid())
+  locationId String?
+  eventType  String
+  payload    Json
+  createdAt  DateTime @default(now())
+}
+```
+
+### Commands
+
+```bash
+# Generate Prisma Client (after schema changes)
+npm run db:generate
+
+# Push schema to database (development)
+npm run db:push
+
+# Run migrations (production)
+npm run db:migrate
+
+# Open Prisma Studio (database GUI)
+npm run db:studio
+```
+
+#### Making Schema Changes
+
+1. Edit `prisma/schema.prisma`
+2. Create migration:
+   ```bash
+   npx prisma migrate dev --name your_change_name
+   ```
+3. Prisma will automatically:
+   - Create migration file
+   - Apply it to database
+   - Regenerate Prisma Client
+
+---
+
+## API Documentation
+
+### Onboarding Endpoints
+
 - `GET /api/status?locationId=...` - Get checklist status for a location
 - `POST /api/dismiss` - Mark widget as dismissed
-- `POST /api/mock/set` - Update flags for testing
+- `POST /api/mock/set` - Update flags for testing (dev only)
 
-**Authorization:**
+### Authorization Endpoints
+
 - `GET /api/agency/status` - Check if agency is authorized
-- `GET /api/installation/check?locationId=...` - Check auth status (agency or location)
+- `GET /api/installation/check?locationId=...` - Check auth status
 - `GET /api/oauth/agency/install` - Agency-level OAuth setup
 - `GET /api/oauth/callback` - OAuth callback handler
 - `DELETE /api/installation?locationId=...` - Clear auth (testing only)
 
-**Real-time:**
+### Real-time Endpoints
+
 - `GET /api/events?locationId=...` - SSE stream for live updates
 
-**Webhooks:**
-- `POST /api/webhooks/ghl` - GHL webhook receiver (auto-updates checklist)
+### Webhook Endpoints
+
+- `POST /api/webhooks/ghl` - GHL webhook receiver
+
+### Utility Endpoints
+
+- `GET /api/healthz` - Health check
+- `GET /api/config` - Configuration info
+
+---
+
+## Widget Features
+
+### Draggable & Resizable
+
+The widget supports advanced user interaction:
+
+#### Dragging
+- **Drag Handle**: Click and drag the header to move
+- **Smart Snapping**: Auto-snaps to left or right side
+- **Viewport Boundaries**: Constrained to stay visible
+- **Click vs Drag Detection**: 8px threshold for accurate detection
+- **Position Persistence**: Remembers position across page reloads
+
+#### Resizing
+- **Resize Handle**: Subtle handle at top (visible on hover)
+- **Height Constraints**: 200px min, 90% viewport max
+- **Height Persistence**: Remembers height across reloads
+
+#### Touch Support
+- Full support for mobile/tablet devices
+- Touch gestures work same as mouse
+
+#### API Methods
+
+```javascript
+// Reset widget position to default
+window.cc360Widget.resetPosition();
+
+// Force widget into viewport
+window.cc360Widget.forceIntoView();
+
+// Minimize the widget
+window.cc360Widget.dismiss();
+
+// Expand the widget
+window.cc360Widget.expand();
+
+// Reload the widget
+window.cc360Widget.reload();
+```
+
+### Automatic Token Refresh
+
+The app automatically refreshes OAuth tokens without requiring re-authorization.
+
+**How it works:**
+1. Checks if token expires within 5 minutes
+2. Uses refresh_token to get new access_token
+3. Updates database automatically
+4. API calls use fresh token
+
+**When refresh happens:**
+- Widget loads and token is expiring
+- API status check runs
+- Any API call that needs authentication
+
+**Logs to watch for:**
+```
+[GHL API] Agency token expired, refreshing...
+[GHL API] Token refreshed successfully, expires at: [timestamp]
+```
+
+---
+
+## Webhooks
+
+### Required Webhook Configuration
+
+In GHL Marketplace → Your App → Webhooks:
+
+1. **Webhook URL**: `https://your-app.vercel.app/api/webhooks/ghl`
+
+2. **Subscribe to events**:
+   - ✅ `ProductCreate` - Course/product creation
+   - ✅ `ProductUpdate` - Course/product updates
+   - ✅ `ProductDelete` - Course/product deletion
+   - ✅ `ExternalAuthConnected` - Payment integration
+
+3. **Required OAuth Scope**: `products.readonly`
+
+### Webhook Event Mapping
+
+```
+GHL Event               → Widget Update
+─────────────────────────────────────────
+ProductCreate/Update    → ✓ Course created
+ExternalAuthConnected   → ✓ Payment integrated
+```
+
+### Testing Webhooks
+
+```bash
+# Manual webhook test
+curl -X POST http://localhost:4002/api/webhooks/ghl \
+  -H "Content-Type: application/json" \
+  -d '{
+    "event": "ProductCreate",
+    "locationId": "test_location_123",
+    "data": {"id": "prod_123", "name": "Test Course"}
+  }'
+
+# Check if it updated
+curl "http://localhost:4002/api/status?locationId=test_location_123"
+```
+
+---
+
+## Troubleshooting
+
+### Docker Issues
+
+#### Database Connection Issues
+
+Ensure PostgreSQL container is running:
+```bash
+docker-compose ps
+docker-compose logs postgres
+```
+
+#### Port Already in Use
+
+```bash
+# Find and kill process
+lsof -ti:4002 | xargs kill -9
+
+# Restart
+make restart
+```
+
+#### Database Connection Issues
+
+```bash
+# Check if Postgres is running
+docker-compose ps postgres
+
+# View logs
+docker-compose logs postgres
+
+# Restart everything
+docker-compose down && docker-compose up --build
+```
+
+### OAuth Issues
+
+#### White Screen on OAuth Popup
+
+**Cause**: Redirect URI mismatch
+
+**Solution**:
+1. Check GHL Marketplace redirect URI matches `.env` exactly
+2. No trailing slashes
+3. Use `http` for localhost, `https` for production
+4. Wait 5 minutes after saving changes in GHL
+
+#### Widget Shows "Setup Required"
+
+**Cause**: Agency not authorized
+
+**Solution**:
+```bash
+make agency-setup  # Run OAuth flow
+```
+
+Or visit `http://localhost:4002` and click "Setup Agency OAuth"
+
+### Widget Issues
+
+#### Widget Doesn't Appear
+
+**Check**:
+1. Custom Values applied to locations
+2. URLs in widget code are correct
+3. JavaScript console for errors (F12)
+
+#### Checklist Not Updating
+
+**Check**:
+1. Webhooks configured in GHL Marketplace
+2. SSE connection active (browser console)
+3. Server logs: `make logs`
+
+### Vercel Deployment Issues
+
+#### OAuth Redirects to Localhost
+
+**Cause**: `VERCEL_URL` not detected or `APP_BASE_URL` not set
+
+**Solution**:
+- Ensure Vercel environment variables are set
+- Set `APP_BASE_URL` manually if needed
+- Clear browser cache
+
+#### Environment Variables Not Working
+
+**Solution**:
+1. After changing env vars in Vercel, **redeploy**
+2. Go to Deployments → Latest → Redeploy
+3. Or push a new commit
+
+---
+
+## Development
+
+### Project Structure
+
+```
+onboarding-widget/
+├── api/              # Vercel serverless functions
+├── prisma/           # Database schema and migrations
+│   ├── schema.prisma
+│   └── migrations/
+├── public/           # Static files
+│   ├── index.html    # Demo page
+│   ├── widget.js     # Widget client
+│   └── test-account.html
+├── src/              # Server source code
+│   ├── app.ts        # Express app & routes
+│   ├── config.ts     # Environment detection
+│   ├── db.ts         # Prisma database client
+│   ├── ghl-api.ts    # GHL API client
+│   ├── oauth.ts      # OAuth handlers
+│   ├── server.ts     # Server entry point
+│   ├── sse.ts        # Server-Sent Events
+│   ├── userpilot.ts  # Analytics
+│   └── webhooks.ts   # Webhook handlers
+├── .env              # Local environment variables
+├── docker-compose.yml
+├── Dockerfile
+├── Makefile          # Dev commands
+├── package.json
+├── tsconfig.json
+└── vercel.json       # Vercel configuration
+```
+
+### Making Changes
+
+```bash
+# Edit code
+nano src/app.ts
+
+# Restart server
+make restart
+
+# View logs
+make logs
+
+# Test changes
+make test
+```
+
+### Database Changes
+
+```bash
+# Edit schema
+nano prisma/schema.prisma
+
+# Create migration
+npx prisma migrate dev --name add_new_field
+
+# View data
+npm run db:studio
+```
+
+### Testing Workflow
+
+```bash
+# 1. Check health
+curl http://localhost:4002/api/healthz
+
+# 2. Test agency status
+curl http://localhost:4002/api/agency/status
+
+# 3. Test onboarding status
+curl "http://localhost:4002/api/status?locationId=test123"
+
+# 4. Simulate webhook
+curl -X POST http://localhost:4002/api/webhooks/ghl \
+  -H "Content-Type: application/json" \
+  -d '{"event":"ProductCreate","locationId":"test123"}'
+
+# 5. Verify update
+curl "http://localhost:4002/api/status?locationId=test123"
+```
+
+### Checklist Before Production
+
+```
+☐ GHL Marketplace app created
+☐ OAuth scopes configured
+☐ Vercel Postgres database created
+☐ Environment variables set in Vercel
+☐ App deployed to Vercel
+☐ GHL Marketplace OAuth URI updated
+☐ GHL Marketplace webhook URL updated
+☐ Agency authorized with production URL
+☐ Custom Values script updated with production URLs
+☐ Tested with real sub-account
+☐ Webhooks delivering successfully
+☐ SSE updates working
+```
+
+---
 
 ## How It Works
 
-### Agency Authorization (One-Time Setup)
-1. Agency admin authorizes app once
-2. All sub-accounts automatically have access
-3. Widget works immediately for all locations
+### Complete Data Flow
 
-### Widget Behavior
-1. Widget loads in sub-account dashboard
-2. Auto-detects locationId from URL
-3. Checks if agency is authorized
-4. Shows checklist with current progress
-5. Updates in real-time via SSE when steps complete
+```
+┌─────────────────────────────────────────┐
+│ 1. Agency Admin Setup (One-Time)       │
+├─────────────────────────────────────────┤
+│ Create GHL app → Deploy server          │
+│ → Authorize agency → Deploy widget      │
+└────────────┬────────────────────────────┘
+             ↓
+┌─────────────────────────────────────────┐
+│ 2. Widget Auto-Loads in Sub-Accounts    │
+├─────────────────────────────────────────┤
+│ User logs in → Custom Values runs       │
+│ → Extracts locationId → Loads widget.js │
+└────────────┬────────────────────────────┘
+             ↓
+┌─────────────────────────────────────────┐
+│ 3. Widget Checks Authorization          │
+├─────────────────────────────────────────┤
+│ GET /api/installation/check             │
+│ → Server checks agency token            │
+│ → Widget shows checklist                │
+└────────────┬────────────────────────────┘
+             ↓
+┌─────────────────────────────────────────┐
+│ 4. Real-Time Connection                 │
+├─────────────────────────────────────────┤
+│ EventSource: GET /api/events            │
+│ → SSE connection maintained             │
+│ → Heartbeat every 25 seconds            │
+└────────────┬────────────────────────────┘
+             ↓
+┌─────────────────────────────────────────┐
+│ 5. User Completes Actions               │
+├─────────────────────────────────────────┤
+│ Create course in GHL                    │
+│ → GHL sends webhook                     │
+│ → Server updates database               │
+│ → Broadcasts via SSE                    │
+└────────────┬────────────────────────────┘
+             ↓
+┌─────────────────────────────────────────┐
+│ 6. Widget Updates in Real-Time         │
+├─────────────────────────────────────────┤
+│ Widget receives SSE message             │
+│ → Updates UI with checkmark             │
+│ → Progress bar animates                 │
+└─────────────────────────────────────────┘
+```
 
-### Webhook Integration
-When users complete actions in GHL:
-- `ProductCreate` → ✓ Course created
-- `OrderCreate` → ✓ Product attached  
-- `ExternalAuthConnected` → ✓ Payment integrated
-- Domain connection → Manual tracking (coming soon)
+### Checklist Link Targets
 
-Checklist link targets
-----------------------
+The widget builds dashboard URLs dynamically based on `data-location`:
 
-The widget builds dashboard URLs dynamically based on the supplied `data-location`. For example, with
-`data-location="kgREXsjAvhag6Qn8Yjqn"` the CTA buttons redirect to:
+- **Connect Payments** → `https://app.coursecreator360.com/v2/location/{locationId}/payments/integrations`
+- **Create a Course** → `https://app.coursecreator360.com/v2/location/{locationId}/memberships/courses/products-v2`
+- **Connect a Domain** → `https://app.coursecreator360.com/v2/location/{locationId}/settings/domain`
 
-- Connect a domain → `https://app.coursecreator360.com/v2/location/kgREXsjAvhag6Qn8Yjqn/settings/domain`
-- Create a course → `https://app.coursecreator360.com/v2/location/kgREXsjAvhag6Qn8Yjqn/memberships/courses/products`
-- Connect product to site/funnel → `https://app.coursecreator360.com/v2/location/kgREXsjAvhag6Qn8Yjqn/funnels-websites/funnels`
-- Connect a payment processor → `https://app.coursecreator360.com/v2/location/kgREXsjAvhag6Qn8Yjqn/payments/integrations`
+---
 
+## Tech Stack
 
+- **Backend**: Node.js + Express + TypeScript
+- **Database**: Prisma ORM + PostgreSQL
+- **Real-time**: Server-Sent Events (SSE)
+- **OAuth**: GoHighLevel OAuth 2.0
+- **Deployment**: Vercel (serverless)
+- **Frontend**: Vanilla JavaScript (no framework)
+- **Containerization**: Docker + Docker Compose
 
+---
+
+## Security
+
+- ✅ OAuth tokens stored server-side only
+- ✅ Automatic token refresh (no re-auth needed)
+- ✅ Environment variables for secrets
+- ✅ HTTPS enforced in production
+- ✅ Minimum OAuth scopes requested
+- ✅ Client secrets never exposed to client
+
+---
+
+## Support
+
+For issues or questions:
+1. Check this README
+2. Review server logs: `make logs`
+3. Check browser console for errors (F12)
+4. Test API endpoints manually
+
+---
+
+## License
+
+Proprietary - CourseCreator360
+
+---
+
+**Made with ❤️ for CourseCreator360**
