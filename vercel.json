@@ -22,16 +22,8 @@
       "dest": "/api/index.ts"
     },
     {
-      "src": "/widget.js",
-      "dest": "/public/widget.js"
-    },
-    {
-      "src": "/public/(.*)",
-      "dest": "/public/$1"
-    },
-    {
-      "src": "/",
-      "dest": "/public/index.html"
+      "src": "/(.*)",
+      "dest": "/api/index.ts"
     }
   ],
   "env": {
