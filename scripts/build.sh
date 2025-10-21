@@ -11,9 +11,13 @@ echo "🚀 Starting build process..."
 echo "📦 Generating Prisma client..."
 npx prisma generate
 
-# Run database migrations
-echo "🗄️ Running database migrations..."
-npx prisma migrate deploy
+# Run database migrations (only in production)
+if [ "$NODE_ENV" = "production" ]; then
+  echo "🗄️ Running database migrations..."
+  npx prisma migrate deploy
+else
+  echo "🗄️ Skipping migrations (not in production)"
+fi
 
 # Build the application
 echo "🔨 Building application..."
