@@ -1,4 +1,20 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: onboarding
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d onboarding"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   widget:
     build: .
     ports:
@@ -6,17 +22,24 @@ services:
     volumes:
       - ./src:/app/src
       - ./public:/app/public
-      - ./data:/app/data
+      - ./prisma:/app/prisma
       - ./package.json:/app/package.json
       - ./tsconfig.json:/app/tsconfig.json
     environment:
       - NODE_ENV=development
       - PORT=4002
+      - DATABASE_URL=postgresql://user:password@postgres:5432/onboarding?schema=public
+      - DIRECT_URL=postgresql://user:password@postgres:5432/onboarding?schema=public
     env_file:
       - .env
-    command: npm run dev
+    command: sh -c "npx prisma migrate deploy && npm run dev"
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     dns:
       - 8.8.8.8
       - 8.8.4.4
 
+volumes:
+  postgres_data:

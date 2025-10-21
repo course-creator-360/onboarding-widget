@@ -170,7 +170,12 @@ typings/
 # Vercel
 .vercel
 
-# Database files
+# Database files (SQLite - legacy, now using PostgreSQL)
 *.db
 *.db-shm
 *.db-wal
+data/
+
+# Prisma
+/prisma/.env
+/prisma/migrations/**/migration.sql

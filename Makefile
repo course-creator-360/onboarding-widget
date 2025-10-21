@@ -37,7 +37,7 @@ setup:
 # Start server
 start:
 	@echo "Starting development server..."
-	docker-compose up --build -d
+	docker-compose up -d
 	@echo ""
 	@echo "✓ Server starting at http://localhost:4002"
 	@echo ""
