@@ -295,18 +295,9 @@
     
     // Load API base and widget on page load
     window.addEventListener('DOMContentLoaded', async function() {
-      try {
-        // Try to fetch config using relative URL (works in all environments)
-        const response = await fetch('/api/config');
-        const config = await response.json();
-        API_BASE = config.apiBase || window.location.origin;
-        document.getElementById('apiBaseUrl').textContent = API_BASE;
-      } catch (error) {
-        console.error('Error loading config:', error);
-        // Fallback to current origin
-        API_BASE = window.location.origin;
-        document.getElementById('apiBaseUrl').textContent = API_BASE;
-      }
+      // Always use current origin for API calls (fixes Vercel preview URL issues)
+      API_BASE = window.location.origin;
+      document.getElementById('apiBaseUrl').textContent = API_BASE;
       
       // Check agency OAuth status and update button
       await updateAgencyButtonStatus();

@@ -10,7 +10,23 @@ import { checkLocationDomain, checkLocationProducts, checkPaymentIntegration, va
 import { getBaseUrl, getEnvironment, getGhlAppBaseUrl } from './config';
 
 const app = express();
-app.use(cors());
+
+// CORS configuration - allow all origins in development, restrict in production if needed
+const corsOptions = {
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    // Allow requests with no origin (mobile apps, curl, etc)
+    if (!origin) return callback(null, true);
+    
+    // Allow all origins for now (can restrict later)
+    // Vercel preview URLs are unpredictable, so we allow all
+    callback(null, true);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '1mb' }));
 
 // Mount routers under /api for serverless compatibility
