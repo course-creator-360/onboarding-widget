@@ -1,0 +1,57 @@
+// Prisma Schema for CC360 Onboarding Widget
+// Database: PostgreSQL (Vercel Postgres compatible)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Installation {
+  id            String   @id @default(cuid())
+  locationId    String   @unique @map("location_id")
+  accountId     String?  @map("account_id")
+  accessToken   String   @map("access_token")
+  refreshToken  String?  @map("refresh_token")
+  expiresAt     BigInt?  @map("expires_at")
+  scope         String?
+  tokenType     String   @default("location") @map("token_type") // 'agency' or 'location'
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([accountId])
+  @@index([tokenType])
+  @@map("installations")
+}
+
+model Onboarding {
+  id                 String   @id @default(cuid())
+  locationId         String   @unique @map("location_id")
+  domainConnected    Boolean  @default(false) @map("domain_connected")
+  courseCreated      Boolean  @default(false) @map("course_created")
+  paymentIntegrated  Boolean  @default(false) @map("payment_integrated")
+  dismissed          Boolean  @default(false)
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@index([locationId])
+  @@map("onboarding")
+}
+
+model EventLog {
+  id         String   @id @default(cuid())
+  locationId String?  @map("location_id")
+  eventType  String   @map("event_type")
+  payload    Json
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([locationId])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("event_log")
+}
+
