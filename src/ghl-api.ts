@@ -1,7 +1,10 @@
-import { getAgencyInstallation, getInstallation, upsertInstallation } from './db';
+import { getAgencyInstallation, getInstallation, upsertInstallation, getAgencyInstallationByAccountId, getAllAgencyInstallations } from './db';
 
 const GHL_API_BASE = 'https://services.leadconnectorhq.com';
 const GHL_TOKEN_URL = 'https://services.leadconnectorhq.com/oauth/token';
+
+// Cache location-to-company mapping to avoid repeated API calls
+const locationCompanyCache = new Map<string, string>();
 
 /**
  * Refresh an expired OAuth token using the refresh token
@@ -81,29 +84,64 @@ function isTokenExpired(installation: any): boolean {
 }
 
 /**
- * Get OAuth token for API calls (agency or location-specific)
- * Automatically refreshes token if expired
+ * Fetch location details to determine which company/agency owns it
+ * Uses any available agency token for the lookup
  */
-async function getAuthToken(locationId: string): Promise<string | null> {
-  // Try agency token first (preferred)
-  let agencyInstall = await getAgencyInstallation();
-  if (agencyInstall?.accessToken) {
-    // Check if token is expired
-    if (isTokenExpired(agencyInstall)) {
-      console.log('[GHL API] Agency token expired, refreshing...');
-      const newToken = await refreshAccessToken(agencyInstall);
-      if (newToken) {
-        return newToken;
-      } else {
-        console.error('[GHL API] Failed to refresh agency token');
-        // Continue to try location token as fallback
+async function getLocationCompanyId(locationId: string): Promise<string | null> {
+  // Check cache first
+  if (locationCompanyCache.has(locationId)) {
+    return locationCompanyCache.get(locationId)!;
+  }
+  
+  // Get any available agency token for the lookup
+  const agencies = await getAllAgencyInstallations();
+  if (agencies.length === 0) {
+    console.log('[GHL API] No agency installations available for location lookup');
+    return null;
+  }
+  
+  // Try each agency token until we successfully fetch location details
+  for (const agency of agencies) {
+    try {
+      const response = await fetch(
+        `${GHL_API_BASE}/locations/${locationId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${agency.accessToken}`,
+            'Version': '2021-07-28',
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        const companyId = data.location?.companyId || data.companyId;
+        
+        if (companyId) {
+          // Cache the result
+          locationCompanyCache.set(locationId, companyId);
+          console.log(`[GHL API] Location ${locationId} belongs to company ${companyId}`);
+          return companyId;
+        }
       }
-    } else {
-      return agencyInstall.accessToken;
+    } catch (error) {
+      console.error(`[GHL API] Error fetching location details with agency ${agency.accountId}:`, error);
+      continue;
     }
   }
   
-  // Fall back to location-specific token
+  console.log(`[GHL API] Could not determine company ID for location ${locationId}`);
+  return null;
+}
+
+/**
+ * Get OAuth token for API calls (agency or location-specific)
+ * Automatically refreshes token if expired
+ * Supports multi-agency deployments by looking up the correct agency token
+ */
+async function getAuthToken(locationId: string): Promise<string | null> {
+  // First, try location-specific token (takes precedence)
   let locationInstall = await getInstallation(locationId);
   if (locationInstall?.accessToken) {
     // Check if token is expired
@@ -114,10 +152,47 @@ async function getAuthToken(locationId: string): Promise<string | null> {
         return newToken;
       } else {
         console.error(`[GHL API] Failed to refresh location token for ${locationId}`);
-        return null;
+        // Fall through to try agency token
       }
     } else {
       return locationInstall.accessToken;
+    }
+  }
+  
+  // Try to find the correct agency token based on location's company ID
+  const companyId = await getLocationCompanyId(locationId);
+  if (companyId) {
+    const agencyInstall = await getAgencyInstallationByAccountId(companyId);
+    if (agencyInstall?.accessToken) {
+      // Check if token is expired
+      if (isTokenExpired(agencyInstall)) {
+        console.log(`[GHL API] Agency token expired for company ${companyId}, refreshing...`);
+        const newToken = await refreshAccessToken(agencyInstall);
+        if (newToken) {
+          return newToken;
+        } else {
+          console.error(`[GHL API] Failed to refresh agency token for company ${companyId}`);
+        }
+      } else {
+        return agencyInstall.accessToken;
+      }
+    }
+  }
+  
+  // Fallback: Try any agency token (backward compatibility for single-agency deployments)
+  let agencyInstall = await getAgencyInstallation();
+  if (agencyInstall?.accessToken) {
+    // Check if token is expired
+    if (isTokenExpired(agencyInstall)) {
+      console.log('[GHL API] Fallback agency token expired, refreshing...');
+      const newToken = await refreshAccessToken(agencyInstall);
+      if (newToken) {
+        return newToken;
+      } else {
+        console.error('[GHL API] Failed to refresh fallback agency token');
+      }
+    } else {
+      return agencyInstall.accessToken;
     }
   }
   

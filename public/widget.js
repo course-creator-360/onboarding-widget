@@ -7,11 +7,10 @@
   const apiBase = currentScript?.getAttribute('data-api') || 'http://localhost:4002';
 
   if (!locationId) {
-    console.error('[CC360 Widget] Missing data-location attribute');
-    return;
+    console.warn('[CC360 Widget] No location ID provided - will show setup message');
+  } else {
+    console.log('[CC360 Widget] Initializing for location:', locationId);
   }
-
-  console.log('[CC360 Widget] Initializing for location:', locationId);
 
   // Widget state
   let currentStatus = null;
@@ -807,6 +806,13 @@
 
   // Check if OAuth installation is complete and token is valid
   async function checkInstallation() {
+    // If no location ID, always show setup required
+    if (!locationId) {
+      console.log('[CC360 Widget] No location ID - showing setup required');
+      window.cc360WidgetError = 'Agency administrator needs to authorize this app. Please contact your agency admin.';
+      return false;
+    }
+    
     try {
       const response = await fetch(`${apiBase}/api/installation/check?locationId=${locationId}`);
       if (!response.ok) throw new Error('Failed to check installation');
@@ -830,6 +836,12 @@
 
   // Fetch initial status
   async function fetchStatus() {
+    // Can't fetch status without location ID
+    if (!locationId) {
+      console.warn('[CC360 Widget] Cannot fetch status without location ID');
+      return false;
+    }
+    
     try {
       const response = await fetch(`${apiBase}/api/status?locationId=${locationId}`);
       if (!response.ok) throw new Error('Failed to fetch status');
@@ -861,6 +873,12 @@
 
   // Connect to SSE for real-time updates
   function connectSSE() {
+    // Can't connect SSE without location ID
+    if (!locationId) {
+      console.warn('[CC360 Widget] Cannot connect SSE without location ID');
+      return;
+    }
+    
     if (eventSource) {
       eventSource.close();
     }
@@ -1069,14 +1087,17 @@
     } catch (e) {}
     
     // Mark as dismissed in database (optional - for analytics/tracking)
-    try {
-      await fetch(`${apiBase}/api/dismiss`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ locationId })
-      });
-    } catch (error) {
-      console.error('[CC360 Widget] Error marking as dismissed:', error);
+    // Only if we have a location ID
+    if (locationId) {
+      try {
+        await fetch(`${apiBase}/api/dismiss`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ locationId })
+        });
+      } catch (error) {
+        console.error('[CC360 Widget] Error marking as dismissed:', error);
+      }
     }
     
     console.log('[CC360 Widget] Widget minimized and marked as dismissed');

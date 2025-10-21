@@ -253,7 +253,8 @@ export async function findInstallationByAccountId(accountId: string): Promise<In
 }
 
 /**
- * Get agency-level installation
+ * Get agency-level installation (first one found - for backward compatibility)
+ * Note: Use getAgencyInstallationByAccountId() for multi-agency support
  */
 export async function getAgencyInstallation(): Promise<Installation | undefined> {
   const result = await prisma.installation.findFirst({
@@ -273,6 +274,54 @@ export async function getAgencyInstallation(): Promise<Installation | undefined>
     createdAt: dateToTimestamp(result.createdAt),
     updatedAt: dateToTimestamp(result.updatedAt),
   };
+}
+
+/**
+ * Get agency-level installation by account ID
+ * Use this for proper multi-agency support
+ */
+export async function getAgencyInstallationByAccountId(accountId: string): Promise<Installation | undefined> {
+  const result = await prisma.installation.findFirst({
+    where: { 
+      tokenType: 'agency',
+      accountId: accountId
+    },
+  });
+
+  if (!result) return undefined;
+
+  return {
+    locationId: result.locationId,
+    accountId: result.accountId ?? undefined,
+    accessToken: result.accessToken,
+    refreshToken: result.refreshToken ?? undefined,
+    expiresAt: bigIntToNumber(result.expiresAt),
+    scope: result.scope ?? undefined,
+    tokenType: (result.tokenType as 'agency' | 'location') ?? 'location',
+    createdAt: dateToTimestamp(result.createdAt),
+    updatedAt: dateToTimestamp(result.updatedAt),
+  };
+}
+
+/**
+ * Get all agency installations (for multi-agency deployments)
+ */
+export async function getAllAgencyInstallations(): Promise<Installation[]> {
+  const results = await prisma.installation.findMany({
+    where: { tokenType: 'agency' },
+  });
+
+  return results.map(result => ({
+    locationId: result.locationId,
+    accountId: result.accountId ?? undefined,
+    accessToken: result.accessToken,
+    refreshToken: result.refreshToken ?? undefined,
+    expiresAt: bigIntToNumber(result.expiresAt),
+    scope: result.scope ?? undefined,
+    tokenType: (result.tokenType as 'agency' | 'location') ?? 'location',
+    createdAt: dateToTimestamp(result.createdAt),
+    updatedAt: dateToTimestamp(result.updatedAt),
+  }));
 }
 
 /**

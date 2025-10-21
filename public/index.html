@@ -94,6 +94,12 @@
     button.secondary:hover {
       background: #5a6268;
     }
+    button.success {
+      background: #28a745;
+    }
+    button.success:hover {
+      background: #218838;
+    }
     .endpoint-list {
       background: #f8f9fa;
       padding: 20px;
@@ -165,7 +171,7 @@
     <p>Configure agency-level authorization (one-time setup):</p>
     
     <div class="controls">
-      <button onclick="setupAgency()">🔑 Setup Agency OAuth</button>
+      <button id="setupAgencyBtn" onclick="setupAgency()">🔑 Setup Agency OAuth</button>
       <button onclick="checkAgencyStatus()">Check Agency Status</button>
       <button class="secondary" onclick="clearAgencyAuth()">Clear Agency Auth</button>
     </div>
@@ -262,7 +268,32 @@
       console.log('Widget loaded for locationId:', locationId);
     }
     
-    // Load API base on page load
+    // Update agency button status
+    async function updateAgencyButtonStatus() {
+      try {
+        const response = await fetch(`${API_BASE}/api/agency/status`);
+        const data = await response.json();
+        
+        const button = document.getElementById('setupAgencyBtn');
+        if (data.authorized) {
+          button.textContent = '✓ Agency OAuth Connected';
+          button.classList.add('success');
+          button.onclick = () => {
+            if (confirm('Agency OAuth is already set up. Do you want to re-authorize?')) {
+              setupAgency();
+            }
+          };
+        } else {
+          button.textContent = '🔑 Setup Agency OAuth';
+          button.classList.remove('success');
+          button.onclick = setupAgency;
+        }
+      } catch (error) {
+        console.error('Error checking agency status:', error);
+      }
+    }
+    
+    // Load API base and widget on page load
     window.addEventListener('DOMContentLoaded', async function() {
       try {
         // Try to fetch config using relative URL (works in all environments)
@@ -276,6 +307,17 @@
         API_BASE = window.location.origin;
         document.getElementById('apiBaseUrl').textContent = API_BASE;
       }
+      
+      // Check agency OAuth status and update button
+      await updateAgencyButtonStatus();
+      
+      // Auto-load widget without location ID to show "Setup Required" message
+      const script = document.createElement('script');
+      script.src = `${API_BASE}/widget.js`;
+      script.setAttribute('data-api', API_BASE);
+      // Note: no data-location attribute - widget will show "Setup Required"
+      document.body.appendChild(script);
+      console.log('Widget loaded (no location ID - will show setup required)');
     });
   </script>
 
@@ -364,7 +406,7 @@
     }
     
     // Check if returning from OAuth
-    window.addEventListener('DOMContentLoaded', function() {
+    window.addEventListener('DOMContentLoaded', async function() {
       const urlParams = new URLSearchParams(window.location.search);
       const oauthSuccess = urlParams.get('oauth_success');
       const oauthType = sessionStorage.getItem('oauth_type');
@@ -378,9 +420,19 @@
         
         alert('Agency authorization successful! Widget will now work for all sub-accounts.');
         
-        // Clean URL and reload
+        // Clean URL
         window.history.replaceState({}, document.title, window.location.pathname);
-        setTimeout(() => location.reload(), 500);
+        
+        // Update button status and reload widget
+        await updateAgencyButtonStatus();
+        
+        // Reload widget to show checklist
+        const existingWidget = document.getElementById('cc360-onboarding-widget');
+        if (existingWidget) existingWidget.remove();
+        const script = document.createElement('script');
+        script.src = `${API_BASE}/widget.js`;
+        script.setAttribute('data-api', API_BASE);
+        document.body.appendChild(script);
       }
     });
 
@@ -412,8 +464,16 @@
         });
         
         if (response.ok) {
-          alert('Agency authorization cleared! Reloading page...');
-          location.reload();
+          alert('Agency authorization cleared!');
+          // Update button status instead of full page reload
+          await updateAgencyButtonStatus();
+          // Reload widget to show "Setup Required"
+          const existingWidget = document.getElementById('cc360-onboarding-widget');
+          if (existingWidget) existingWidget.remove();
+          const script = document.createElement('script');
+          script.src = `${API_BASE}/widget.js`;
+          script.setAttribute('data-api', API_BASE);
+          document.body.appendChild(script);
         } else {
           alert('Failed to clear agency authorization');
         }
