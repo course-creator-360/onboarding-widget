@@ -7,7 +7,7 @@ import webhookRouter from './webhooks';
 import { getOnboardingStatus, setDismissed, updateOnboardingStatus, getInstallation, hasAgencyAuthorization, getAgencyInstallation, deleteInstallation } from './db';
 import { sseBroker } from './sse';
 import { checkLocationDomain, checkLocationProducts, checkPaymentIntegration, validateToken } from './ghl-api';
-import { getBaseUrl, getEnvironment } from './config';
+import { getBaseUrl, getEnvironment, getGhlAppBaseUrl } from './config';
 
 const app = express();
 app.use(cors());
@@ -26,7 +26,8 @@ app.get('/api/healthz', (_req, res) => res.json({ ok: true }));
 app.get('/api/config', (_req, res) => {
   return res.json({
     apiBase: getBaseUrl(),
-    environment: getEnvironment()
+    environment: getEnvironment(),
+    ghlAppBaseUrl: getGhlAppBaseUrl()
   });
 });
 

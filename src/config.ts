@@ -54,3 +54,11 @@ export function getEnvironment(): string {
   return process.env.NODE_ENV || 'development';
 }
 
+/**
+ * Get the base URL for GoHighLevel app links
+ * Defaults to coursecreator360 whitelabel if not specified
+ */
+export function getGhlAppBaseUrl(): string {
+  return process.env.GHL_APP_BASE_URL || 'https://app.coursecreator360.com';
+}
+
