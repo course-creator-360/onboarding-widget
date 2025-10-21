@@ -229,7 +229,7 @@
   <!-- Widget loading script -->
   <script>
     let LOCATION_ID = null;
-    let API_BASE = 'http://localhost:4002';
+    let API_BASE = window.location.origin; // Use current origin by default
 
     // Load widget with specified location ID
     function loadWidgetWithLocation() {
@@ -265,13 +265,16 @@
     // Load API base on page load
     window.addEventListener('DOMContentLoaded', async function() {
       try {
-        const response = await fetch('http://localhost:4002/api/config');
+        // Try to fetch config using relative URL (works in all environments)
+        const response = await fetch('/api/config');
         const config = await response.json();
-        API_BASE = config.apiBase || 'http://localhost:4002';
+        API_BASE = config.apiBase || window.location.origin;
         document.getElementById('apiBaseUrl').textContent = API_BASE;
       } catch (error) {
         console.error('Error loading config:', error);
-        document.getElementById('apiBaseUrl').textContent = 'http://localhost:4002';
+        // Fallback to current origin
+        API_BASE = window.location.origin;
+        document.getElementById('apiBaseUrl').textContent = API_BASE;
       }
     });
   </script>

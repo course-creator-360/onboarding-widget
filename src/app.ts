@@ -124,7 +124,19 @@ app.get('/api/installation/check', async (req, res) => {
   // Check if agency is authorized (takes precedence)
   const hasAgency = await hasAgencyAuthorization();
   if (hasAgency) {
-    // Agency is authorized, allow widget to work
+    // Agency authorization exists, but verify token is still valid
+    const tokenValid = await validateToken(locationId);
+    if (!tokenValid) {
+      console.log('[Installation Check] Agency token expired or invalid for location:', locationId);
+      return res.json({
+        installed: false,
+        hasToken: false,
+        tokenType: 'agency',
+        error: 'Your authorization has expired. Please contact your agency administrator to reauthorize this app.'
+      });
+    }
+    
+    // Agency is authorized and token is valid
     console.log('[Installation Check] Agency authorized for location:', locationId);
     return res.json({
       installed: true,
@@ -135,10 +147,25 @@ app.get('/api/installation/check', async (req, res) => {
   
   // Fall back to per-location check
   const installation = await getInstallation(locationId);
+  if (installation) {
+    // Check if location token is valid
+    const tokenValid = await validateToken(locationId);
+    if (!tokenValid) {
+      console.log('[Installation Check] Location token expired or invalid for:', locationId);
+      return res.json({
+        installed: false,
+        hasToken: false,
+        tokenType: 'location',
+        error: 'Your authorization has expired. Please reauthorize this app.'
+      });
+    }
+  }
+  
   return res.json({
     installed: !!installation,
     hasToken: !!installation?.accessToken,
-    tokenType: installation?.tokenType || 'location'
+    tokenType: installation?.tokenType || 'location',
+    error: !installation ? 'Agency administrator needs to authorize this app. Please contact your agency admin.' : undefined
   });
 });
 
