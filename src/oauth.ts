@@ -12,15 +12,26 @@ const REDIRECT_URI = getRedirectUri();
 
 const OAUTH_SCOPES = (
   process.env.GHL_SCOPES || [
-    'locations.readonly',
+    'courses.write',
     'courses.readonly',
-    'funnels/funnel.readonly',
-    'funnels/page.readonly',
-    'products.readonly',
     'products/prices.readonly',
+    'products.readonly',
+    'products.write',
+    'products/prices.write',
+    'products/collection.readonly',
+    'products/collection.write',
+    'payments/integration.readonly',
+    'payments/subscriptions.readonly',
+    'payments/custom-provider.readonly',
+    'businesses.readonly',
+    'locations.readonly',
+    'locations/customValues.readonly',
+    'funnels/page.readonly',
+    'funnels/funnel.readonly',
+    'funnels/pagecount.readonly',
+    'funnels/redirect.readonly',
     'payments/orders.readonly',
-    'payments/transactions.readonly',
-    'payments/custom-provider.readonly'
+    'payments/transactions.readonly'
   ].join(' ')
 );
 
@@ -222,17 +233,15 @@ state=RANDOM_STATE</pre>
 router.get('/install', (req, res) => {
   const clientId = process.env.GHL_CLIENT_ID;
   const locationId = (req.query.locationId as string) || undefined;
-  const testMode = req.query.test === 'true';
   
-  // Testing mode - bypass real OAuth
-  if (testMode || !clientId || clientId === 'your_ghl_client_id_here') {
-    console.log('[OAuth] Running in TEST MODE - bypassing real OAuth');
-    return res.send(`
+  // Require OAuth configuration
+  if (!clientId || clientId === 'your_ghl_client_id_here') {
+    return res.status(500).send(`
       <!DOCTYPE html>
       <html>
         <head>
           <meta charset="UTF-8">
-          <title>Test Mode - OAuth Bypass</title>
+          <title>OAuth Configuration Required</title>
           <style>
             body {
               font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -262,71 +271,39 @@ router.get('/install', (req, res) => {
               opacity: 0.9;
               line-height: 1.5;
             }
-            button {
-              background: white;
-              color: #667eea;
-              border: none;
-              padding: 12px 32px;
-              border-radius: 8px;
-              font-size: 16px;
-              font-weight: 600;
-              cursor: pointer;
-              transition: transform 0.2s;
-            }
-            button:hover {
-              transform: scale(1.05);
-            }
             .info {
               background: rgba(255, 255, 255, 0.1);
               border-radius: 8px;
               padding: 16px;
               margin-top: 24px;
               font-size: 14px;
+              text-align: left;
             }
           </style>
         </head>
         <body>
           <div class="container">
-            <div class="icon">🧪</div>
-            <h1>Test Mode</h1>
+            <div class="icon">⚙️</div>
+            <h1>OAuth Configuration Required</h1>
             <p>
-              Real OAuth credentials are not configured. Click below to create a 
-              test installation for development.
+              GoHighLevel OAuth credentials are not configured. Please set GHL_CLIENT_ID and 
+              GHL_CLIENT_SECRET in your environment variables.
             </p>
-            <button onclick="createTestInstallation()">Create Test Installation</button>
             <div class="info">
-              <strong>For Production:</strong><br>
-              Configure GHL_CLIENT_ID and GHL_CLIENT_SECRET in your .env file
+              <strong>Setup Steps:</strong><br>
+              1. Create app in GHL Marketplace<br>
+              2. Get Client ID and Secret<br>
+              3. Add to .env file<br>
+              4. Restart the server<br>
+              5. Return to this page
             </div>
           </div>
-          <script>
-            function createTestInstallation() {
-              fetch('/api/oauth/test-install?locationId=${locationId || 'test-location'}', {
-                method: 'POST'
-              })
-              .then(res => res.json())
-              .then(() => {
-                // Notify parent window
-                if (window.opener) {
-                  window.opener.postMessage({
-                    type: 'oauth_complete',
-                    locationId: '${locationId || 'test-location'}'
-                  }, '*');
-                }
-                setTimeout(() => window.close(), 500);
-              })
-              .catch(err => {
-                alert('Error: ' + err.message);
-              });
-            }
-          </script>
         </body>
       </html>
     `);
   }
   
   // Real OAuth flow
-  if (!clientId) return res.status(500).send('Missing GHL_CLIENT_ID');
   const state = crypto.randomBytes(16).toString('hex');
   stateStore.set(state, { locationId });
   const authorizeUrl = new URL(DEFAULT_AUTHORIZE_URL);
@@ -336,29 +313,6 @@ router.get('/install', (req, res) => {
   authorizeUrl.searchParams.set('scope', OAUTH_SCOPES);
   authorizeUrl.searchParams.set('state', state);
   res.redirect(authorizeUrl.toString());
-});
-
-// Test installation endpoint (for development without real OAuth)
-router.post('/test-install', async (req, res) => {
-  const locationId = (req.query.locationId as string) || 'test-location';
-  
-  try {
-    // Create a fake installation for testing
-    await upsertInstallation({
-      locationId,
-      accountId: 'test-account',
-      accessToken: 'test_access_token_' + Date.now(),
-      refreshToken: 'test_refresh_token',
-      expiresAt: Date.now() + (365 * 24 * 60 * 60 * 1000), // 1 year
-      scope: OAUTH_SCOPES
-    });
-    
-    console.log('[OAuth] Test installation created for location:', locationId);
-    res.json({ success: true, locationId, message: 'Test installation created' });
-  } catch (err) {
-    console.error('[OAuth] Error creating test installation:', err);
-    res.status(500).json({ success: false, error: 'Failed to create test installation' });
-  }
 });
 
 router.get('/callback', async (req, res) => {
