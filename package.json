@@ -5,7 +5,7 @@
   "type": "commonjs",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc -p tsconfig.json && cp -r public dist/",
+    "build": "tsc -p tsconfig.json && mkdir -p dist && cp -r public dist/",
     "vercel-build": "npm run build && npx prisma generate",
     "start": "node dist/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -25,7 +25,7 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/node": "^20.11.24",
-    "@vercel/node": "^3.0.0",
+    "@vercel/node": "^3.2.29",
     "prisma": "^6.17.1",
     "tsx": "^4.19.2",
     "typescript": "^5.5.4"
