@@ -179,3 +179,4 @@ data/
 # Prisma
 /prisma/.env
 /prisma/migrations/**/migration.sql
+.env*.local

@@ -30,6 +30,32 @@ app.get('/api/config', (_req, res) => {
   });
 });
 
+// Migration endpoint for manual migration runs
+app.post('/api/migrate', async (_req, res) => {
+  try {
+    const { execSync } = require('child_process');
+    console.log('Running database migrations...');
+    
+    execSync('npx prisma migrate deploy', { 
+      stdio: 'pipe',
+      env: {
+        ...process.env,
+        DATABASE_URL: process.env.DATABASE_URL,
+        DIRECT_URL: process.env.DIRECT_URL
+      }
+    });
+    
+    console.log('Database migrations completed successfully');
+    return res.json({ success: true, message: 'Migrations completed successfully' });
+  } catch (error) {
+    console.error('Migration failed:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+});
+
 app.get('/api/status', async (req, res) => {
   const locationId = (req.query.locationId as string) || '';
   if (!locationId) return res.status(400).json({ error: 'locationId is required' });
