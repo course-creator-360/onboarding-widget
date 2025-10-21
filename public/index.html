@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CC360 Onboarding Widget - Demo</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .demo-container {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.2);
+      max-width: 800px;
+      width: 100%;
+      padding: 48px;
+    }
+    h1 {
+      color: #2c3e50;
+      font-size: 32px;
+      margin-bottom: 16px;
+    }
+    h2 {
+      color: #667eea;
+      font-size: 20px;
+      margin-top: 32px;
+      margin-bottom: 16px;
+    }
+    p {
+      color: #6c757d;
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+    .info-box {
+      background: #f8f9fa;
+      border-left: 4px solid #667eea;
+      padding: 16px;
+      margin: 24px 0;
+      border-radius: 4px;
+    }
+    .info-box strong {
+      color: #2c3e50;
+      display: block;
+      margin-bottom: 8px;
+    }
+    code {
+      background: #e9ecef;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 14px;
+      color: #e83e8c;
+    }
+    .controls {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+      flex-wrap: wrap;
+    }
+    button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    button:hover {
+      background: #5568d3;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+    button:active {
+      transform: translateY(0);
+    }
+    button.secondary {
+      background: #6c757d;
+    }
+    button.secondary:hover {
+      background: #5a6268;
+    }
+    .endpoint-list {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 16px 0;
+    }
+    .endpoint-list li {
+      margin-bottom: 8px;
+      color: #495057;
+    }
+    .status-display {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      padding: 16px;
+      border-radius: 8px;
+      margin-top: 16px;
+      display: none;
+    }
+    .status-display.show {
+      display: block;
+    }
+    .status-display pre {
+      background: white;
+      padding: 12px;
+      border-radius: 4px;
+      overflow-x: auto;
+      margin-top: 8px;
+    }
+    .badge {
+      display: inline-block;
+      background: #28a745;
+      color: white;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="demo-container">
+    <h1>🚀 CC360 Onboarding Widget</h1>
+    <p class="badge">Demo Mode</p>
+    <p>
+      This is a demo page for the CourseCreator360 onboarding widget. 
+      The widget appears in the bottom-right corner and tracks onboarding progress.
+    </p>
+
+    <div class="info-box">
+      <strong>Widget Configuration:</strong>
+      <div style="margin-top: 12px;">
+        <label for="locationIdInput" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">Enter Location ID:</label>
+        <input 
+          type="text" 
+          id="locationIdInput" 
+          placeholder="e.g., L851uHvru1ipOe8DIwNS"
+          style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; margin-bottom: 12px;"
+        />
+        <button onclick="loadWidgetWithLocation()" style="margin-bottom: 12px;">Load Widget</button>
+        <p style="margin: 0; font-size: 13px; color: #6c757d;">
+          Current Location: <code id="currentLocationId">Not loaded</code><br>
+          API Base: <code id="apiBaseUrl">Loading...</code>
+        </p>
+      </div>
+    </div>
+
+    <h2>Agency Setup</h2>
+    <p>Configure agency-level authorization (one-time setup):</p>
+    
+    <div class="controls">
+      <button onclick="setupAgency()">🔑 Setup Agency OAuth</button>
+      <button onclick="checkAgencyStatus()">Check Agency Status</button>
+      <button class="secondary" onclick="clearAgencyAuth()">Clear Agency Auth</button>
+    </div>
+
+    <h2>Widget Testing</h2>
+    <p>Test widget behavior and onboarding progress:</p>
+    
+    <div class="controls">
+      <button onclick="checkInstallation()">Check Installation</button>
+      <button onclick="resetWidget()">Reset Widget State</button>
+      <button class="secondary" onclick="reloadWidget()">Reload Widget</button>
+      <button class="secondary" onclick="clearLocationData()" style="background: #dc3545;">🗑️ Clear Location Data</button>
+    </div>
+
+    <h2>Onboarding Progress</h2>
+    <p>Simulate onboarding steps for the current location:</p>
+    
+    <div class="controls">
+      <button onclick="toggleStep('paymentIntegrated')">Toggle Payment</button>
+      <button onclick="toggleStep('courseCreated')">Toggle Course</button>
+      <button onclick="toggleStep('domainConnected')">Toggle Domain</button>
+      <button class="secondary" onclick="resetAll()">Reset All</button>
+      <button class="secondary" onclick="checkStatus()">Check Status</button>
+    </div>
+
+    <div id="status-display" class="status-display">
+      <strong>Current Status:</strong>
+      <pre id="status-content"></pre>
+    </div>
+
+    <h2>Available Endpoints</h2>
+    <div class="endpoint-list">
+      <ul>
+        <li><code>GET /api/status?locationId=...</code> - Get current checklist status</li>
+        <li><code>GET /api/events?locationId=...</code> - SSE stream for real-time updates</li>
+        <li><code>GET /api/onboarding/:locationId/check-products</code> - Check if products exist (polling)</li>
+        <li><code>POST /api/dismiss</code> - Dismiss the widget</li>
+        <li><code>POST /api/mock/set</code> - Update checklist flags (testing)</li>
+        <li><code>POST /api/test/clear-location</code> - Clear location data (keep agency auth)</li>
+        <li><code>GET /api/oauth/install</code> - OAuth installation flow</li>
+        <li><code>POST /api/webhooks/ghl</code> - GHL webhook receiver</li>
+      </ul>
+    </div>
+
+    <h2>How It Works</h2>
+    <p>
+      The widget uses Server-Sent Events (SSE) for real-time updates. When you click 
+      the testing buttons above, the widget will automatically update without refreshing the page.
+    </p>
+    <p>
+      <strong>Product Detection:</strong> The widget now uses <strong>fetch interception</strong> to detect 
+      when products/courses are created in GHL's admin dashboard. When the widget is loaded as custom JS 
+      in the agency, it intercepts GHL's API calls and triggers a status check when product creation is detected.
+    </p>
+    <p> 
+      Other events (domain connection, payment integration, orders) still use webhooks from GoHighLevel 
+      for real-time updates.
+    </p>
+  </div>
+
+  <!-- Widget loading script -->
+  <script>
+    let LOCATION_ID = null;
+    let API_BASE = 'http://localhost:4002';
+
+    // Load widget with specified location ID
+    function loadWidgetWithLocation() {
+      const locationIdInput = document.getElementById('locationIdInput');
+      const locationId = locationIdInput.value.trim();
+      
+      if (!locationId) {
+        alert('Please enter a Location ID');
+        return;
+      }
+      
+      LOCATION_ID = locationId;
+      document.getElementById('currentLocationId').textContent = locationId;
+      
+      // Remove existing widget script if any
+      const existing = document.querySelector('script[src*="widget.js"]');
+      if (existing) existing.remove();
+      
+      // Remove existing widget from DOM
+      const existingWidget = document.getElementById('cc360-onboarding-widget');
+      if (existingWidget) existingWidget.remove();
+      
+      // Load widget
+      const script = document.createElement('script');
+      script.src = `${API_BASE}/widget.js`;
+      script.setAttribute('data-location', locationId);
+      script.setAttribute('data-api', API_BASE);
+      document.body.appendChild(script);
+      
+      console.log('Widget loaded for locationId:', locationId);
+    }
+    
+    // Load API base on page load
+    window.addEventListener('DOMContentLoaded', async function() {
+      try {
+        const response = await fetch('http://localhost:4002/api/config');
+        const config = await response.json();
+        API_BASE = config.apiBase || 'http://localhost:4002';
+        document.getElementById('apiBaseUrl').textContent = API_BASE;
+      } catch (error) {
+        console.error('Error loading config:', error);
+        document.getElementById('apiBaseUrl').textContent = 'http://localhost:4002';
+      }
+    });
+  </script>
+
+  <script>
+    let currentStatus = {};
+
+    async function checkStatus() {
+      if (!LOCATION_ID) {
+        alert('Please load the widget first by entering a Location ID');
+        return;
+      }
+      try {
+        const response = await fetch(`${API_BASE}/api/status?locationId=${LOCATION_ID}`);
+        currentStatus = await response.json();
+        displayStatus(currentStatus);
+      } catch (error) {
+        console.error('Error fetching status:', error);
+      }
+    }
+
+    async function toggleStep(step) {
+      try {
+        // Get current status first
+        await checkStatus();
+        
+        // Toggle the step
+        const newValue = !currentStatus[step];
+        
+        const response = await fetch(`${API_BASE}/api/mock/set`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            locationId: LOCATION_ID,
+            updates: { [step]: newValue }
+          })
+        });
+        
+        const updatedStatus = await response.json();
+        displayStatus(updatedStatus);
+      } catch (error) {
+        console.error('Error toggling step:', error);
+      }
+    }
+
+    async function resetAll() {
+      try {
+        const response = await fetch(`${API_BASE}/api/mock/set`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            locationId: LOCATION_ID,
+            updates: {
+              domainConnected: false,
+              courseCreated: false,
+              paymentIntegrated: false,
+              dismissed: false
+            }
+          })
+        });
+        
+        const updatedStatus = await response.json();
+        displayStatus(updatedStatus);
+      } catch (error) {
+        console.error('Error resetting:', error);
+      }
+    }
+
+    function displayStatus(status) {
+      currentStatus = status;
+      const statusDisplay = document.getElementById('status-display');
+      const statusContent = document.getElementById('status-content');
+      statusContent.textContent = JSON.stringify(status, null, 2);
+      statusDisplay.classList.add('show');
+    }
+
+    function setupAgency() {
+      // Option 1: Use same window (no popup)
+      if (confirm('You will be redirected to GoHighLevel for authorization. Continue?')) {
+        // Save current URL to return after OAuth
+        sessionStorage.setItem('oauth_return_url', window.location.href);
+        sessionStorage.setItem('oauth_type', 'agency');
+        
+        // Redirect same window to OAuth
+        window.location.href = `${API_BASE}/api/oauth/agency/install`;
+      }
+    }
+    
+    // Check if returning from OAuth
+    window.addEventListener('DOMContentLoaded', function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const oauthSuccess = urlParams.get('oauth_success');
+      const oauthType = sessionStorage.getItem('oauth_type');
+      
+      if (oauthSuccess === 'true' && oauthType === 'agency') {
+        sessionStorage.removeItem('oauth_type');
+        sessionStorage.removeItem('oauth_return_url');
+        
+        // Clear minimized state so widget shows full after OAuth
+        localStorage.removeItem('cc360_widget_minimized');
+        
+        alert('Agency authorization successful! Widget will now work for all sub-accounts.');
+        
+        // Clean URL and reload
+        window.history.replaceState({}, document.title, window.location.pathname);
+        setTimeout(() => location.reload(), 500);
+      }
+    });
+
+    async function checkAgencyStatus() {
+      try {
+        const response = await fetch(`${API_BASE}/api/agency/status`);
+        const data = await response.json();
+        
+        if (data.authorized) {
+          alert(`Agency Status: ✓ Authorized\n\nAccount ID: ${data.installation?.accountId || 'N/A'}\nCreated: ${data.installation?.createdAt ? new Date(data.installation.createdAt).toLocaleString() : 'N/A'}`);
+        } else {
+          alert('Agency Status: ✗ Not Authorized\n\nClick "Setup Agency OAuth" to authorize.');
+        }
+        displayStatus(data);
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Error checking agency status. See console for details.');
+      }
+    }
+
+    async function clearAgencyAuth() {
+      if (!confirm('This will clear the agency authorization. All sub-accounts will lose access until re-authorized. Continue?')) {
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${API_BASE}/api/installation?locationId=agency`, {
+          method: 'DELETE'
+        });
+        
+        if (response.ok) {
+          alert('Agency authorization cleared! Reloading page...');
+          location.reload();
+        } else {
+          alert('Failed to clear agency authorization');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Error clearing agency authorization. See console for details.');
+      }
+    }
+
+    async function checkInstallation() {
+      if (!LOCATION_ID) {
+        alert('Please load the widget first by entering a Location ID');
+        return;
+      }
+      try {
+        const response = await fetch(`${API_BASE}/api/installation/check?locationId=${LOCATION_ID}`);
+        const data = await response.json();
+        
+        const typeLabel = data.tokenType === 'agency' ? '(via Agency)' : '(Location-specific)';
+        alert(`Installation Status:\n\nInstalled: ${data.installed}\nHas Token: ${data.hasToken}\nToken Type: ${data.tokenType} ${typeLabel}`);
+        displayStatus(data);
+      } catch (error) {
+        console.error('Error checking installation:', error);
+        alert('Error checking installation. See console for details.');
+      }
+    }
+
+    function resetWidget() {
+      // Clear all widget state from localStorage
+      localStorage.removeItem('cc360_widget_minimized');
+      alert('Widget state cleared. Reloading page...');
+      location.reload();
+    }
+
+    function reloadWidget() {
+      if (window.cc360Widget && window.cc360Widget.reload) {
+        window.cc360Widget.reload();
+      } else {
+        location.reload();
+      }
+    }
+
+    async function clearLocationData() {
+      if (!LOCATION_ID) {
+        alert('Please load the widget first by entering a Location ID');
+        return;
+      }
+      if (!confirm(`⚠️ This will clear ALL data for location ${LOCATION_ID}:\n\n- All onboarding progress\n- Location-specific installation\n- Widget state\n\n✓ Agency authorization will be preserved\n\nContinue?`)) {
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${API_BASE}/api/test/clear-location`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ locationId: LOCATION_ID })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          alert(`✓ ${data.message}\n\nReloading page...`);
+          
+          // Clear localStorage widget state
+          localStorage.removeItem('cc360_widget_minimized');
+          
+          // Reload page
+          setTimeout(() => location.reload(), 500);
+        } else {
+          alert(`Error: ${data.error}\n\n${data.message || 'Unknown error'}`);
+        }
+      } catch (error) {
+        console.error('Error clearing location data:', error);
+        alert('Error clearing location data. See console for details.');
+      }
+    }
+  </script>
+</body>
+</html>
+
