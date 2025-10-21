@@ -2,7 +2,6 @@
   "version": 2,
   "buildCommand": "npm run vercel-build",
   "installCommand": "npm install && npx prisma generate",
-  "outputDirectory": "dist",
   "functions": {
     "api/index.ts": {
       "runtime": "@vercel/node@4.0.0",
@@ -24,15 +23,15 @@
     },
     {
       "src": "/widget.js",
-      "dest": "/dist/public/widget.js"
+      "dest": "/public/widget.js"
     },
     {
       "src": "/public/(.*)",
-      "dest": "/dist/public/$1"
+      "dest": "/public/$1"
     },
     {
       "src": "/",
-      "dest": "/dist/public/index.html"
+      "dest": "/public/index.html"
     }
   ],
   "env": {
