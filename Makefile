@@ -24,8 +24,6 @@ setup:
 		cp env.template .env; \
 		echo "✓ Created .env file from template"; \
 		echo "⚠ Please edit .env and add your GHL credentials"; \
-	else \
-		echo "✓ .env file already exists"; \
 	fi
 	@mkdir -p data
 	@echo "✓ Created data directory"
