@@ -140,7 +140,7 @@ async function getLocationCompanyId(locationId: string): Promise<string | null> 
  * Automatically refreshes token if expired
  * Supports multi-agency deployments by looking up the correct agency token
  */
-async function getAuthToken(locationId: string): Promise<string | null> {
+export async function getAuthToken(locationId: string): Promise<string | null> {
   // First, try location-specific token (takes precedence)
   let locationInstall = await getInstallation(locationId);
   if (locationInstall?.accessToken) {
