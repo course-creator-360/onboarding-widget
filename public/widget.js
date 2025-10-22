@@ -241,6 +241,17 @@
         .cc360-checklist-item.completed:hover {
           border-color: #28a745;
         }
+        .cc360-checklist-item.disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+          pointer-events: none;
+          background: #f8f9fa;
+        }
+        .cc360-checklist-item.disabled:hover {
+          border-color: #e9ecef;
+          transform: none;
+          box-shadow: none;
+        }
         .cc360-checkbox {
           width: 22px;
           height: 22px;
@@ -259,6 +270,10 @@
         .cc360-checklist-item.completed .cc360-checkbox {
           background: #10b981;
           border-color: #10b981;
+        }
+        .cc360-checklist-item.disabled .cc360-checkbox {
+          border-color: #e9ecef;
+          background: #f8f9fa;
         }
         .cc360-checkbox::after {
           content: '✓';
@@ -281,6 +296,15 @@
           font-weight: 500;
           margin: 0;
           color: #1a202c;
+        }
+        .cc360-checklist-item.disabled .cc360-checklist-title {
+          color: #adb5bd;
+        }
+        .cc360-lock-icon {
+          margin-left: auto;
+          padding-left: 8px;
+          font-size: 16px;
+          opacity: 0.5;
         }
         .cc360-progress {
           margin-bottom: 16px;
@@ -406,17 +430,39 @@
     const progressBarEl = document.getElementById('cc360-progress-bar');
     if (progressBarEl) progressBarEl.style.width = `${progressPercent}%`;
 
+    // Determine which items should be enabled (in order)
+    let foundFirstIncomplete = false;
+    const itemsWithState = items.map(item => {
+      let isDisabled = false;
+      
+      if (item.completed) {
+        // Completed items are always enabled
+        isDisabled = false;
+      } else {
+        // For incomplete items, only the first one should be enabled
+        if (foundFirstIncomplete) {
+          isDisabled = true;
+        } else {
+          foundFirstIncomplete = true;
+          isDisabled = false;
+        }
+      }
+      
+      return { ...item, isDisabled };
+    });
+    
     // Render items (minimal - no descriptions)
-    checklistContainer.innerHTML = items.map(item => `
+    checklistContainer.innerHTML = itemsWithState.map(item => `
       <a 
         href="${buildDashboardUrl(item.url)}" 
-        class="cc360-checklist-item ${item.completed ? 'completed' : ''}"
+        class="cc360-checklist-item ${item.completed ? 'completed' : ''} ${item.isDisabled ? 'disabled' : ''}"
         target="_blank"
       >
         <div class="cc360-checkbox"></div>
         <div class="cc360-checklist-content">
           <div class="cc360-checklist-title">${item.title}</div>
         </div>
+        ${item.isDisabled ? '<div class="cc360-lock-icon">🔒</div>' : ''}
       </a>
     `).join('');
   }
