@@ -6,7 +6,7 @@ import oauthRouter from './oauth';
 import webhookRouter from './webhooks';
 import { getOnboardingStatus, setDismissed, updateOnboardingStatus, getInstallation, hasAgencyAuthorization, getAgencyInstallation, deleteInstallation } from './db';
 import { sseBroker } from './sse';
-import { checkLocationDomain, checkLocationProducts, checkPaymentIntegration, validateToken } from './ghl-api';
+import { checkLocationDomain, checkLocationProducts, checkPaymentIntegration, validateToken, getAuthToken } from './ghl-api';
 import { getBaseUrl, getEnvironment, getGhlAppBaseUrl } from './config';
 
 const app = express();
@@ -140,10 +140,11 @@ app.get('/api/installation/check', async (req, res) => {
   // Check if agency is authorized (takes precedence)
   const hasAgency = await hasAgencyAuthorization();
   if (hasAgency) {
-    // Agency authorization exists, but verify token is still valid
-    const tokenValid = await validateToken(locationId);
-    if (!tokenValid) {
-      console.log('[Installation Check] Agency token expired or invalid for location:', locationId);
+    // Agency authorization exists - attempt to get a valid token (will auto-refresh if needed)
+    const token = await getAuthToken(locationId);
+    
+    if (!token) {
+      console.log('[Installation Check] Failed to get valid token for location:', locationId);
       return res.json({
         installed: false,
         hasToken: false,
@@ -152,8 +153,8 @@ app.get('/api/installation/check', async (req, res) => {
       });
     }
     
-    // Agency is authorized and token is valid
-    console.log('[Installation Check] Agency authorized for location:', locationId);
+    // Token is valid (either existing or refreshed)
+    console.log('[Installation Check] Valid token obtained for location:', locationId);
     return res.json({
       installed: true,
       hasToken: true,
@@ -164,10 +165,11 @@ app.get('/api/installation/check', async (req, res) => {
   // Fall back to per-location check
   const installation = await getInstallation(locationId);
   if (installation) {
-    // Check if location token is valid
-    const tokenValid = await validateToken(locationId);
-    if (!tokenValid) {
-      console.log('[Installation Check] Location token expired or invalid for:', locationId);
+    // Attempt to get a valid token (will auto-refresh if needed)
+    const token = await getAuthToken(locationId);
+    
+    if (!token) {
+      console.log('[Installation Check] Failed to get valid token for location:', locationId);
       return res.json({
         installed: false,
         hasToken: false,
@@ -175,13 +177,21 @@ app.get('/api/installation/check', async (req, res) => {
         error: 'Your authorization has expired. Please reauthorize this app.'
       });
     }
+    
+    // Token is valid (either existing or refreshed)
+    console.log('[Installation Check] Valid token obtained for location:', locationId);
+    return res.json({
+      installed: true,
+      hasToken: true,
+      tokenType: installation?.tokenType || 'location'
+    });
   }
   
   return res.json({
-    installed: !!installation,
-    hasToken: !!installation?.accessToken,
-    tokenType: installation?.tokenType || 'location',
-    error: !installation ? 'Agency administrator needs to authorize this app. Please contact your agency admin.' : undefined
+    installed: false,
+    hasToken: false,
+    tokenType: 'location',
+    error: 'Agency administrator needs to authorize this app. Please contact your agency admin.'
   });
 });
 
