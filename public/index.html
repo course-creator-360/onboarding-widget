@@ -522,7 +522,7 @@
         alert('Please add ?locationId=YOUR_LOCATION_ID to the URL to test with a specific location');
         return;
       }
-      if (!confirm(`⚠️ This will clear ALL data for location ${LOCATION_ID}:\n\n- All onboarding progress\n- Location-specific installation\n- Widget state\n\n✓ Agency authorization will be preserved\n\nContinue?`)) {
+      if (!confirm(`⚠️ This will clear ALL data for location ${LOCATION_ID}:\n\n- All onboarding progress\n- Location-specific installation\n- Widget state (including dismissal)\n- Local storage (position, minimized state)\n\n✓ Agency authorization will be preserved\n\nContinue?`)) {
         return;
       }
       
@@ -536,10 +536,17 @@
         const data = await response.json();
         
         if (response.ok) {
-          alert(`✓ ${data.message}\n\nReloading page...`);
+          alert(`✓ ${data.message}\n\nClearing local storage and reloading...`);
           
-          // Clear localStorage widget state
-          localStorage.removeItem('cc360_widget_minimized');
+          // Clear all widget-related localStorage items (especially dismissed state)
+          try {
+            localStorage.removeItem('cc360_widget_minimized');
+            localStorage.removeItem('cc360_widget_dismissed_permanently'); // Legacy, but clear anyway
+            localStorage.removeItem('cc360_widget_position');
+            localStorage.removeItem('cc360_widget_height');
+          } catch (e) {
+            console.error('Error clearing localStorage:', e);
+          }
           
           // Reload page
           setTimeout(() => location.reload(), 500);

@@ -1978,12 +1978,7 @@
     widgetElement.remove();
     widgetElement = null;
     
-    // Save permanent dismissal to localStorage
-    try {
-      localStorage.setItem('cc360_widget_dismissed_permanently', 'true');
-    } catch (e) {}
-    
-    // Mark as dismissed in database (optional - for analytics/tracking)
+    // Mark as dismissed in database (controls widget visibility)
     if (locationId) {
       try {
         await fetch(`${apiBase}/api/dismiss`, {
@@ -1991,6 +1986,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ locationId })
         });
+        console.log('[CC360 Widget] Marked as dismissed in database');
       } catch (error) {
         console.error('[CC360 Widget] Error marking as dismissed:', error);
       }
@@ -2149,15 +2145,6 @@
   async function init() {
     console.log('[CC360 Widget] Initializing...');
     
-    // Check if widget has been permanently dismissed
-    try {
-      const permanentlyDismissed = localStorage.getItem('cc360_widget_dismissed_permanently');
-      if (permanentlyDismissed === 'true') {
-        console.log('[CC360 Widget] Widget has been permanently dismissed, not showing');
-        return;
-      }
-    } catch (e) {}
-    
     // Clear minimized state on page load (widget should default to expanded)
     try {
       localStorage.removeItem('cc360_widget_minimized');
@@ -2230,8 +2217,6 @@
         widgetElement.remove();
         widgetElement = null;
       }
-      // Clear permanent dismissal on reload
-      localStorage.removeItem('cc360_widget_dismissed_permanently');
       await init();
     }
   };
