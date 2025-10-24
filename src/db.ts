@@ -15,6 +15,7 @@ export type OnboardingStatus = {
   updatedAt: number;
   createdAt: number;
   shouldShowWidget: boolean;
+  allTasksCompleted: boolean; // Helper for widget to know when to show completion dialog
 };
 
 export type Installation = {
@@ -41,33 +42,25 @@ function bigIntToNumber(value: bigint | null | undefined): number | undefined {
 }
 
 /**
- * Calculate if widget should be shown based on age and completion status
- * Widget shows if:
- * - Location was created within last 30 days (from onboarding.createdAt)
- * - AND not all 3 tasks are completed
+ * Calculate if widget should be shown
+ * Widget shows unless explicitly dismissed by user action
+ * When all tasks are complete, widget will show a completion dialog
+ * and only hide when user clicks "OK" (sets dismissed=true)
  */
 function calculateShouldShowWidget(
   createdAt: number,
   domainConnected: boolean,
   courseCreated: boolean,
-  paymentIntegrated: boolean
+  paymentIntegrated: boolean,
+  dismissed: boolean
 ): boolean {
-  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-  const now = Date.now();
-  const age = now - createdAt;
-  
-  // Hide if older than 30 days
-  if (age > THIRTY_DAYS_MS) {
+  // Hide ONLY if manually dismissed by user (after clicking "OK" on completion dialog)
+  if (dismissed) {
     return false;
   }
   
-  // Hide if all tasks completed
-  const allCompleted = domainConnected && courseCreated && paymentIntegrated;
-  if (allCompleted) {
-    return false;
-  }
-  
-  // Show widget if within 30 days and not all completed
+  // Otherwise always show the widget
+  // The widget itself will handle showing completion dialog when all tasks are done
   return true;
 }
 
@@ -103,11 +96,13 @@ export async function getOnboardingStatus(locationId: string): Promise<Onboardin
   }
 
   const createdAt = dateToTimestamp(row.createdAt);
+  const allTasksCompleted = row.domainConnected && row.courseCreated && row.paymentIntegrated;
   const shouldShowWidget = calculateShouldShowWidget(
     createdAt,
     row.domainConnected,
     row.courseCreated,
-    row.paymentIntegrated
+    row.paymentIntegrated,
+    row.dismissed
   );
 
   return {
@@ -119,6 +114,7 @@ export async function getOnboardingStatus(locationId: string): Promise<Onboardin
     createdAt,
     updatedAt: dateToTimestamp(row.updatedAt),
     shouldShowWidget,
+    allTasksCompleted,
   };
 }
 
@@ -127,18 +123,20 @@ export async function getOnboardingStatus(locationId: string): Promise<Onboardin
  */
 export async function updateOnboardingStatus(
   locationId: string,
-  updates: Partial<Omit<OnboardingStatus, 'locationId' | 'createdAt' | 'updatedAt'>>
+  updates: Partial<Omit<OnboardingStatus, 'locationId' | 'createdAt' | 'updatedAt' | 'shouldShowWidget' | 'allTasksCompleted'>>
 ): Promise<OnboardingStatus> {
   await ensureOnboardingRow(locationId);
 
+  // Filter out undefined values to only update fields that are explicitly provided
+  const data: Record<string, any> = {};
+  if (updates.domainConnected !== undefined) data.domainConnected = updates.domainConnected;
+  if (updates.courseCreated !== undefined) data.courseCreated = updates.courseCreated;
+  if (updates.paymentIntegrated !== undefined) data.paymentIntegrated = updates.paymentIntegrated;
+  if (updates.dismissed !== undefined) data.dismissed = updates.dismissed;
+
   await prisma.onboarding.update({
     where: { locationId },
-    data: {
-      domainConnected: updates.domainConnected,
-      courseCreated: updates.courseCreated,
-      paymentIntegrated: updates.paymentIntegrated,
-      dismissed: updates.dismissed,
-    },
+    data,
   });
 
   return getOnboardingStatus(locationId);
@@ -149,6 +147,38 @@ export async function updateOnboardingStatus(
  */
 export async function setDismissed(locationId: string, dismissed: boolean): Promise<OnboardingStatus> {
   return updateOnboardingStatus(locationId, { dismissed });
+}
+
+/**
+ * Toggle a specific onboarding field atomically
+ */
+export async function toggleOnboardingField(
+  locationId: string,
+  field: 'domainConnected' | 'courseCreated' | 'paymentIntegrated' | 'dismissed'
+): Promise<OnboardingStatus> {
+  await ensureOnboardingRow(locationId);
+
+  // Get current value directly from database
+  const current = await prisma.onboarding.findUnique({
+    where: { locationId },
+    select: { [field]: true }
+  });
+
+  if (!current) {
+    throw new Error(`No onboarding record found for location ${locationId}`);
+  }
+
+  // Toggle the field value
+  const newValue = !current[field];
+
+  // Update only this specific field
+  await prisma.onboarding.update({
+    where: { locationId },
+    data: { [field]: newValue }
+  });
+
+  // Return the updated status
+  return getOnboardingStatus(locationId);
 }
 
 /**

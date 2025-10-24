@@ -1,4 +1,5 @@
 import { getAgencyInstallation, getInstallation, upsertInstallation, getAgencyInstallationByAccountId, getAllAgencyInstallations } from './db';
+import { getSDKClient } from './ghl-sdk';
 
 const GHL_API_BASE = 'https://services.leadconnectorhq.com';
 const GHL_TOKEN_URL = 'https://services.leadconnectorhq.com/oauth/token';
@@ -204,54 +205,25 @@ export async function getAuthToken(locationId: string): Promise<string | null> {
  * Returns true if at least 1 domain exists, false otherwise
  */
 export async function checkLocationDomain(locationId: string): Promise<boolean> {
-  const token = await getAuthToken(locationId);
-  
-  if (!token) {
-    console.log('[GHL API] No auth token available for domain check - agency OAuth not completed');
-    return false;
-  }
-  
   try {
-    console.log(`[GHL API] Checking domain for location: ${locationId}`);
+    console.log(`[GHL SDK] Checking domain for location: ${locationId}`);
     
-    const response = await fetch(
-      `${GHL_API_BASE}/locations/${locationId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Version': '2021-07-28',
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[GHL API] Failed to fetch location: ${response.status}`, errorText);
-      
-      if (response.status === 401) {
-        console.error('[GHL API] Token is invalid or expired. Run agency OAuth again.');
-      }
-      
-      return false;
-    }
-    
-    const data = await response.json();
+    const ghl = await getSDKClient(locationId);
+    const response = await ghl.locations.getLocation({ locationId });
+    const location: any = response?.location;
     
     // Simple boolean check: does location have any domain?
     const hasDomain = !!(
-      data.location?.customDomain || 
-      data.location?.domain ||
-      data.customDomain ||
-      data.domain
+      location?.customDomain || 
+      location?.domain
     );
     
-    console.log(`[GHL API] Domain check for ${locationId}: ${hasDomain}`, 
-      data.location?.customDomain || data.customDomain || 'no domain');
+    console.log(`[GHL SDK] Domain check for ${locationId}: ${hasDomain}`, 
+      location?.customDomain || 'no domain');
     return hasDomain;
     
   } catch (error) {
-    console.error('[GHL API] Error checking domain:', error);
+    console.error('[GHL SDK] Error checking domain:', error);
     return false;
   }
 }
@@ -298,55 +270,34 @@ export async function validateToken(locationId: string): Promise<boolean> {
  * Returns true if at least 1 product exists, false otherwise
  */
 export async function checkLocationProducts(locationId: string): Promise<boolean> {
-  const token = await getAuthToken(locationId);
-  
-  if (!token) {
-    console.log('[GHL API] No auth token available for products check');
-    return false;
-  }
-  
   try {
-    console.log(`[GHL API] Checking products for location: ${locationId}`);
+    console.log(`[GHL SDK] Checking products for location: ${locationId}`);
     
-    const response = await fetch(
-      `${GHL_API_BASE}/products/?locationId=${locationId}&limit=1`,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Version': '2021-07-28',
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[GHL API] Failed to fetch products: ${response.status}`, errorText);
-      return false;
-    }
-    
-    const data = await response.json();
+    const ghl = await getSDKClient(locationId);
+    const response = await ghl.products.listInvoices({
+      locationId: locationId,
+      limit: 1
+    });
     
     // Log the full API response for debugging
-    console.log(`[GHL API] Products API Response:`, JSON.stringify(data, null, 2));
+    console.log(`[GHL SDK] Products API Response:`, JSON.stringify(response, null, 2));
     
     // Check if any products exist - ONLY check array length, not metadata
-    // Metadata (total/count) might be present even when array is empty
-    const productsArray = data.products || data.data || [];
+    const productsArray = response.products || [];
     const arrayLength = Array.isArray(productsArray) ? productsArray.length : 0;
     const hasProducts = arrayLength > 0;
     
-    console.log(`[GHL API] Products check for ${locationId}: ${hasProducts}`, 
+    console.log(`[GHL SDK] Products check for ${locationId}: ${hasProducts}`, 
       `(array length: ${arrayLength}, isArray: ${Array.isArray(productsArray)})`);
     
     if (hasProducts && productsArray.length > 0) {
-      console.log(`[GHL API] First product:`, productsArray[0]);
+      console.log(`[GHL SDK] First product:`, productsArray[0]);
     }
     
     return hasProducts;
     
   } catch (error) {
-    console.error('[GHL API] Error checking products:', error);
+    console.error('[GHL SDK] Error checking products:', error);
     return false;
   }
 }
@@ -365,91 +316,68 @@ export async function checkLocationProducts(locationId: string): Promise<boolean
  * Returns true if any payment provider or manual payment method is connected
  */
 export async function checkPaymentIntegration(locationId: string): Promise<boolean> {
-  const token = await getAuthToken(locationId);
-  
-  if (!token) {
-    console.log('[GHL API] No auth token available for payment check');
-    return false;
-  }
-  
   try {
-    console.log(`[GHL API] Checking payment integration for location: ${locationId}`);
+    console.log(`[GHL SDK] Checking payment integration for location: ${locationId}`);
     
-    // Check for connected payment providers
-    const response = await fetch(
-      `${GHL_API_BASE}/locations/${locationId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Version': '2021-07-28',
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    
-    if (!response.ok) {
-      console.error(`[GHL API] Failed to fetch location for payment check: ${response.status}`);
-      return false;
-    }
-    
-    const data = await response.json();
-    const location = data.location || data;
+    const ghl = await getSDKClient(locationId);
+    const response = await ghl.locations.getLocation({ locationId });
+    const location: any = response?.location;
     
     // Log full location object to see available fields (only in development)
     if (process.env.NODE_ENV !== 'production') {
-      console.log('[GHL API] Location object keys:', Object.keys(location));
+      console.log('[GHL SDK] Location object keys:', Object.keys(location || {}));
     }
     
     // Check for any payment provider integration
     // Supports: Stripe, PayPal, Authorize.net, NMI, Square, 40+ other providers, and Manual Payment Methods
     const hasPayment = !!(
       // Generic payment fields
-      location.paymentIntegration ||
-      location.paymentProviders ||
-      location.paymentProvider ||
-      location.paymentGateway ||
-      location.merchantAccount ||
+      location?.paymentIntegration ||
+      location?.paymentProviders ||
+      location?.paymentProvider ||
+      location?.paymentGateway ||
+      location?.merchantAccount ||
       
       // Manual Payment Methods (Cash on Delivery, Custom Payment Methods)
-      location.manualPaymentMethods ||
-      location.customPaymentMethods ||
-      location.manualPayment ||
-      location.cashOnDelivery ||
-      location.customPayment ||
-      location.manualPaymentEnabled ||
+      location?.manualPaymentMethods ||
+      location?.customPaymentMethods ||
+      location?.manualPayment ||
+      location?.cashOnDelivery ||
+      location?.customPayment ||
+      location?.manualPaymentEnabled ||
       
       // Stripe
-      location.stripeAccountId ||
-      location.stripeConnected ||
-      location.stripe ||
+      location?.stripeAccountId ||
+      location?.stripeConnected ||
+      location?.stripe ||
       
       // PayPal
-      location.paypalAccountId ||
-      location.paypalConnected ||
-      location.paypal ||
+      location?.paypalAccountId ||
+      location?.paypalConnected ||
+      location?.paypal ||
       
       // Authorize.net
-      location.authorizeNetAccountId ||
-      location.authorizeNetConnected ||
+      location?.authorizeNetAccountId ||
+      location?.authorizeNetConnected ||
       
       // NMI
-      location.nmiAccountId ||
-      location.nmiConnected ||
+      location?.nmiAccountId ||
+      location?.nmiConnected ||
       
       // Square
-      location.squareAccountId ||
-      location.squareConnected ||
-      location.square ||
+      location?.squareAccountId ||
+      location?.squareConnected ||
+      location?.square ||
       
       // Other providers (generic check)
-      location.merchantId ||
-      location.gatewayId ||
-      location.processorId
+      location?.merchantId ||
+      location?.gatewayId ||
+      location?.processorId
     );
     
     // Log which specific fields were found
-    if (hasPayment) {
-      const foundFields = Object.keys(location).filter(key => 
+    if (hasPayment && location) {
+      const foundFields = Object.keys(location).filter((key: string) => 
         key.toLowerCase().includes('payment') ||
         key.toLowerCase().includes('stripe') ||
         key.toLowerCase().includes('paypal') ||
@@ -460,15 +388,15 @@ export async function checkPaymentIntegration(locationId: string): Promise<boole
         key.toLowerCase().includes('cash') ||
         key.toLowerCase().includes('custom')
       );
-      console.log(`[GHL API] Payment check for ${locationId}: TRUE - Fields found:`, foundFields);
+      console.log(`[GHL SDK] Payment check for ${locationId}: TRUE - Fields found:`, foundFields);
     } else {
-      console.log(`[GHL API] Payment check for ${locationId}: FALSE - No payment fields found`);
+      console.log(`[GHL SDK] Payment check for ${locationId}: FALSE - No payment fields found`);
     }
     
     return hasPayment;
     
   } catch (error) {
-    console.error('[GHL API] Error checking payment integration:', error);
+    console.error('[GHL SDK] Error checking payment integration:', error);
     return false;
   }
 }

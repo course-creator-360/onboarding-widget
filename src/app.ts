@@ -4,9 +4,10 @@ import cors from 'cors';
 import path from 'path';
 import oauthRouter from './oauth';
 import webhookRouter from './webhooks';
-import { getOnboardingStatus, setDismissed, updateOnboardingStatus, getInstallation, hasAgencyAuthorization, getAgencyInstallation, deleteInstallation } from './db';
+import { getOnboardingStatus, setDismissed, updateOnboardingStatus, getInstallation, hasAgencyAuthorization, getAgencyInstallation, deleteInstallation, OnboardingStatus, toggleOnboardingField } from './db';
 import { sseBroker } from './sse';
 import { checkLocationDomain, checkLocationProducts, checkPaymentIntegration, validateToken, getAuthToken } from './ghl-api';
+import { validateLocationId } from './ghl-sdk';
 import { getBaseUrl, getEnvironment, getGhlAppBaseUrl } from './config';
 
 const app = express();
@@ -128,7 +129,7 @@ app.get('/api/status', async (req, res) => {
   }
   
   // Log widget visibility decision
-  console.log(`[Status] Widget visibility for ${locationId}: ${status.shouldShowWidget} (age: ${Math.floor((Date.now() - status.createdAt) / (24 * 60 * 60 * 1000))} days, completed: ${status.domainConnected && status.courseCreated && status.paymentIntegrated})`);
+  console.log(`[Status] Widget visibility for ${locationId}: ${status.shouldShowWidget} (dismissed: ${status.dismissed}, allTasksCompleted: ${status.allTasksCompleted})`);
   
   return res.json(status);
 });
@@ -193,6 +194,39 @@ app.get('/api/installation/check', async (req, res) => {
     tokenType: 'location',
     error: 'Agency administrator needs to authorize this app. Please contact your agency admin.'
   });
+});
+
+app.get('/api/location/validate', async (req, res) => {
+  const locationId = (req.query.locationId as string) || '';
+  if (!locationId) return res.status(400).json({ error: 'locationId is required' });
+  
+  try {
+    console.log('[Location Validation] Validating locationId:', locationId);
+    
+    const validation = await validateLocationId(locationId);
+    
+    if (validation.valid) {
+      console.log('[Location Validation] Location is valid:', locationId);
+      return res.json({
+        valid: true,
+        locationId: locationId,
+        companyId: validation.companyId,
+        locationName: validation.location?.name || null
+      });
+    } else {
+      console.log('[Location Validation] Location not found or unauthorized:', locationId);
+      return res.status(404).json({
+        valid: false,
+        error: 'Location not found or not accessible with current authorization'
+      });
+    }
+  } catch (error) {
+    console.error('[Location Validation] Error validating location:', error);
+    return res.status(500).json({
+      valid: false,
+      error: 'Failed to validate location'
+    });
+  }
 });
 
 app.get('/api/agency/status', async (req, res) => {
@@ -300,14 +334,34 @@ app.post('/api/dismiss', async (req, res) => {
 });
 
 app.post('/api/mock/set', async (req, res) => {
-  const { locationId, updates } = req.body as { locationId?: string; updates?: Record<string, unknown> };
+  const { locationId, updates } = req.body as { locationId?: string; updates?: Partial<OnboardingStatus> };
   if (!locationId) return res.status(400).json({ error: 'locationId is required' });
-  const status = await updateOnboardingStatus(locationId, {
-    domainConnected: updates?.domainConnected as boolean | undefined,
-    courseCreated: updates?.courseCreated as boolean | undefined,
-    paymentIntegrated: updates?.paymentIntegrated as boolean | undefined,
-    dismissed: updates?.dismissed as boolean | undefined
-  });
+  if (!updates) return res.status(400).json({ error: 'updates is required' });
+  
+  // Pass updates directly - db layer handles filtering
+  const status = await updateOnboardingStatus(locationId, updates);
+  await sseBroker.broadcastStatus(locationId);
+  res.json(status);
+});
+
+// Toggle a specific field (for demo page) - atomic operation
+app.post('/api/toggle', async (req, res) => {
+  const { locationId, field } = req.body as { locationId?: string; field?: string };
+  if (!locationId) return res.status(400).json({ error: 'locationId is required' });
+  if (!field) return res.status(400).json({ error: 'field is required' });
+  
+  // Validate field name
+  const validFields = ['domainConnected', 'courseCreated', 'paymentIntegrated', 'dismissed'];
+  if (!validFields.includes(field)) {
+    return res.status(400).json({ error: 'Invalid field name' });
+  }
+  
+  // Atomically toggle the field - always gets fresh data from DB
+  const status = await toggleOnboardingField(
+    locationId, 
+    field as 'domainConnected' | 'courseCreated' | 'paymentIntegrated' | 'dismissed'
+  );
+  
   await sseBroker.broadcastStatus(locationId);
   res.json(status);
 });
