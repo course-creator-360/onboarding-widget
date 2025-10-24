@@ -350,6 +350,7 @@ export async function checkPaymentIntegration(locationId: string): Promise<boole
       location?.stripeAccountId ||
       location?.stripeConnected ||
       location?.stripe ||
+      (location?.stripeProductId && location.stripeProductId.trim() !== '') ||
       
       // PayPal
       location?.paypalAccountId ||
