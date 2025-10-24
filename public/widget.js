@@ -66,20 +66,31 @@
   let shouldShowWidget = true;
   let hasShownCompletionDialog = false; // Track if we've shown the completion dialog
   let ghlAppBaseUrl = 'https://app.coursecreator360.com'; // Default, will be fetched from backend
+  let userpilotToken = null; // Will be fetched from backend
 
   // Fetch configuration from backend
   async function fetchConfig() {
     try {
+      console.log('[CC360 Widget] 🔧 Fetching config from:', `${apiBase}/api/config`);
       const response = await fetch(`${apiBase}/api/config`);
       if (response.ok) {
         const config = await response.json();
+        console.log('[CC360 Widget] ✅ Config received:', config);
+        
         if (config.ghlAppBaseUrl) {
           ghlAppBaseUrl = config.ghlAppBaseUrl;
           console.log('[CC360 Widget] Using GHL base URL:', ghlAppBaseUrl);
         }
+        
+        if (config.userpilotToken) {
+          userpilotToken = config.userpilotToken;
+          console.log('[CC360 Widget] ✅ Userpilot token received from backend');
+        } else {
+          console.log('[CC360 Widget] ⚠️ No Userpilot token in config');
+        }
       }
     } catch (error) {
-      console.warn('[CC360 Widget] Could not fetch config, using default GHL base URL:', error);
+      console.warn('[CC360 Widget] ❌ Could not fetch config:', error);
     }
   }
 
@@ -1520,6 +1531,7 @@
             // Track in Userpilot
             if (window.userpilot) {
               try {
+                console.log('[Userpilot] 📊 Tracking event: survey_completed');
                 window.userpilot.track('survey_completed', {
                   location_id: locationId,
                   reason: formData.reason,
@@ -1529,9 +1541,12 @@
                   course_idea: formData.courseIdea || '',
                   completed_at: new Date().toISOString()
                 });
+                console.log('[Userpilot] ✅ Survey completion event tracked');
               } catch (e) {
-                console.error('[Userpilot] Error tracking survey completion:', e);
+                console.error('[Userpilot] ❌ Error tracking survey completion:', e);
               }
+            } else {
+              console.log('[Userpilot] ⚠️ Userpilot not initialized, skipping survey tracking');
             }
             
             // Show booking modal after 2 seconds
@@ -1993,13 +2008,17 @@
     // Track in Userpilot
     if (window.userpilot) {
       try {
+        console.log('[Userpilot] 📊 Tracking event: widget_dismissed');
         window.userpilot.track('widget_dismissed', {
           location_id: locationId,
           dismissed_at: new Date().toISOString()
         });
+        console.log('[Userpilot] ✅ Event tracked successfully');
       } catch (e) {
-        console.error('[Userpilot] Error tracking widget dismissal:', e);
+        console.error('[Userpilot] ❌ Error tracking widget dismissal:', e);
       }
+    } else {
+      console.log('[Userpilot] ⚠️ Userpilot not initialized, skipping event tracking');
     }
     
     // Remove widget from DOM
@@ -2171,49 +2190,79 @@
 
   // Initialize Userpilot with user context from GHL
   async function initUserpilot() {
+    console.log('[Userpilot] Starting initialization...');
+    console.log('[Userpilot] LocationId:', locationId);
+    
     if (!locationId) {
-      console.log('[Userpilot] No locationId, skipping initialization');
+      console.warn('[Userpilot] ❌ No locationId, skipping initialization');
       return;
     }
     
-    // Get Userpilot token from environment or script attribute
-    const userpilotToken = window.cc360UserpilotToken || 
-                          document.currentScript?.getAttribute('data-userpilot-token');
+    // Get Userpilot token from backend config (preferred) or fallback to manual setting
+    const token = userpilotToken || 
+                  window.cc360UserpilotToken || 
+                  document.currentScript?.getAttribute('data-userpilot-token');
     
-    if (!userpilotToken) {
-      console.log('[Userpilot] No token provided, skipping initialization');
+    console.log('[Userpilot] Token sources:');
+    console.log('[Userpilot]   - From backend config:', userpilotToken ? '✅' : '❌');
+    console.log('[Userpilot]   - From window.cc360UserpilotToken:', window.cc360UserpilotToken ? '✅' : '❌');
+    console.log('[Userpilot]   - From script attribute:', document.currentScript?.getAttribute('data-userpilot-token') ? '✅' : '❌');
+    console.log('[Userpilot] Final token:', token ? '✅ Token available' : '❌ No token');
+    
+    if (!token) {
+      console.warn('[Userpilot] ❌ No token available from any source, skipping initialization');
+      console.log('[Userpilot] 💡 Set USERPILOT_TOKEN in Vercel environment variables');
       return;
     }
     
     try {
       // Fetch location context from backend
+      console.log('[Userpilot] 📡 Fetching location context from:', `${apiBase}/api/location-context?locationId=${locationId}`);
       const response = await fetch(`${apiBase}/api/location-context?locationId=${locationId}`);
+      console.log('[Userpilot] Context API response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error('Failed to fetch location context');
+        const errorText = await response.text();
+        console.error('[Userpilot] ❌ Failed to fetch context:', response.status, errorText);
+        throw new Error(`Failed to fetch location context: ${response.status}`);
       }
       
       const context = await response.json();
-      console.log('[Userpilot] Fetched location context:', context.name);
+      console.log('[Userpilot] ✅ Fetched location context:', context);
       
       // Load Userpilot SDK if not already loaded
       if (!window.userpilot) {
+        console.log('[Userpilot] 📦 Loading Userpilot SDK...');
         const script = document.createElement('script');
         script.src = 'https://js.userpilot.io/sdk/latest.js';
         script.async = true;
         
         await new Promise((resolve, reject) => {
-          script.onload = resolve;
-          script.onerror = reject;
+          script.onload = () => {
+            console.log('[Userpilot] ✅ SDK loaded successfully');
+            resolve();
+          };
+          script.onerror = (err) => {
+            console.error('[Userpilot] ❌ SDK failed to load:', err);
+            reject(err);
+          };
           document.head.appendChild(script);
         });
+        
+        // Wait a bit for SDK to fully initialize
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } else {
+        console.log('[Userpilot] SDK already loaded');
       }
       
       // Initialize Userpilot
       if (window.userpilot) {
-        window.userpilot.initialize(userpilotToken);
+        console.log('[Userpilot] 🔧 Initializing with token:', token.substring(0, 10) + '...');
+        window.userpilot.initialize(token);
+        console.log('[Userpilot] ✅ Initialized successfully');
         
-        // Identify user with context from GHL
-        window.userpilot.identify(locationId, {
+        // Prepare user data
+        const userData = {
           name: context.name,
           email: context.email,
           phone: context.phone,
@@ -2228,12 +2277,21 @@
           domain_connected: currentStatus?.domainConnected || false,
           course_created: currentStatus?.courseCreated || false,
           payment_integrated: currentStatus?.paymentIntegrated || false
-        });
+        };
         
-        console.log('[Userpilot] User identified:', locationId, '-', context.name);
+        console.log('[Userpilot] 👤 Identifying user:', locationId);
+        console.log('[Userpilot] User data:', userData);
+        
+        // Identify user with context from GHL
+        window.userpilot.identify(locationId, userData);
+        
+        console.log('[Userpilot] ✅ User identified successfully:', context.name);
+      } else {
+        console.error('[Userpilot] ❌ SDK not available after load');
       }
     } catch (error) {
-      console.error('[Userpilot] Failed to initialize:', error);
+      console.error('[Userpilot] ❌ Failed to initialize:', error);
+      console.error('[Userpilot] Error details:', error.message || error);
     }
   }
 
@@ -2272,7 +2330,9 @@
       await initializeChecklist();
       
       // Initialize Userpilot after checklist loads
+      console.log('[CC360 Widget] 🎯 Calling initUserpilot...');
       await initUserpilot();
+      console.log('[CC360 Widget] ✅ initUserpilot completed');
     }
   }
 

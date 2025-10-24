@@ -343,36 +343,30 @@ VERCEL_MIGRATE_SECRET=your_secure_random_secret
 GHL_SUBACCOUNT_TEST_LOCATION_ID=your_test_location
 
 # Analytics (optional)
-USERPILOT_API_KEY=your_production_key      # Server-side tracking
-USERPILOT_STAGE_API_KEY=your_staging_key    # Server-side staging
+# Userpilot - Server-side tracking (webhook events)
+USERPILOT_API_KEY=your_production_api_key
+USERPILOT_STAGE_API_KEY=your_staging_api_key
+
+# Userpilot - Client-side tracking (widget SDK)
+# Get from: Userpilot Dashboard → Settings → Installation (App Token)
+USERPILOT_TOKEN=your_userpilot_app_token              # Production app token
+USERPILOT_STAGE_TOKEN=your_staging_app_token          # Staging app token
 ```
 
-### Userpilot Client-Side Tracking
+### Userpilot Integration
 
-To enable client-side Userpilot tracking with user identification, add the token to your widget script:
+Userpilot is fully integrated for both server-side and client-side tracking:
 
-```html
-<script>
-(function() {
-  'use strict';
-  
-  // Set Userpilot token before loading widget
-  window.cc360UserpilotToken = 'YOUR_USERPILOT_APP_TOKEN'; // Get from Userpilot Dashboard
-  
-  const match = window.location.pathname.match(/\/location\/([^\/]+)/);
-  if (!match) return;
-  
-  const locationId = match[1];
-  const script = document.createElement('script');
-  script.src = 'https://your-app.vercel.app/widget.js';
-  script.setAttribute('data-location', locationId);
-  script.setAttribute('data-api', 'https://your-app.vercel.app');
-  // Or set token via attribute: script.setAttribute('data-userpilot-token', 'YOUR_TOKEN');
-  
-  document.body.appendChild(script);
-})();
-</script>
-```
+**Server-Side (Backend):**
+- Tracks webhook events: `domain_connected`, `course_created`, `payment_integrated`
+- Requires: `USERPILOT_API_KEY` in environment variables
+
+**Client-Side (Widget):**
+- Identifies users with GHL location context (name, email, company, etc.)
+- Tracks widget interactions: `widget_dismissed`, `survey_completed`
+- Requires: `USERPILOT_TOKEN` in environment variables
+
+The widget automatically fetches the token from your backend configuration - no need to expose it in the custom JavaScript
 
 ### Environment Auto-Detection
 

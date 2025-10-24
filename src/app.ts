@@ -43,10 +43,16 @@ app.use('/install', oauthRouter);
 app.get('/api/healthz', (_req, res) => res.json({ ok: true }));
 
 app.get('/api/config', (_req, res) => {
+  // Get Userpilot token based on environment
+  const userpilotToken = process.env.NODE_ENV === 'production' 
+    ? process.env.USERPILOT_TOKEN 
+    : (process.env.USERPILOT_STAGE_TOKEN || process.env.USERPILOT_TOKEN);
+  
   return res.json({
     apiBase: getBaseUrl(),
     environment: getEnvironment(),
-    ghlAppBaseUrl: getGhlAppBaseUrl()
+    ghlAppBaseUrl: getGhlAppBaseUrl(),
+    userpilotToken: userpilotToken || null  // Expose for client-side SDK
   });
 });
 
