@@ -336,7 +336,14 @@ router.get('/callback', async (req, res) => {
   // Retrieve state from cookie (serverless-compatible)
   const cookieName = `oauth_state_${state}`;
   const stateCookie = req.cookies?.[cookieName];
+  
+  console.log('[OAuth Callback] State:', state);
+  console.log('[OAuth Callback] Cookie name:', cookieName);
+  console.log('[OAuth Callback] All cookies:', Object.keys(req.cookies || {}));
+  console.log('[OAuth Callback] State cookie value:', stateCookie);
+  
   if (!stateCookie) {
+    console.error('[OAuth Callback] State cookie not found');
     return res.status(400).send(`
       <!DOCTYPE html>
       <html>
@@ -384,7 +391,14 @@ router.get('/callback', async (req, res) => {
     `);
   }
   
-  const context = JSON.parse(stateCookie);
+  let context;
+  try {
+    context = JSON.parse(stateCookie);
+    console.log('[OAuth Callback] Parsed context:', context);
+  } catch (err) {
+    console.error('[OAuth Callback] Failed to parse state cookie:', err);
+    return res.status(400).send('Invalid state cookie format');
+  }
   
   // Clear the cookie after use
   res.clearCookie(cookieName);
