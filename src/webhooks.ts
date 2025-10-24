@@ -9,8 +9,14 @@ const router = express.Router();
 router.post('/ghl', async (req, res) => {
   const eventType: string = (req.body?.event || req.body?.type || '').toString();
   const payload = req.body || {};
-  const locationId: string | undefined =
-    payload?.locationId || payload?.location_id || payload?.id || payload?.account?.locationId || payload?.location || payload?.accountId;
+  
+  // For LocationUpdate webhooks, the locationId is in the "id" property
+  let locationId: string | undefined;
+  if (/LocationUpdate/i.test(eventType)) {
+    locationId = payload?.id;
+  } else {
+    locationId = payload?.locationId || payload?.location_id || payload?.id || payload?.account?.locationId || payload?.location || payload?.accountId;
+  }
 
   // Log incoming webhook
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
