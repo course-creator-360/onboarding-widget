@@ -16,6 +16,7 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@gohighlevel/api-client": "^2.2.1",
     "@prisma/client": "^6.17.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
