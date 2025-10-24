@@ -8,7 +8,7 @@ import webhookRouter from './webhooks';
 import { getOnboardingStatus, setDismissed, updateOnboardingStatus, getInstallation, hasAgencyAuthorization, getAgencyInstallation, deleteInstallation, OnboardingStatus, toggleOnboardingField } from './db';
 import { sseBroker } from './sse';
 import { checkLocationDomain, checkLocationProducts, checkPaymentIntegration, validateToken, getAuthToken } from './ghl-api';
-import { validateLocationId } from './ghl-sdk';
+import { validateLocationId, getSDKClient } from './ghl-sdk';
 import { getBaseUrl, getEnvironment, getGhlAppBaseUrl } from './config';
 
 const app = express();
@@ -134,6 +134,44 @@ app.get('/api/status', async (req, res) => {
   console.log(`[Status] Widget visibility for ${locationId}: ${status.shouldShowWidget} (dismissed: ${status.dismissed}, allTasksCompleted: ${status.allTasksCompleted})`);
   
   return res.json(status);
+});
+
+app.get('/api/location-context', async (req, res) => {
+  const locationId = (req.query.locationId as string) || '';
+  if (!locationId) return res.status(400).json({ error: 'locationId is required' });
+  
+  try {
+    console.log(`[Location Context] Fetching context for location: ${locationId}`);
+    
+    // Use GHL SDK to fetch location details
+    const ghl = await getSDKClient(locationId);
+    const response = await ghl.locations.getLocation({ locationId });
+    const location = response?.location;
+    
+    if (!location) {
+      throw new Error('Location not found');
+    }
+    
+    console.log(`[Location Context] Successfully fetched context for: ${location.name}`);
+    
+    // Return sanitized user context for Userpilot
+    return res.json({
+      locationId: location.id,
+      name: location.name || 'Unknown',
+      email: location.email || '',
+      phone: location.phone || '',
+      companyId: location.companyId || '',
+      address: location.address || '',
+      city: location.city || '',
+      state: location.state || '',
+      country: location.country || '',
+      website: location.website || '',
+      timezone: location.timezone || '',
+    });
+  } catch (error) {
+    console.error('[Location Context] Error fetching location data:', error);
+    return res.status(500).json({ error: 'Failed to fetch location context' });
+  }
 });
 
 app.get('/api/installation/check', async (req, res) => {

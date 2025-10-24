@@ -1516,7 +1516,23 @@
           } else {
             setSubmitted(true);
             console.log("Survey submitted with data:", formData);
-            // TODO: Send survey data to backend
+            
+            // Track in Userpilot
+            if (window.userpilot) {
+              try {
+                window.userpilot.track('survey_completed', {
+                  location_id: locationId,
+                  reason: formData.reason,
+                  profession: formData.profession,
+                  has_domain: formData.hasDomain,
+                  domain: formData.domain || '',
+                  course_idea: formData.courseIdea || '',
+                  completed_at: new Date().toISOString()
+                });
+              } catch (e) {
+                console.error('[Userpilot] Error tracking survey completion:', e);
+              }
+            }
             
             // Show booking modal after 2 seconds
             setTimeout(() => {
@@ -1974,6 +1990,18 @@
   async function dismissWidgetPermanently() {
     if (!widgetElement) return;
     
+    // Track in Userpilot
+    if (window.userpilot) {
+      try {
+        window.userpilot.track('widget_dismissed', {
+          location_id: locationId,
+          dismissed_at: new Date().toISOString()
+        });
+      } catch (e) {
+        console.error('[Userpilot] Error tracking widget dismissal:', e);
+      }
+    }
+    
     // Remove widget from DOM
     widgetElement.remove();
     widgetElement = null;
@@ -2141,6 +2169,74 @@
     `;
   }
 
+  // Initialize Userpilot with user context from GHL
+  async function initUserpilot() {
+    if (!locationId) {
+      console.log('[Userpilot] No locationId, skipping initialization');
+      return;
+    }
+    
+    // Get Userpilot token from environment or script attribute
+    const userpilotToken = window.cc360UserpilotToken || 
+                          document.currentScript?.getAttribute('data-userpilot-token');
+    
+    if (!userpilotToken) {
+      console.log('[Userpilot] No token provided, skipping initialization');
+      return;
+    }
+    
+    try {
+      // Fetch location context from backend
+      const response = await fetch(`${apiBase}/api/location-context?locationId=${locationId}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch location context');
+      }
+      
+      const context = await response.json();
+      console.log('[Userpilot] Fetched location context:', context.name);
+      
+      // Load Userpilot SDK if not already loaded
+      if (!window.userpilot) {
+        const script = document.createElement('script');
+        script.src = 'https://js.userpilot.io/sdk/latest.js';
+        script.async = true;
+        
+        await new Promise((resolve, reject) => {
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+      }
+      
+      // Initialize Userpilot
+      if (window.userpilot) {
+        window.userpilot.initialize(userpilotToken);
+        
+        // Identify user with context from GHL
+        window.userpilot.identify(locationId, {
+          name: context.name,
+          email: context.email,
+          phone: context.phone,
+          companyId: context.companyId,
+          city: context.city,
+          state: context.state,
+          country: context.country,
+          website: context.website,
+          timezone: context.timezone,
+          // Add onboarding progress
+          onboarding_status: currentStatus?.allTasksCompleted ? 'completed' : 'active',
+          domain_connected: currentStatus?.domainConnected || false,
+          course_created: currentStatus?.courseCreated || false,
+          payment_integrated: currentStatus?.paymentIntegrated || false
+        });
+        
+        console.log('[Userpilot] User identified:', locationId, '-', context.name);
+      }
+    } catch (error) {
+      console.error('[Userpilot] Failed to initialize:', error);
+    }
+  }
+
   // Initialize widget
   async function init() {
     console.log('[CC360 Widget] Initializing...');
@@ -2174,6 +2270,9 @@
       // Authorized - show checklist directly
       console.log('[CC360 Widget] Authorized, showing checklist');
       await initializeChecklist();
+      
+      // Initialize Userpilot after checklist loads
+      await initUserpilot();
     }
   }
 

@@ -343,8 +343,35 @@ VERCEL_MIGRATE_SECRET=your_secure_random_secret
 GHL_SUBACCOUNT_TEST_LOCATION_ID=your_test_location
 
 # Analytics (optional)
-USERPILOT_API_KEY=your_production_key
-USERPILOT_STAGE_API_KEY=your_staging_key
+USERPILOT_API_KEY=your_production_key      # Server-side tracking
+USERPILOT_STAGE_API_KEY=your_staging_key    # Server-side staging
+```
+
+### Userpilot Client-Side Tracking
+
+To enable client-side Userpilot tracking with user identification, add the token to your widget script:
+
+```html
+<script>
+(function() {
+  'use strict';
+  
+  // Set Userpilot token before loading widget
+  window.cc360UserpilotToken = 'YOUR_USERPILOT_APP_TOKEN'; // Get from Userpilot Dashboard
+  
+  const match = window.location.pathname.match(/\/location\/([^\/]+)/);
+  if (!match) return;
+  
+  const locationId = match[1];
+  const script = document.createElement('script');
+  script.src = 'https://your-app.vercel.app/widget.js';
+  script.setAttribute('data-location', locationId);
+  script.setAttribute('data-api', 'https://your-app.vercel.app');
+  // Or set token via attribute: script.setAttribute('data-userpilot-token', 'YOUR_TOKEN');
+  
+  document.body.appendChild(script);
+})();
+</script>
 ```
 
 ### Environment Auto-Detection
