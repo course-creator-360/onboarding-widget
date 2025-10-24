@@ -415,14 +415,38 @@ router.get('/callback', async (req, res) => {
     body.set('client_secret', clientSecret);
     body.set('redirect_uri', REDIRECT_URI);
 
+    console.log('[OAuth Callback] Exchanging code for token...');
+    console.log('[OAuth Callback] Token URL:', DEFAULT_TOKEN_URL);
+    console.log('[OAuth Callback] Client ID:', clientId);
+    console.log('[OAuth Callback] Redirect URI:', REDIRECT_URI);
+
     const tokenResp = await fetch(DEFAULT_TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body
     });
+    
+    console.log('[OAuth Callback] Token response status:', tokenResp.status);
+    
     const tokenJson = (await tokenResp.json()) as any;
+    console.log('[OAuth Callback] Token response:', JSON.stringify(tokenJson, null, 2));
+    
+    // Check if token exchange failed
+    if (!tokenResp.ok || tokenJson.error) {
+      console.error('[OAuth Callback] Token exchange failed:', tokenJson);
+      throw new Error(tokenJson.error_description || tokenJson.error || 'Token exchange failed');
+    }
+    
+    if (!tokenJson.access_token) {
+      console.error('[OAuth Callback] No access token in response');
+      throw new Error('No access token received');
+    }
     const locationId = context.locationId || tokenJson?.locationId || tokenJson?.location_id || 'unknown';
     const tokenType = context.tokenType || 'location';
+
+    console.log('[OAuth Callback] Storing installation...');
+    console.log('[OAuth Callback] Location ID:', locationId);
+    console.log('[OAuth Callback] Token Type:', tokenType);
 
     await upsertInstallation({
       locationId,
@@ -433,6 +457,8 @@ router.get('/callback', async (req, res) => {
       scope: tokenJson.scope,
       tokenType
     });
+    
+    console.log('[OAuth Callback] Installation stored successfully');
     
     // Determine redirect based on environment
     const baseUrl = getBaseUrl();
@@ -515,6 +541,9 @@ router.get('/callback', async (req, res) => {
       </html>
     `);
   } catch (err) {
+    console.error('[OAuth Callback] Error:', err);
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+    
     res.status(500).send(`
       <!DOCTYPE html>
       <html>
@@ -531,9 +560,11 @@ router.get('/callback', async (req, res) => {
               margin: 0;
               background: #f8f9fa;
               text-align: center;
+              padding: 20px;
             }
             .container {
               padding: 40px;
+              max-width: 600px;
             }
             .error {
               font-size: 64px;
@@ -544,13 +575,41 @@ router.get('/callback', async (req, res) => {
               margin: 0 0 10px 0;
               color: #333;
             }
+            .error-details {
+              background: #fff3cd;
+              border: 1px solid #ffc107;
+              border-radius: 5px;
+              padding: 15px;
+              margin: 20px 0;
+              text-align: left;
+              font-size: 14px;
+              color: #856404;
+            }
+            button {
+              background: #667eea;
+              color: white;
+              border: none;
+              padding: 12px 24px;
+              border-radius: 5px;
+              cursor: pointer;
+              margin-top: 20px;
+              font-size: 14px;
+            }
+            button:hover { background: #5568d3; }
           </style>
         </head>
         <body>
           <div class="container">
             <div class="error">✗</div>
             <h1>Authorization Failed</h1>
-            <p>Please close this window and try again.</p>
+            <p>There was an error during the OAuth process.</p>
+            <div class="error-details">
+              <strong>Error:</strong> ${errorMessage}
+            </div>
+            <button onclick="window.location.href='${getBaseUrl()}'">Try Again</button>
+            <p style="font-size: 12px; color: #666; margin-top: 20px;">
+              Check Vercel logs for detailed error information.
+            </p>
           </div>
         </body>
       </html>
