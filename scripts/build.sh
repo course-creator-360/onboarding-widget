@@ -11,12 +11,16 @@ echo "🚀 Starting build process..."
 echo "📦 Generating Prisma client..."
 npx prisma generate
 
-# Run database migrations (only in production)
-if [ "$NODE_ENV" = "production" ]; then
+# Run database migrations (only if DATABASE_URL is available)
+if [ -n "$DATABASE_URL" ] && [ "$NODE_ENV" = "production" ]; then
   echo "🗄️ Running database migrations..."
-  npx prisma migrate deploy
+  npx prisma migrate deploy || {
+    echo "⚠️ Migration failed - continuing with build"
+    echo "⚠️ Run migrations manually via /api/migrate endpoint after deployment"
+  }
 else
-  echo "🗄️ Skipping migrations (not in production)"
+  echo "🗄️ Skipping migrations (DATABASE_URL not available or not in production)"
+  echo "ℹ️ Run migrations manually via /api/migrate endpoint after deployment"
 fi
 
 # Build the application

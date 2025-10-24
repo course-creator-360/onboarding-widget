@@ -6,9 +6,17 @@
     "api/index.ts": {
       "runtime": "@vercel/node@4.0.0",
       "maxDuration": 30
+    },
+    "api/migrate.ts": {
+      "runtime": "@vercel/node@4.0.0",
+      "maxDuration": 60
     }
   },
   "routes": [
+    {
+      "src": "/api/migrate",
+      "dest": "/api/migrate.ts"
+    },
     {
       "src": "/api/(.*)",
       "dest": "/api/index.ts"

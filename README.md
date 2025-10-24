@@ -249,7 +249,16 @@ Vercel automatically sets these environment variables:
 - `POSTGRES_PRISMA_URL` - Pooled connection for Prisma
 - `POSTGRES_URL_NON_POOLING` - Non-pooled for migrations
 
-#### Step 2: Deploy
+#### Step 2: Set Environment Variables
+
+In addition to the database variables, set:
+
+```bash
+# Migration security
+VERCEL_MIGRATE_SECRET=your-secure-random-secret
+```
+
+#### Step 3: Deploy
 
 ```bash
 # Install Vercel CLI
@@ -262,10 +271,20 @@ vercel --prod
 The deployment automatically:
 1. Installs Prisma dependencies
 2. Generates Prisma Client (via `postinstall` script)
-3. Runs migrations
-4. Starts your app
+3. Builds your app
 
-#### Step 3: Update GHL Marketplace
+#### Step 4: Run Migrations
+
+After deployment, run migrations via the dedicated endpoint:
+
+```bash
+curl -X POST https://your-app.vercel.app/api/migrate \
+  -H "x-vercel-migrate-secret: your-secure-random-secret"
+```
+
+**Note:** Migrations are not run automatically at runtime in serverless environments. They must be triggered manually via the `/api/migrate` endpoint after each deployment that includes schema changes.
+
+#### Step 5: Update GHL Marketplace
 
 After deployment, update your GHL app settings:
 
@@ -282,6 +301,9 @@ Set these in Vercel Dashboard (Settings → Environment Variables):
 # Required
 GHL_CLIENT_ID=your_ghl_client_id
 GHL_CLIENT_SECRET=your_ghl_client_secret
+
+# Migration security (required for /api/migrate endpoint)
+VERCEL_MIGRATE_SECRET=your_secure_random_secret
 
 # Optional (auto-detected from VERCEL_URL)
 # APP_BASE_URL=https://your-custom-domain.com
@@ -312,7 +334,7 @@ The app uses **Prisma ORM** with **PostgreSQL** for cloud-ready, type-safe datab
 
 **Why Prisma?**
 - Type-safe database access with auto-completion
-- Automatic migrations on deployment
+- Migrations via dedicated endpoint
 - Async operations for scalability
 - PostgreSQL support for production-ready deployments
 
@@ -363,14 +385,16 @@ npm run db:generate
 # Push schema to database (development)
 npm run db:push
 
-# Run migrations (production)
+# Run migrations (local development)
 npm run db:migrate
 
 # Open Prisma Studio (database GUI)
 npm run db:studio
 ```
 
-#### Making Schema Changes
+### Making Schema Changes
+
+#### Development
 
 1. Edit `prisma/schema.prisma`
 2. Create migration:
@@ -378,9 +402,24 @@ npm run db:studio
    npx prisma migrate dev --name your_change_name
    ```
 3. Prisma will automatically:
-   - Create migration file
-   - Apply it to database
+   - Create migration file in `prisma/migrations/`
+   - Apply it to local database
    - Regenerate Prisma Client
+
+#### Production
+
+1. After deploying code with new migrations:
+   ```bash
+   curl -X POST https://your-app.vercel.app/api/migrate \
+     -H "x-vercel-migrate-secret: your-secure-random-secret"
+   ```
+
+2. The endpoint will:
+   - Run all pending migrations
+   - Update the database schema
+   - Return success/error response
+
+**Important:** Migrations are NOT run automatically in production. You must trigger them manually via the `/api/migrate` endpoint after each deployment that includes schema changes.
 
 ---
 
@@ -407,6 +446,10 @@ npm run db:studio
 ### Webhook Endpoints
 
 - `POST /api/webhooks/ghl` - GHL webhook receiver
+
+### Migration Endpoints
+
+- `POST /api/migrate` - Run database migrations (requires `x-vercel-migrate-secret` header)
 
 ### Utility Endpoints
 
@@ -614,6 +657,23 @@ Or visit `http://localhost:4002` and click "Setup Agency OAuth"
 2. Go to Deployments → Latest → Redeploy
 3. Or push a new commit
 
+#### Database Migration Errors
+
+**Error**: `npm error code ENOENT` or `mkdir` permission errors
+
+**Cause**: Attempting to run migrations at runtime in serverless environment
+
+**Solution**:
+1. Ensure `VERCEL_MIGRATE_SECRET` is set in environment variables
+2. Run migrations via endpoint after deployment:
+   ```bash
+   curl -X POST https://your-app.vercel.app/api/migrate \
+     -H "x-vercel-migrate-secret: your-secret"
+   ```
+3. Check response for success/error details
+
+**Note**: Migrations are never run automatically in production. Always use the `/api/migrate` endpoint.
+
 ---
 
 ## Development
@@ -667,6 +727,8 @@ make test
 
 ### Database Changes
 
+#### Local Development
+
 ```bash
 # Edit schema
 nano prisma/schema.prisma
@@ -676,6 +738,14 @@ npx prisma migrate dev --name add_new_field
 
 # View data
 npm run db:studio
+```
+
+#### After Deploying to Production
+
+```bash
+# Run migrations via endpoint
+curl -X POST https://your-app.vercel.app/api/migrate \
+  -H "x-vercel-migrate-secret: your-secret"
 ```
 
 ### Testing Workflow
@@ -705,8 +775,9 @@ curl "http://localhost:4002/api/status?locationId=test123"
 ☐ GHL Marketplace app created
 ☐ OAuth scopes configured
 ☐ Vercel Postgres database created
-☐ Environment variables set in Vercel
+☐ Environment variables set in Vercel (including VERCEL_MIGRATE_SECRET)
 ☐ App deployed to Vercel
+☐ Database migrations run via /api/migrate endpoint
 ☐ GHL Marketplace OAuth URI updated
 ☐ GHL Marketplace webhook URL updated
 ☐ Agency authorized with production URL

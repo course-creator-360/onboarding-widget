@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { execSync } from 'child_process';
+import path from 'path';
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   // Only allow POST requests
@@ -16,8 +17,10 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
   try {
     console.log('Running database migrations...');
     
-    // Run Prisma migrations
-    execSync('npx prisma migrate deploy', { 
+    // Use the locally installed prisma binary instead of npx
+    const prismaPath = path.join(process.cwd(), 'node_modules', '.bin', 'prisma');
+    
+    execSync(`${prismaPath} migrate deploy`, { 
       stdio: 'inherit',
       env: {
         ...process.env,
