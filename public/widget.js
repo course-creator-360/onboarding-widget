@@ -3,14 +3,60 @@
 
   // Get configuration from script tag
   const currentScript = document.currentScript || document.querySelector('script[src*="widget.js"]');
-  const locationId = currentScript?.getAttribute('data-location');
   const apiBase = currentScript?.getAttribute('data-api') || 'http://localhost:4002';
 
-  if (!locationId) {
-    console.warn('[CC360 Widget] No location ID provided - will show setup message');
-  } else {
-    console.log('[CC360 Widget] Initializing for location:', locationId);
+  // Location ID will be auto-detected from GHL UserContext
+  let locationId = null;
+
+  // Auto-detect location ID from GHL user context
+  async function detectLocationFromContext() {
+    try {
+      // Check for GHL global context objects (primary method)
+      if (typeof window._GHL_CONTEXT !== 'undefined' && window._GHL_CONTEXT?.locationId) {
+        console.log('[CC360 Widget] Detected location ID from _GHL_CONTEXT:', window._GHL_CONTEXT.locationId);
+        return window._GHL_CONTEXT.locationId;
+      }
+
+      // Check for location in URL (when embedded in GHL dashboard)
+      const urlMatch = window.location.pathname.match(/\/location\/([^\/]+)/) || 
+                       window.location.search.match(/locationId=([^&]+)/);
+      if (urlMatch && urlMatch[1]) {
+        console.log('[CC360 Widget] Detected location ID from URL:', urlMatch[1]);
+        return urlMatch[1];
+      }
+
+      // Check if running in GHL iframe context
+      try {
+        if (window.parent && window.parent !== window) {
+          // Try to get location from parent window URL
+          const parentUrl = window.parent.location.href;
+          const parentMatch = parentUrl.match(/\/location\/([^\/]+)/) ||
+                            parentUrl.match(/locationId=([^&]+)/);
+          if (parentMatch && parentMatch[1]) {
+            console.log('[CC360 Widget] Detected location ID from parent URL:', parentMatch[1]);
+            return parentMatch[1];
+          }
+          
+          // Try to get location from parent window's GHL context
+          if (window.parent._GHL_CONTEXT?.locationId) {
+            console.log('[CC360 Widget] Detected location ID from parent _GHL_CONTEXT:', window.parent._GHL_CONTEXT.locationId);
+            return window.parent._GHL_CONTEXT.locationId;
+          }
+        }
+      } catch (e) {
+        // Cross-origin access blocked - this is expected in some scenarios
+        console.log('[CC360 Widget] Cannot access parent context (cross-origin)');
+      }
+
+      console.warn('[CC360 Widget] Could not detect location ID from GHL context');
+      return null;
+    } catch (error) {
+      console.error('[CC360 Widget] Error detecting location from context:', error);
+      return null;
+    }
   }
+
+  console.log('[CC360 Widget] Initializing with auto-detection from GHL UserContext...');
 
   // Widget state
   let currentStatus = null;
@@ -18,6 +64,7 @@
   let widgetElement = null;
   let isInstalled = false;
   let shouldShowWidget = true;
+  let hasShownCompletionDialog = false; // Track if we've shown the completion dialog
   let ghlAppBaseUrl = 'https://app.coursecreator360.com'; // Default, will be fetched from backend
 
   // Fetch configuration from backend
@@ -44,13 +91,10 @@
   // Widget state
   let isMinimized = false;
   let isDragging = false;
-  let isResizing = false;
   let dragStartX = 0;
   let dragStartY = 0;
   let widgetStartX = 0;
   let widgetStartY = 0;
-  let resizeStartY = 0;
-  let widgetStartHeight = 0;
   let hasDragged = false; // Track if user actually moved the widget
 
   // Create widget HTML
@@ -67,12 +111,11 @@
           max-height: 90vh;
           min-height: 200px;
           height: auto;
-          background: #ffffff;
+          background: transparent;
           border-radius: 16px;
-          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
           z-index: 99999;
-          overflow: hidden;
+          overflow: visible;
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           user-select: none;
         }
@@ -80,47 +123,61 @@
           transition: none;
           cursor: grabbing;
         }
-        #cc360-onboarding-widget.resizing {
-          transition: none;
-        }
         #cc360-onboarding-widget.hidden {
           transform: translateY(120%);
         }
         #cc360-onboarding-widget.minimized {
           width: auto;
-          max-width: 250px;
-          height: 48px;
-          min-height: 48px;
-          border-radius: 24px;
-          cursor: grab;
-          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+          max-width: 280px;
+          height: 50px !important;
+          min-height: 50px;
+          max-height: 50px;
+          border-radius: 25px;
+          cursor: pointer;
+          box-shadow: none;
+          background: transparent;
         }
         #cc360-onboarding-widget.minimized:active {
           cursor: grabbing;
         }
-        #cc360-onboarding-widget.minimized:hover {
+        #cc360-onboarding-widget.minimized:hover .cc360-widget-minimized {
           transform: translateY(-2px);
           box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
         }
         #cc360-onboarding-widget.minimized .cc360-widget-full {
-          display: none;
+          opacity: 0;
+          pointer-events: none;
+          visibility: hidden;
         }
         #cc360-onboarding-widget.minimized .cc360-widget-minimized {
-          display: flex !important;
+          opacity: 1;
+          visibility: visible;
+        }
+        #cc360-onboarding-widget:not(.minimized) .cc360-widget-full {
+          opacity: 1;
+          visibility: visible;
+        }
+        #cc360-onboarding-widget:not(.minimized) .cc360-widget-minimized {
+          opacity: 0;
+          visibility: hidden;
         }
         .cc360-widget-minimized {
-          display: none;
+          display: flex;
           align-items: center;
           justify-content: center;
           flex-direction: row;
-          height: 48px;
+          height: 50px;
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           color: white;
-          gap: 10px;
-          padding: 0 18px;
+          gap: 12px;
+          padding: 0 22px;
           text-align: center;
-          border-radius: 24px;
+          border-radius: 25px;
           overflow: hidden;
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+          opacity: 0;
+          visibility: hidden;
+          transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.2s ease;
         }
         .cc360-widget-minimized.complete {
           background: linear-gradient(135deg, #10b981 0%, #059669 100%);
@@ -128,144 +185,213 @@
         .cc360-widget-minimized-icon {
           font-size: 20px;
           line-height: 1;
-        }
-        .cc360-widget-minimized-text {
-          font-size: 12px;
-          line-height: 1.3;
-          font-weight: 600;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          max-width: 150px;
-        }
-        .cc360-widget-minimized-count {
-          font-size: 13px;
-          font-weight: 700;
-          background: rgba(255, 255, 255, 0.2);
-          padding: 2px 8px;
-          border-radius: 10px;
-        }
-        .cc360-widget-full {
-          display: block;
-        }
-        .cc360-resize-handle {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          height: 8px;
-          cursor: ns-resize;
-          z-index: 10;
           display: flex;
           align-items: center;
           justify-content: center;
         }
-        .cc360-resize-handle::after {
-          content: '';
-          width: 40px;
-          height: 3px;
-          background: rgba(0, 0, 0, 0.1);
-          border-radius: 2px;
-          transition: background 0.2s;
+        .cc360-widget-minimized-text {
+          font-size: 14px;
+          line-height: 1;
+          font-weight: 600;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 160px;
+          display: flex;
+          align-items: center;
         }
-        .cc360-resize-handle:hover::after {
-          background: rgba(0, 0, 0, 0.2);
+        .cc360-widget-minimized-count {
+          font-size: 13px;
+          font-weight: 700;
+          line-height: 1;
+          background: rgba(255, 255, 255, 0.25);
+          padding: 6px 11px;
+          border-radius: 14px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .cc360-widget-full {
+          display: block;
+          transition: opacity 0.3s ease, visibility 0.3s ease;
+          background: white;
+          border-radius: 16px;
+          overflow: hidden;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
         }
         .cc360-widget-header {
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           color: white;
-          padding: 16px 18px;
-          cursor: grab;
+          padding: 20px 50px 16px 18px;
           position: relative;
-        }
-        .cc360-widget-header:active {
-          cursor: grabbing;
+          z-index: 10;
         }
         .cc360-widget-title {
-          font-size: 15px;
-          font-weight: 600;
+          font-size: 18px;
+          font-weight: 700;
+          margin: 0 0 8px 0;
+          letter-spacing: -0.3px;
+        }
+        .cc360-widget-subtitle {
+          font-size: 13px;
+          font-weight: 400;
+          margin: 0 0 16px 0;
+          line-height: 1.5;
+          opacity: 1;
+          color: rgba(255, 255, 255, 0.95);
+        }
+        .cc360-minimize-btn {
+          position: absolute;
+          top: 18px;
+          right: 18px;
+          width: 32px;
+          height: 32px;
+          background: transparent !important;
+          border: none;
+          border-radius: 50%;
+          color: white;
+          font-size: 24px;
+          line-height: 1;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: transform 0.2s;
+          z-index: 20;
+          outline: none;
+          padding: 0;
           margin: 0;
-          letter-spacing: -0.2px;
+        }
+        .cc360-minimize-btn:hover {
+          background: transparent !important;
+          transform: scale(1.15);
+        }
+        .cc360-minimize-btn:focus {
+          outline: none;
+          background: transparent !important;
+        }
+        .cc360-minimize-btn:active {
+          background: transparent !important;
         }
         .cc360-widget-footer {
           padding: 14px 18px;
           background: #f8f9fa;
           text-align: center;
+          position: relative;
+          z-index: 10;
         }
         .cc360-dismiss-btn {
-          background: white;
+          background: transparent !important;
           border: none;
-          color: #495057;
-          padding: 8px 20px;
-          border-radius: 8px;
+          color: #868e96;
+          padding: 8px 0;
           cursor: pointer;
-          font-size: 13px;
-          font-weight: 600;
-          transition: all 0.2s;
-          width: 100%;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+          font-size: 12px;
+          font-weight: 500;
+          width: auto;
+          display: inline-block;
+          position: relative;
+          z-index: 1;
+          transition: none !important;
+          animation: none !important;
+          box-shadow: none !important;
+          outline: none !important;
         }
         .cc360-dismiss-btn:hover {
-          background: #f8f9fa;
-          transform: translateY(-1px);
-          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+          background: transparent !important;
+          transition: none !important;
+          animation: none !important;
+          box-shadow: none !important;
+          transform: none !important;
+        }
+        .cc360-dismiss-btn:active {
+          background: transparent !important;
+        }
+        .cc360-dismiss-btn:focus {
+          background: transparent !important;
+          outline: none !important;
         }
         .cc360-widget-body {
-          padding: 18px;
+          padding: 18px 18px 18px 24px;
           overflow-y: auto;
           overflow-x: hidden;
           max-height: calc(90vh - 200px);
+          background: white;
+          position: relative;
+          z-index: 1;
+        }
+        .cc360-checklist {
+          position: relative;
         }
         .cc360-checklist-item {
           display: flex;
           align-items: center;
-          padding: 14px;
-          margin-bottom: 8px;
-          background: white;
+          padding: 10px 12px 10px 0;
+          margin-bottom: 14px;
+          background: transparent;
           border-radius: 10px;
           transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
           text-decoration: none;
           color: inherit;
           cursor: pointer;
-          border: 1.5px solid #e9ecef;
+          border: none;
+          position: relative;
+        }
+        .cc360-checklist-item:last-child {
+          margin-bottom: 0;
+        }
+        .cc360-checklist-item:not(:last-child)::before {
+          content: '';
+          position: absolute;
+          left: 12px;
+          top: 34px;
+          width: 2px;
+          height: calc(100% - 24px);
+          background: #e9ecef;
+          transition: background 0.3s;
+          z-index: 1;
+        }
+        .cc360-checklist-item.completed:not(:last-child)::before {
+          background: #10b981;
         }
         .cc360-checklist-item:hover {
-          border-color: #667eea;
-          transform: translateX(3px);
-          box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+          background: #f5f6f7;
         }
-        .cc360-checklist-item.completed {
-          background: #f8fdf9;
-          border-color: #d4edda;
+        .cc360-checklist-item:hover .cc360-chevron-icon {
+          opacity: 1;
+          color: #667eea;
         }
-        .cc360-checklist-item.completed:hover {
-          border-color: #28a745;
+        .cc360-checklist-item.completed .cc360-checklist-title {
+          color: #10b981;
         }
         .cc360-checklist-item.disabled {
           opacity: 0.5;
           cursor: not-allowed;
           pointer-events: none;
-          background: #f8f9fa;
         }
         .cc360-checklist-item.disabled:hover {
-          border-color: #e9ecef;
-          transform: none;
-          box-shadow: none;
+          background: transparent;
         }
         .cc360-checkbox {
-          width: 22px;
-          height: 22px;
-          border: 2px solid #cbd5e0;
+          width: 24px;
+          height: 24px;
+          min-width: 24px;
+          min-height: 24px;
+          border: 2.5px solid #cbd5e0;
           border-radius: 50%;
-          margin-right: 12px;
+          margin-right: 14px;
           flex-shrink: 0;
           display: flex;
           align-items: center;
           justify-content: center;
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          background: white;
+          position: relative;
+          z-index: 2;
         }
         .cc360-checklist-item:hover .cc360-checkbox {
           border-color: #667eea;
+          transform: scale(1.1);
         }
         .cc360-checklist-item.completed .cc360-checkbox {
           background: #10b981;
@@ -274,6 +400,9 @@
         .cc360-checklist-item.disabled .cc360-checkbox {
           border-color: #e9ecef;
           background: #f8f9fa;
+        }
+        .cc360-checklist-item.disabled:hover .cc360-checkbox {
+          transform: none;
         }
         .cc360-checkbox::after {
           content: '✓';
@@ -290,12 +419,17 @@
         }
         .cc360-checklist-content {
           flex: 1;
+          transition: transform 0.2s;
+          display: flex;
+          align-items: center;
         }
         .cc360-checklist-title {
           font-size: 14px;
           font-weight: 500;
           margin: 0;
           color: #1a202c;
+          transition: color 0.2s;
+          line-height: 1.4;
         }
         .cc360-checklist-item.disabled .cc360-checklist-title {
           color: #adb5bd;
@@ -306,8 +440,111 @@
           font-size: 16px;
           opacity: 0.5;
         }
-        .cc360-progress {
+        .cc360-chevron-icon {
+          margin-left: auto;
+          padding-left: 12px;
+          font-size: 20px;
+          color: #cbd5e0;
+          opacity: 0;
+          transition: all 0.2s;
+          line-height: 1;
+          display: flex;
+          align-items: center;
+        }
+        .cc360-checklist-item.disabled .cc360-chevron-icon {
+          display: none;
+        }
+        .cc360-dialog-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 100000;
+          animation: cc360-fadeIn 0.2s ease;
+        }
+        @keyframes cc360-fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .cc360-dialog {
+          background: white;
+          border-radius: 16px;
+          padding: 28px;
+          max-width: 380px;
+          width: 90%;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+          animation: cc360-slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        @keyframes cc360-slideUp {
+          from { 
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to { 
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .cc360-dialog-title {
+          font-size: 20px;
+          font-weight: 600;
+          margin: 0 0 12px 0;
+          color: #1a202c;
+        }
+        .cc360-dialog-message {
+          font-size: 14px;
+          line-height: 1.6;
+          color: #6c757d;
+          margin: 0 0 24px 0;
+        }
+        .cc360-dialog-buttons {
+          display: flex;
+          gap: 12px;
+        }
+        .cc360-dialog-btn {
+          flex: 1;
+          padding: 12px 20px;
+          border: none;
+          border-radius: 8px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .cc360-dialog-btn-primary {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+        }
+        .cc360-dialog-btn-primary:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        .cc360-dialog-btn-secondary {
+          background: #f8f9fa;
+          color: #495057;
+        }
+        .cc360-dialog-btn-secondary:hover {
+          background: #e9ecef;
+        }
+        .cc360-dialog-icon {
+          font-size: 48px;
+          text-align: center;
           margin-bottom: 16px;
+        }
+        .cc360-dialog-success .cc360-dialog-title {
+          text-align: center;
+          color: #28a745;
+        }
+        .cc360-dialog-success .cc360-dialog-message {
+          text-align: center;
+        }
+        .cc360-progress {
+          margin-bottom: 0;
           padding: 0;
         }
         .cc360-progress-text {
@@ -315,6 +552,7 @@
           color: rgba(255, 255, 255, 0.9);
           margin-bottom: 8px;
           font-weight: 500;
+          line-height: 1.4;
         }
         .cc360-progress-bar-bg {
           height: 6px;
@@ -333,13 +571,15 @@
       <div class="cc360-widget-minimized" id="cc360-widget-minimized">
         <div class="cc360-widget-minimized-icon" id="cc360-minimized-icon">🚀</div>
         <div class="cc360-widget-minimized-text" id="cc360-minimized-text">Start Onboarding!</div>
-        <div class="cc360-widget-minimized-count" id="cc360-minimized-count">0/3</div>
+        <div class="cc360-widget-minimized-count" id="cc360-minimized-count">1/4</div>
       </div>
       <div class="cc360-widget-full">
-        <div class="cc360-resize-handle" id="cc360-resize-handle"></div>
-        <div class="cc360-widget-header" id="cc360-drag-handle">
+        <div class="cc360-widget-header">
+          <button class="cc360-minimize-btn" id="cc360-minimize-btn">⌄</button>
+          <h3 class="cc360-widget-title">Welcome Aboard to CC360!</h3>
+          <p class="cc360-widget-subtitle">Complete these steps to get your account fully set up and ready to go.</p>
           <div class="cc360-progress">
-            <div class="cc360-progress-text"><span id="cc360-progress-count">0/3</span> tasks completed</div>
+            <div class="cc360-progress-text"><span id="cc360-progress-count">0/4</span> tasks completed</div>
             <div class="cc360-progress-bar-bg">
               <div class="cc360-progress-bar" id="cc360-progress-bar" style="width: 0%"></div>
             </div>
@@ -349,7 +589,7 @@
           <div id="cc360-checklist"></div>
         </div>
         <div class="cc360-widget-footer">
-          <button class="cc360-dismiss-btn" onclick="window.cc360Widget.dismiss()">Minimize</button>
+          <button class="cc360-dismiss-btn" onclick="window.cc360Widget.showDismissDialog()">Dismiss Checklist</button>
         </div>
       </div>
     `;
@@ -362,6 +602,13 @@
     if (!checklistContainer) return;
 
     const items = [
+      {
+        key: 'accountCreated',
+        title: 'Create your Account',
+        url: '#',
+        completed: true,
+        isStatic: true
+      },
       {
         key: 'paymentIntegrated',
         title: 'Connect Payments',
@@ -385,19 +632,12 @@
     const completedCount = items.filter(item => item.completed).length;
     const progressPercent = (completedCount / items.length) * 100;
     
-    // Check if all tasks are completed - hide widget if so
+    // Check if all tasks are completed - show completion dialog
     const allCompleted = status.domainConnected && status.courseCreated && status.paymentIntegrated;
-    if (allCompleted) {
-      console.log('[CC360 Widget] All tasks completed! Hiding widget...');
-      if (widgetElement) {
-        widgetElement.remove();
-        widgetElement = null;
-      }
-      if (eventSource) {
-        eventSource.close();
-        eventSource = null;
-      }
-      return;
+    if (allCompleted && !hasShownCompletionDialog) {
+      console.log('[CC360 Widget] All tasks completed! Showing completion dialog...');
+      showCompletionDialog();
+      hasShownCompletionDialog = true; // Only show once per session
     }
 
     // Update progress
@@ -421,7 +661,7 @@
         minimizedIconEl.textContent = '🎉';
         if (minimizedWidget) minimizedWidget.classList.add('complete');
       } else {
-        minimizedTextEl.textContent = 'In Progress';
+        minimizedTextEl.textContent = 'Onboaring In Progress';
         minimizedIconEl.textContent = '⚡';
         if (minimizedWidget) minimizedWidget.classList.remove('complete');
       }
@@ -452,19 +692,34 @@
     });
     
     // Render items (minimal - no descriptions)
-    checklistContainer.innerHTML = itemsWithState.map(item => `
-      <a 
-        href="${buildDashboardUrl(item.url)}" 
-        class="cc360-checklist-item ${item.completed ? 'completed' : ''} ${item.isDisabled ? 'disabled' : ''}"
-        target="_blank"
-      >
-        <div class="cc360-checkbox"></div>
-        <div class="cc360-checklist-content">
-          <div class="cc360-checklist-title">${item.title}</div>
-        </div>
-        ${item.isDisabled ? '<div class="cc360-lock-icon">🔒</div>' : ''}
-      </a>
-    `).join('');
+    checklistContainer.innerHTML = itemsWithState.map(item => {
+      // Static items (like account creation) should not be links
+      if (item.isStatic) {
+        return `
+          <div class="cc360-checklist-item ${item.completed ? 'completed' : ''} ${item.isDisabled ? 'disabled' : ''}" style="cursor: default;">
+            <div class="cc360-checkbox"></div>
+            <div class="cc360-checklist-content">
+              <div class="cc360-checklist-title">${item.title}</div>
+            </div>
+          </div>
+        `;
+      }
+      
+      // Regular items are clickable links
+      return `
+        <a 
+          href="${buildDashboardUrl(item.url)}" 
+          class="cc360-checklist-item ${item.completed ? 'completed' : ''} ${item.isDisabled ? 'disabled' : ''}"
+          target="_blank"
+        >
+          <div class="cc360-checkbox"></div>
+          <div class="cc360-checklist-content">
+            <div class="cc360-checklist-title">${item.title}</div>
+          </div>
+          ${item.isDisabled ? '<div class="cc360-lock-icon">🔒</div>' : '<div class="cc360-chevron-icon">›</div>'}
+        </a>
+      `;
+    }).join('');
   }
 
   // Force widget into viewport if it's off-screen (safety function)
@@ -518,55 +773,57 @@
   // Setup drag functionality
   function setupDragAndResize() {
     const widget = document.getElementById('cc360-onboarding-widget');
-    const dragHandle = document.getElementById('cc360-drag-handle');
-    const resizeHandle = document.getElementById('cc360-resize-handle');
     const minimizedWidget = document.querySelector('.cc360-widget-minimized');
+    const minimizeBtn = document.getElementById('cc360-minimize-btn');
     
     if (!widget) return;
 
     // Load saved position and height from localStorage
     restoreWidgetPosition();
     
-    // Drag functionality for full widget header
-    if (dragHandle) {
-      dragHandle.addEventListener('mousedown', startDragging);
-      dragHandle.addEventListener('touchstart', startDragging);
+    // Minimize button click handler
+    if (minimizeBtn) {
+      minimizeBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Toggle between minimized and expanded
+        if (isMinimized) {
+          expandWidget();
+        } else {
+          minimizeWidget();
+        }
+      });
+      // Prevent dragging when clicking minimize button
+      minimizeBtn.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+      });
+      minimizeBtn.addEventListener('touchstart', (e) => {
+        e.stopPropagation();
+      });
     }
     
     // Drag functionality for minimized widget
     if (minimizedWidget) {
       minimizedWidget.addEventListener('mousedown', startDraggingMinimized);
       minimizedWidget.addEventListener('touchstart', startDraggingMinimized);
-    }
-    
-    // Resize functionality
-    if (resizeHandle) {
-      resizeHandle.addEventListener('mousedown', startResizing);
-      resizeHandle.addEventListener('touchstart', startResizing);
-    }
-    
-    function startDragging(e) {
-      if (isMinimized) return; // Don't drag when minimized
       
-      isDragging = true;
-      hasDragged = false; // Reset drag flag
-      widget.classList.add('dragging');
-      
-      const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
-      const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
-      
-      dragStartX = clientX;
-      dragStartY = clientY;
-      
-      const rect = widget.getBoundingClientRect();
-      widgetStartX = rect.left;
-      widgetStartY = rect.top;
-      
-      e.preventDefault();
+      // Add click handler for toggling
+      minimizedWidget.addEventListener('click', (e) => {
+        // Only toggle if user didn't drag
+        if (!hasDragged) {
+          e.stopPropagation();
+          if (isMinimized) {
+            expandWidget();
+          } else {
+            minimizeWidget();
+          }
+        }
+      });
     }
     
     function startDraggingMinimized(e) {
-      // Only drag if minimized, don't expand on drag start
+      // Only allow dragging when minimized (expanded state is undraggable)
       if (!isMinimized) return;
       
       isDragging = true;
@@ -579,26 +836,13 @@
       dragStartX = clientX;
       dragStartY = clientY;
       
+      // Get the widget container's position
       const rect = widget.getBoundingClientRect();
       widgetStartX = rect.left;
       widgetStartY = rect.top;
       
       e.preventDefault();
-      e.stopPropagation(); // Prevent the expand click event
-    }
-    
-    function startResizing(e) {
-      if (isMinimized) return;
-      
-      isResizing = true;
-      widget.classList.add('resizing');
-      
-      const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
-      resizeStartY = clientY;
-      widgetStartHeight = widget.offsetHeight;
-      
-      e.preventDefault();
-      e.stopPropagation();
+      e.stopPropagation(); // Prevent the expand/click event
     }
     
     function onMouseMove(e) {
@@ -633,9 +877,9 @@
           const maxX = window.innerWidth - 100; // Allow 100px to remain visible on right
           newX = Math.max(minX, Math.min(newX, maxX));
           
-          // Constrain Y position (keep fully visible)
-          const minY = margin;
-          const maxY = window.innerHeight - widgetHeight - margin;
+          // Constrain Y position (allow dragging to bottom)
+          const minY = 0; // Allow dragging to very top
+          const maxY = window.innerHeight - 60; // Keep at least 60px visible at bottom
           newY = Math.max(minY, Math.min(newY, maxY));
           
           // Temporarily position the widget while dragging
@@ -644,48 +888,12 @@
           widget.style.bottom = 'auto';
           widget.style.right = 'auto';
         }
-      } else if (isResizing) {
-        const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
-        const deltaY = clientY - resizeStartY;
-        
-        // Resize from top (decrease deltaY increases height)
-        const newHeight = widgetStartHeight - deltaY;
-        const minHeight = 200;
-        const maxHeight = window.innerHeight * 0.9;
-        
-        // Constrain height
-        if (newHeight >= minHeight && newHeight <= maxHeight) {
-          widget.style.height = newHeight + 'px';
-          
-          // Adjust top position to keep bottom fixed while resizing
-          const rect = widget.getBoundingClientRect();
-          const currentBottom = window.innerHeight - rect.bottom;
-          widget.style.top = (window.innerHeight - newHeight - currentBottom) + 'px';
-        }
       }
     }
     
     function onMouseUp(e) {
       if (isDragging) {
         widget.classList.remove('dragging');
-        
-        // If user was in minimized mode and didn't drag, expand the widget
-        if (isMinimized && !hasDragged) {
-          console.log('[CC360 Widget] Click detected (not drag) - expanding in place');
-          isDragging = false;
-          hasDragged = false;
-          // Don't reposition - just expand in place
-          expandWidget();
-          return;
-        }
-        
-        // If in expanded mode and didn't drag, just ignore (was a click on header)
-        if (!isMinimized && !hasDragged) {
-          console.log('[CC360 Widget] Click detected on header (not drag) - no action');
-          isDragging = false;
-          hasDragged = false;
-          return;
-        }
         
         // Only reposition if user actually dragged
         if (hasDragged) {
@@ -703,13 +911,19 @@
           // Calculate bottom position with boundary constraints
           let bottomPos = window.innerHeight - rect.bottom;
           
-          // Get current widget height (minimized = 48px, expanded = actual height)
-          const widgetHeight = isMinimized ? 48 : widget.offsetHeight;
-          const maxBottom = window.innerHeight - widgetHeight - margin;
-          const minBottom = margin;
+          // Get current widget height (minimized = 50px, expanded = actual height)
+          const widgetHeight = isMinimized ? 50 : widget.offsetHeight;
           
-          // Constrain bottom position to keep widget fully visible
-          bottomPos = Math.max(minBottom, Math.min(bottomPos, maxBottom));
+          // For minimized state, allow it to go very close to bottom
+          // For expanded state, keep more margin to ensure visibility
+          const maxAllowedBottom = isMinimized 
+            ? window.innerHeight - widgetHeight - 5  // 5px from bottom when minimized
+            : window.innerHeight - widgetHeight - 10; // 10px margin when expanded
+          
+          const minBottom = 10; // Allow close to edges
+          
+          // Constrain bottom position to keep widget visible
+          bottomPos = Math.max(minBottom, Math.min(bottomPos, maxAllowedBottom));
           
           if (snapToRight) {
             widget.style.right = margin + 'px';
@@ -729,15 +943,13 @@
         }
         
         isDragging = false;
-        hasDragged = false;
-      } else if (isResizing) {
-        widget.classList.remove('resizing');
         
-        // Save the new height
-        const position = getWidgetPosition();
-        saveWidgetPosition(position.isRight, position.bottom, widget.style.height);
-        
-        isResizing = false;
+        // Delay resetting hasDragged to prevent click event from expanding
+        // after a drag. The click event fires after mouseup, so we need
+        // to keep hasDragged true until after the click event has processed
+        setTimeout(() => {
+          hasDragged = false;
+        }, 100);
       }
     }
     
@@ -860,6 +1072,20 @@
     }
     
     try {
+      // First, validate that the locationId exists in the agency's location list
+      console.log('[CC360 Widget] Validating locationId with agency...');
+      const validationResponse = await fetch(`${apiBase}/api/location/validate?locationId=${locationId}`);
+      const validationData = await validationResponse.json();
+      
+      if (!validationData.valid) {
+        console.error('[CC360 Widget] Location validation failed:', validationData.error);
+        window.cc360WidgetError = validationData.error || 'This location is not accessible. Please contact your agency administrator.';
+        return false;
+      }
+      
+      console.log('[CC360 Widget] Location validated successfully:', validationData.locationName || locationId);
+      
+      // Now check installation and authorization
       const response = await fetch(`${apiBase}/api/installation/check?locationId=${locationId}`);
       if (!response.ok) throw new Error('Failed to check installation');
       const data = await response.json();
@@ -956,12 +1182,6 @@
           
           // Update checklist with new data
           renderChecklist(currentStatus);
-          
-          // If dismissed via API/webhook, minimize the widget
-          if (currentStatus.dismissed && !isMinimized) {
-            console.log('[CC360 Widget] Received dismissed status, minimizing widget');
-            dismissWidget();
-          }
         }
       } catch (error) {
         console.error('[CC360 Widget] Error parsing SSE data:', error);
@@ -1119,21 +1339,650 @@
     }, 500);
   }
 
-  // Dismiss widget (minimizes it and marks as dismissed in database)
-  async function dismissWidget() {
+  // Minimize widget (just minimizes, doesn't dismiss)
+  function minimizeWidget() {
     if (!widgetElement) return;
     
-    // Minimize the widget
+    const widget = document.getElementById('cc360-onboarding-widget');
+    if (!widget) return;
+    
+    // Minimize the widget (CSS transition handles the fade)
     isMinimized = true;
     widgetElement.classList.add('minimized');
     
-    // Save minimized state to localStorage
+    // Keep current position, just change the visual state
+    const position = getWidgetPosition();
+    saveWidgetPosition(position.isRight, position.bottom, widget.style.height);
+    
+    console.log('[CC360 Widget] Widget minimized');
+  }
+  
+  // Show dismiss dialog
+  // Show completion dialog when all tasks are done
+  function showCompletionDialog() {
+    // Create dialog overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'cc360-dialog-overlay';
+    overlay.innerHTML = `
+      <div class="cc360-dialog cc360-dialog-success">
+        <div class="cc360-dialog-icon">🎉</div>
+        <h3 class="cc360-dialog-title">Congratulations!</h3>
+        <p class="cc360-dialog-message">
+          You've completed all onboarding tasks! Your account is now fully set up and ready to go.
+        </p>
+        <div class="cc360-dialog-buttons">
+          <button class="cc360-dialog-btn cc360-dialog-btn-primary" id="cc360-dialog-ok">Got It!</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(overlay);
+    
+    // Handle "Got It!" button - show survey instead of dismissing
+    document.getElementById('cc360-dialog-ok').addEventListener('click', () => {
+      overlay.remove();
+      showSurveyModal();
+    });
+    
+    // Close on overlay click
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        overlay.remove();
+        showSurveyModal();
+      }
+    });
+  }
+
+  // Show survey modal as a popup
+  function showSurveyModal() {
+    // Create survey modal overlay
+    const surveyOverlay = document.createElement('div');
+    surveyOverlay.id = 'cc360-survey-overlay';
+    surveyOverlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100001;
+      animation: cc360-fadeIn 0.2s ease;
+    `;
+    
+    const surveyContainer = document.createElement('div');
+    surveyContainer.id = 'cc360-survey-container';
+    surveyContainer.style.cssText = `
+      background: white;
+      border-radius: 16px;
+      padding: 40px;
+      max-width: 700px;
+      width: 90%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      animation: cc360-slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+    `;
+    
+    // Close button
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '×';
+    closeBtn.style.cssText = `
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: transparent;
+      border: none;
+      font-size: 32px;
+      color: #6c757d;
+      cursor: pointer;
+      padding: 0;
+      width: 32px;
+      height: 32px;
+      line-height: 32px;
+      text-align: center;
+    `;
+    closeBtn.onclick = () => {
+      surveyOverlay.remove();
+      dismissWidgetPermanently();
+    };
+    
+    surveyContainer.appendChild(closeBtn);
+    
+    // Survey content container
+    const surveyContent = document.createElement('div');
+    surveyContent.id = 'cc360-survey-root';
+    surveyContainer.appendChild(surveyContent);
+    
+    surveyOverlay.appendChild(surveyContainer);
+    document.body.appendChild(surveyOverlay);
+    
+    // Load React, ReactDOM, and Babel if not already loaded
+    const loadScript = (src, type = 'text/javascript') => {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        if (type) script.type = type;
+        script.onload = resolve;
+        script.onerror = reject;
+        if (type === 'text/babel') {
+          script.setAttribute('data-type', 'module');
+        }
+        document.head.appendChild(script);
+      });
+    };
+    
+    // Load dependencies and render survey
+    Promise.all([
+      window.React ? Promise.resolve() : loadScript('https://unpkg.com/react@18/umd/react.production.min.js'),
+      window.ReactDOM ? Promise.resolve() : loadScript('https://unpkg.com/react-dom@18/umd/react-dom.production.min.js'),
+      window.Babel ? Promise.resolve() : loadScript('https://unpkg.com/@babel/standalone/babel.min.js')
+    ]).then(() => {
+      renderSurvey();
+    }).catch(err => {
+      console.error('[CC360 Widget] Failed to load survey dependencies:', err);
+      surveyOverlay.remove();
+      dismissWidgetPermanently();
+    });
+    
+    function renderSurvey() {
+      const { useState } = React;
+      
+      const OnboardingSurveyWidget = () => {
+        const [step, setStep] = useState(0);
+        const [formData, setFormData] = useState({
+          reason: "",
+          profession: "",
+          hasDomain: "",
+          domain: "",
+          courseIdea: "",
+        });
+        const [submitted, setSubmitted] = useState(false);
+        
+        const logoUrl = "https://cc360-pages.s3.us-west-2.amazonaws.com/course-creator-360-logo.webp";
+        const totalSteps = 5;
+        
+        const updateForm = (updates) => {
+          setFormData((prev) => ({ ...prev, ...updates }));
+        };
+        
+        const handleNext = () => {
+          if (step < totalSteps - 1) {
+            setStep(step + 1);
+          } else {
+            setSubmitted(true);
+            console.log("Survey submitted with data:", formData);
+            // TODO: Send survey data to backend
+            
+            // Show booking modal after 2 seconds
+            setTimeout(() => {
+              surveyOverlay.remove();
+              showBookingModal();
+            }, 2000);
+          }
+        };
+        
+        const handleBack = () => {
+          if (step > 0) setStep(step - 1);
+        };
+        
+        const progressPercent = Math.min((step / (totalSteps - 1)) * 100, 100);
+        
+        const isNextDisabled = () => {
+          switch (step) {
+            case 1:
+              return !formData.reason;
+            case 2:
+              return !formData.profession;
+            case 3:
+              if (!formData.hasDomain) return true;
+              if (formData.hasDomain === "yes" && !formData.domain) return true;
+              return false;
+            case 4:
+              return formData.courseIdea.trim().length < 40;
+            default:
+              return false;
+          }
+        };
+        
+        const renderStep = () => {
+          const styles = {
+            heading: { fontSize: '1.75rem', fontWeight: 600, marginBottom: '16px', lineHeight: 1.3, color: '#111827' },
+            subtext: { fontSize: '1rem', color: '#6b7280', marginBottom: '24px', lineHeight: 1.5 },
+            optionList: { display: 'flex', flexDirection: 'column', gap: '12px' },
+            optionItem: { display: 'flex', alignItems: 'center', padding: '16px 20px', border: '2px solid #e5e7eb', borderRadius: '8px', cursor: 'pointer', fontSize: '1rem', color: '#374151', backgroundColor: '#ffffff', transition: 'all 0.2s ease' },
+            radio: { marginRight: '12px', width: '20px', height: '20px', cursor: 'pointer' },
+            textInput: { width: '100%', padding: '12px 16px', marginTop: '16px', fontSize: '1rem', border: '2px solid #e5e7eb', borderRadius: '8px', outline: 'none', transition: 'border-color 0.2s ease', boxSizing: 'border-box' },
+            textArea: { width: '100%', padding: '12px 16px', fontSize: '1rem', border: '2px solid #e5e7eb', borderRadius: '8px', outline: 'none', resize: 'vertical', minHeight: '120px', transition: 'border-color 0.2s ease', fontFamily: 'inherit', boxSizing: 'border-box' },
+            counter: { fontSize: '0.875rem', color: '#9ca3af', textAlign: 'right', marginTop: '8px' }
+          };
+          
+          switch (step) {
+            case 0:
+              return React.createElement('div', null,
+                React.createElement('h2', { style: styles.heading }, 
+                  'Welcome! We\'re so excited to have you ', 
+                  React.createElement('span', { role: 'img', 'aria-label': 'celebration' }, '🙌')
+                ),
+                React.createElement('p', { style: styles.subtext }, 'We have a few questions to personalize your experience.')
+              );
+            case 1:
+              return React.createElement('div', null,
+                React.createElement('h2', { style: styles.heading }, 'What brings you to Course Creator 360?'),
+                React.createElement('div', { style: styles.optionList },
+                  [
+                    { key: "exploring", label: "Just casually exploring." },
+                    { key: "monetize", label: "I want to monetize my knowledge online." },
+                    { key: "better", label: "I'm looking for a better solution for my online business." },
+                  ].map((opt) => 
+                    React.createElement('label', { key: opt.key, style: styles.optionItem },
+                      React.createElement('input', {
+                        type: 'radio',
+                        name: 'reason',
+                        value: opt.key,
+                        checked: formData.reason === opt.key,
+                        onChange: () => updateForm({ reason: opt.key }),
+                        style: styles.radio
+                      }),
+                      React.createElement('span', null, opt.label)
+                    )
+                  )
+                )
+              );
+            case 2:
+              return React.createElement('div', null,
+                React.createElement('h2', { style: styles.heading }, 'How would you describe yourself professionally?'),
+                React.createElement('div', { style: styles.optionList },
+                  [
+                    { key: "coach", label: "Coach, teacher, or instructor." },
+                    { key: "creator", label: "Content creator." },
+                    { key: "freelancer", label: "Freelancer or consultant." },
+                    { key: "entrepreneur", label: "Entrepreneur." },
+                    { key: "other", label: "Other." },
+                  ].map((opt) => 
+                    React.createElement('label', { key: opt.key, style: styles.optionItem },
+                      React.createElement('input', {
+                        type: 'radio',
+                        name: 'profession',
+                        value: opt.key,
+                        checked: formData.profession === opt.key,
+                        onChange: () => updateForm({ profession: opt.key }),
+                        style: styles.radio
+                      }),
+                      React.createElement('span', null, opt.label)
+                    )
+                  )
+                )
+              );
+            case 3:
+              return React.createElement('div', null,
+                React.createElement('h2', { style: styles.heading }, 'Do you have an existing domain?'),
+                React.createElement('p', { style: styles.subtext }, 'A domain is the web address people type to reach your site (e.g. mybrand.com).'),
+                React.createElement('div', { style: styles.optionList },
+                  [
+                    { key: "yes", label: "Yes" },
+                    { key: "no", label: "No" },
+                  ].map((opt) => 
+                    React.createElement('label', { key: opt.key, style: styles.optionItem },
+                      React.createElement('input', {
+                        type: 'radio',
+                        name: 'hasDomain',
+                        value: opt.key,
+                        checked: formData.hasDomain === opt.key,
+                        onChange: () => updateForm({ hasDomain: opt.key, domain: "" }),
+                        style: styles.radio
+                      }),
+                      React.createElement('span', null, opt.label)
+                    )
+                  )
+                ),
+                formData.hasDomain === "yes" && React.createElement('input', {
+                  type: 'text',
+                  placeholder: 'e.g. mybrand.com',
+                  value: formData.domain,
+                  onChange: (e) => updateForm({ domain: e.target.value }),
+                  style: styles.textInput
+                })
+              );
+            case 4:
+              return React.createElement('div', null,
+                React.createElement('h2', { style: styles.heading }, 'Describe your course idea in as much detail as possible:'),
+                React.createElement('textarea', {
+                  placeholder: 'E.g. \'My course teaches busy parents how to cook 20-minute vegetarian meals...\'',
+                  value: formData.courseIdea,
+                  onChange: (e) => updateForm({ courseIdea: e.target.value }),
+                  style: styles.textArea,
+                  rows: 5
+                }),
+                React.createElement('p', { style: styles.counter }, `${formData.courseIdea.trim().length} / 40`)
+              );
+            default:
+              return null;
+          }
+        };
+        
+        if (submitted) {
+          return React.createElement('div', null,
+            React.createElement('div', { style: { textAlign: 'center', marginBottom: '30px' } },
+              React.createElement('img', { src: logoUrl, alt: 'Course Creator 360', style: { height: '40px', width: 'auto' } })
+            ),
+            React.createElement('div', { style: { maxWidth: '600px', margin: '0 auto' } },
+              React.createElement('div', { style: { width: '100%', height: '8px', backgroundColor: '#e5e7eb', borderRadius: '4px', marginBottom: '32px', overflow: 'hidden' } },
+                React.createElement('div', { style: { height: '100%', backgroundColor: '#1E88E5', borderRadius: '4px', width: '100%' } })
+              ),
+              React.createElement('div', null,
+                React.createElement('h2', { style: { fontSize: '1.75rem', fontWeight: 600, marginBottom: '16px', lineHeight: 1.3, color: '#111827' } },
+                  '🎉 Thanks! We\'ve received your responses.'
+                ),
+                React.createElement('p', { style: { fontSize: '1rem', color: '#6b7280', marginBottom: '24px', lineHeight: 1.5 } },
+                  'You can now proceed to book your free onboarding call.'
+                )
+              )
+            )
+          );
+        }
+        
+        const buttonStyles = {
+          button: { flex: 1, padding: '14px 24px', fontSize: '1rem', fontWeight: 600, borderRadius: '8px', border: 'none', cursor: 'pointer', transition: 'all 0.2s ease' },
+          backButton: { backgroundColor: '#f3f4f6', color: '#374151' },
+          primaryButton: { backgroundColor: '#1E88E5', color: '#ffffff' }
+        };
+        
+        return React.createElement('div', null,
+          React.createElement('div', { style: { textAlign: 'center', marginBottom: '30px' } },
+            React.createElement('img', { src: logoUrl, alt: 'Course Creator 360', style: { height: '40px', width: 'auto' } })
+          ),
+          React.createElement('div', { style: { maxWidth: '600px', margin: '0 auto' } },
+            React.createElement('div', { style: { width: '100%', height: '8px', backgroundColor: '#e5e7eb', borderRadius: '4px', marginBottom: '32px', overflow: 'hidden' } },
+              React.createElement('div', { style: { height: '100%', backgroundColor: '#1E88E5', borderRadius: '4px', width: `${progressPercent}%`, transition: 'width 0.3s ease' } })
+            ),
+            renderStep(),
+            React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', gap: '16px', marginTop: '32px' } },
+              step > 0 ? React.createElement('button', { style: { ...buttonStyles.button, ...buttonStyles.backButton }, onClick: handleBack }, 'Back')
+                : React.createElement('div', { style: { flex: 1 } }),
+              React.createElement('button', {
+                style: { ...buttonStyles.button, ...buttonStyles.primaryButton, opacity: isNextDisabled() ? 0.4 : 1, cursor: isNextDisabled() ? 'default' : 'pointer' },
+                onClick: () => { if (!isNextDisabled()) handleNext(); },
+                disabled: isNextDisabled()
+              }, step === totalSteps - 1 ? 'Submit' : 'Next')
+            )
+          )
+        );
+      };
+      
+      const root = ReactDOM.createRoot(document.getElementById('cc360-survey-root'));
+      root.render(React.createElement(OnboardingSurveyWidget));
+    }
+  }
+
+  // Show booking modal after survey completion
+  function showBookingModal() {
+    // Create booking modal overlay
+    const bookingOverlay = document.createElement('div');
+    bookingOverlay.id = 'cc360-booking-overlay';
+    bookingOverlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100002;
+      animation: cc360-fadeIn 0.2s ease;
+    `;
+    
+    const bookingModal = document.createElement('div');
+    bookingModal.id = 'cc360-booking-modal';
+    bookingModal.style.cssText = `
+      background: white;
+      border-radius: 16px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 90vh;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      animation: cc360-slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    `;
+    
+    // Header with logo and close button
+    const header = document.createElement('div');
+    header.style.cssText = `
+      padding: 24px;
+      text-align: center;
+      border-bottom: 1px solid #e5e7eb;
+      position: relative;
+    `;
+    
+    const logo = document.createElement('img');
+    logo.src = 'https://cc360-pages.s3.us-west-2.amazonaws.com/course-creator-360-logo.webp';
+    logo.alt = 'Course Creator 360';
+    logo.style.cssText = 'height: 36px; width: auto; margin-bottom: 16px;';
+    
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '×';
+    closeBtn.style.cssText = `
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: none;
+      border: none;
+      font-size: 28px;
+      color: #6b7280;
+      cursor: pointer;
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+    `;
+    closeBtn.onmouseover = () => { closeBtn.style.background = '#f3f4f6'; closeBtn.style.color = '#374151'; };
+    closeBtn.onmouseout = () => { closeBtn.style.background = 'none'; closeBtn.style.color = '#6b7280'; };
+    closeBtn.onclick = () => {
+      bookingOverlay.remove();
+      dismissWidgetPermanently();
+    };
+    
+    header.appendChild(logo);
+    header.appendChild(closeBtn);
+    
+    // Initial content view
+    const initialContent = document.createElement('div');
+    initialContent.id = 'cc360-booking-initial';
+    initialContent.style.cssText = 'padding: 32px 24px; text-align: center;';
+    initialContent.innerHTML = `
+      <div style="font-size: 3.5rem; margin-bottom: 16px;">📞</div>
+      <h2 style="font-size: 1.75rem; font-weight: 700; color: #111827; margin-bottom: 16px; line-height: 1.3;">
+        Did you know that creators who have an onboarding call make money 
+        <span style="display: inline-block; background: linear-gradient(135deg, #1E88E5 0%, #1565C0 100%); color: white; padding: 4px 12px; border-radius: 6px; font-weight: 700; font-size: 1.1rem; margin: 0 4px;">57% faster</span> 
+        than those who don't?
+      </h2>
+      <p style="font-size: 1.1rem; color: #4b5563; margin-bottom: 24px; line-height: 1.6;">
+        Book your free 1-on-1 onboarding call and get personalized guidance to accelerate your success.
+      </p>
+      <div style="text-align: left; margin: 24px auto; max-width: 400px;">
+        <div style="display: flex; align-items: center; margin-bottom: 12px; font-size: 1rem; color: #374151;">
+          <span style="font-size: 1.25rem; margin-right: 12px; min-width: 24px;">✅</span>
+          <span>Personalized platform walkthrough</span>
+        </div>
+        <div style="display: flex; align-items: center; margin-bottom: 12px; font-size: 1rem; color: #374151;">
+          <span style="font-size: 1.25rem; margin-right: 12px; min-width: 24px;">✅</span>
+          <span>Custom strategy for your business</span>
+        </div>
+        <div style="display: flex; align-items: center; margin-bottom: 12px; font-size: 1rem; color: #374151;">
+          <span style="font-size: 1.25rem; margin-right: 12px; min-width: 24px;">✅</span>
+          <span>Answer all your questions live</span>
+        </div>
+        <div style="display: flex; align-items: center; margin-bottom: 12px; font-size: 1rem; color: #374151;">
+          <span style="font-size: 1.25rem; margin-right: 12px; min-width: 24px;">✅</span>
+          <span>Fast-track your first course launch</span>
+        </div>
+      </div>
+    `;
+    
+    const scheduleBtn = document.createElement('button');
+    scheduleBtn.innerHTML = '📅 Schedule My Free Onboarding Call';
+    scheduleBtn.style.cssText = `
+      padding: 16px 40px;
+      font-size: 1.125rem;
+      font-weight: 600;
+      background: linear-gradient(135deg, #1E88E5 0%, #1565C0 100%);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 14px rgba(30, 136, 229, 0.4);
+      margin-top: 8px;
+    `;
+    scheduleBtn.onmouseover = () => {
+      scheduleBtn.style.transform = 'translateY(-2px)';
+      scheduleBtn.style.boxShadow = '0 6px 20px rgba(30, 136, 229, 0.5)';
+    };
+    scheduleBtn.onmouseout = () => {
+      scheduleBtn.style.transform = 'translateY(0)';
+      scheduleBtn.style.boxShadow = '0 4px 14px rgba(30, 136, 229, 0.4)';
+    };
+    scheduleBtn.onclick = () => {
+      initialContent.style.display = 'none';
+      calendarContent.style.display = 'block';
+      header.style.display = 'none';
+    };
+    
+    const skipBtn = document.createElement('button');
+    skipBtn.innerHTML = 'Maybe later';
+    skipBtn.style.cssText = `
+      background: none;
+      border: none;
+      color: #9ca3af;
+      font-size: 0.9rem;
+      cursor: pointer;
+      margin-top: 16px;
+      padding: 8px;
+      transition: color 0.2s ease;
+    `;
+    skipBtn.onmouseover = () => { skipBtn.style.color = '#6b7280'; skipBtn.style.textDecoration = 'underline'; };
+    skipBtn.onmouseout = () => { skipBtn.style.color = '#9ca3af'; skipBtn.style.textDecoration = 'none'; };
+    skipBtn.onclick = () => {
+      bookingOverlay.remove();
+      dismissWidgetPermanently();
+    };
+    
+    initialContent.appendChild(scheduleBtn);
+    initialContent.appendChild(skipBtn);
+    
+    // Calendar view
+    const calendarContent = document.createElement('div');
+    calendarContent.id = 'cc360-booking-calendar';
+    calendarContent.style.cssText = 'padding: 0; height: 700px; overflow: hidden; display: none; position: relative;';
+    
+    const backBtn = document.createElement('button');
+    backBtn.innerHTML = '← Back';
+    backBtn.style.cssText = `
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      background: #f3f4f6;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      color: #374151;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      z-index: 10;
+    `;
+    backBtn.onmouseover = () => { backBtn.style.background = '#e5e7eb'; };
+    backBtn.onmouseout = () => { backBtn.style.background = '#f3f4f6'; };
+    backBtn.onclick = () => {
+      calendarContent.style.display = 'none';
+      initialContent.style.display = 'block';
+      header.style.display = 'block';
+    };
+    
+    const iframe = document.createElement('iframe');
+    iframe.src = 'https://my.coursecreator360.com/widget/booking/k0yrAymNvet7hUvzBxTh';
+    iframe.style.cssText = 'width: 100%; height: 100%; border: none; overflow: hidden;';
+    iframe.setAttribute('scrolling', 'no');
+    
+    calendarContent.appendChild(backBtn);
+    calendarContent.appendChild(iframe);
+    
+    // Assemble modal
+    bookingModal.appendChild(header);
+    bookingModal.appendChild(initialContent);
+    bookingModal.appendChild(calendarContent);
+    
+    bookingOverlay.appendChild(bookingModal);
+    document.body.appendChild(bookingOverlay);
+    
+    // Close on overlay click
+    bookingOverlay.addEventListener('click', (e) => {
+      if (e.target === bookingOverlay) {
+        bookingOverlay.remove();
+        dismissWidgetPermanently();
+      }
+    });
+    
+    console.log('[CC360 Widget] Booking modal opened');
+  }
+
+  function showDismissDialog() {
+    // Create dialog overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'cc360-dialog-overlay';
+    overlay.innerHTML = `
+      <div class="cc360-dialog">
+        <h3 class="cc360-dialog-title">Dismiss Onboarding?</h3>
+        <p class="cc360-dialog-message">
+          Would you like to keep this checklist or remove it permanently? You can always bring it back later if you keep it.
+        </p>
+        <div class="cc360-dialog-buttons">
+          <button class="cc360-dialog-btn cc360-dialog-btn-primary" id="cc360-dialog-keep">Keep It</button>
+          <button class="cc360-dialog-btn cc360-dialog-btn-secondary" id="cc360-dialog-discard">Discard Forever</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(overlay);
+    
+    // Handle "Keep It" button
+    document.getElementById('cc360-dialog-keep').addEventListener('click', () => {
+      overlay.remove();
+    });
+    
+    // Handle "Discard Forever" button
+    document.getElementById('cc360-dialog-discard').addEventListener('click', () => {
+      overlay.remove();
+      dismissWidgetPermanently();
+    });
+    
+    // Close on overlay click
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        overlay.remove();
+      }
+    });
+  }
+  
+  // Dismiss widget permanently
+  async function dismissWidgetPermanently() {
+    if (!widgetElement) return;
+    
+    // Remove widget from DOM
+    widgetElement.remove();
+    widgetElement = null;
+    
+    // Save permanent dismissal to localStorage
     try {
-      localStorage.setItem('cc360_widget_minimized', 'true');
+      localStorage.setItem('cc360_widget_dismissed_permanently', 'true');
     } catch (e) {}
     
     // Mark as dismissed in database (optional - for analytics/tracking)
-    // Only if we have a location ID
     if (locationId) {
       try {
         await fetch(`${apiBase}/api/dismiss`, {
@@ -1146,87 +1995,49 @@
       }
     }
     
-    console.log('[CC360 Widget] Widget minimized and marked as dismissed');
+    // Close SSE connection
+    if (eventSource) {
+      eventSource.close();
+      eventSource = null;
+    }
+    
+    console.log('[CC360 Widget] Widget dismissed permanently');
   }
   
   // Expand widget from minimized state
   function expandWidget() {
     if (!widgetElement) return;
     
+    const widget = document.getElementById('cc360-onboarding-widget');
+    if (!widget) return;
+    
+    // Expand the widget
     isMinimized = false;
     widgetElement.classList.remove('minimized');
     
-    // Use multiple checks to ensure accurate positioning after expansion
-    const checkAndAdjustPosition = () => {
-      const widget = document.getElementById('cc360-onboarding-widget');
-      if (!widget) return;
+    // Ensure the expanded widget fits in viewport
+    const rect = widget.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const margin = 24;
+    
+    // Check if widget would go off bottom of screen
+    setTimeout(() => {
+      const expandedRect = widget.getBoundingClientRect();
+      const expandedHeight = expandedRect.height;
       
-      const rect = widget.getBoundingClientRect();
-      const margin = 24;
-      let adjusted = false;
-      
-      // Get current position
-      const currentBottom = parseInt(widget.style.bottom) || margin;
-      const widgetHeight = rect.height;
-      
-      // Calculate safe bounds
-      const minBottom = margin;
-      const maxBottom = window.innerHeight - widgetHeight - margin;
-      
-      // Determine the best position
-      let newBottom = currentBottom;
-      
-      // If widget goes off bottom, move it up
-      if (rect.bottom > window.innerHeight - margin) {
-        const overflow = rect.bottom - (window.innerHeight - margin);
-        newBottom = currentBottom + overflow;
-        adjusted = true;
-        console.log('[CC360 Widget] Adjusted up by', overflow, 'px - was going off bottom');
-      }
-      
-      // If widget goes off top, move it down  
-      if (rect.top < margin) {
-        const overflow = margin - rect.top;
-        newBottom = currentBottom - overflow;
-        adjusted = true;
-        console.log('[CC360 Widget] Adjusted down by', overflow, 'px - was going off top');
-      }
-      
-      // Apply final constraints
-      newBottom = Math.max(minBottom, Math.min(newBottom, maxBottom));
-      
-      if (adjusted || newBottom !== currentBottom) {
-        widget.style.bottom = newBottom + 'px';
-        widget.style.top = 'auto';
+      // If it would go off the bottom, reposition it
+      if (expandedRect.bottom > viewportHeight - margin) {
+        const currentBottom = parseInt(widget.style.bottom) || margin;
+        const overflow = expandedRect.bottom - (viewportHeight - margin);
+        const newBottom = currentBottom + overflow;
         
-        // Verify final position
-        const finalRect = widget.getBoundingClientRect();
-        console.log('[CC360 Widget] Final position:', {
-          top: finalRect.top,
-          bottom: finalRect.bottom,
-          height: finalRect.height,
-          bottomStyle: newBottom
-        });
+        // Make sure we don't push it off the top
+        const maxBottom = viewportHeight - expandedHeight - margin;
+        widget.style.bottom = Math.min(newBottom, maxBottom) + 'px';
         
-        // Save the adjusted position
-        const position = getWidgetPosition();
-        saveWidgetPosition(position.isRight, newBottom, widget.style.height);
+        console.log('[CC360 Widget] Adjusted position to fit in viewport');
       }
-    };
-    
-    // Check immediately after expansion
-    setTimeout(checkAndAdjustPosition, 50);
-    
-    // Double-check after render is complete (accounts for content loading)
-    setTimeout(checkAndAdjustPosition, 150);
-    
-    // Final safety check to force widget into view if needed
-    setTimeout(() => forceWidgetIntoView(), 200);
-    
-    // Save expanded state
-    try {
-      localStorage.setItem('cc360_widget_minimized', 'false');
-    } catch (e) {}
+    }, 50); // Small delay to let DOM update
     
     console.log('[CC360 Widget] Widget expanded');
   }
@@ -1258,16 +2069,11 @@
     // Setup drag and resize functionality
     setupDragAndResize();
     
-    // Restore minimized state (from localStorage OR dismissed status)
-    // If database says dismissed, start minimized
-    if (currentStatus.dismissed) {
-      console.log('[CC360 Widget] Widget was dismissed, showing in minimized state');
-      isMinimized = true;
-      widgetElement.classList.add('minimized');
-      localStorage.setItem('cc360_widget_minimized', 'true');
-    } else {
-      // Otherwise check localStorage
-      restoreMinimizedState();
+    // Default to expanded state (no longer respect dismissed from database)
+    // Widget always defaults to expanded on page load
+    isMinimized = false;
+    if (widgetElement) {
+      widgetElement.classList.remove('minimized');
     }
     
     // Safety check after initialization to ensure widget is visible
@@ -1277,56 +2083,63 @@
     connectSSE();
   }
 
-  // Show not authorized message
+  // Show not authorized message (minimized widget)
   function showNotAuthorized(errorMessage) {
     widgetElement = document.createElement('div');
     widgetElement.id = 'cc360-onboarding-widget';
+    widgetElement.classList.add('minimized', 'setup-required');
     document.body.appendChild(widgetElement);
 
-    const message = errorMessage || 'Agency administrator needs to authorize this app. Please contact your agency admin.';
-    const isExpired = errorMessage && errorMessage.includes('expired');
+    // Always show simple message, log full error to console
+    if (errorMessage) {
+      console.error('[CC360 Widget] Setup error:', errorMessage);
+    }
 
     widgetElement.innerHTML = `
       <style>
-        #cc360-onboarding-widget {
+        #cc360-onboarding-widget.setup-required {
           position: fixed;
-          bottom: 20px;
-          right: 20px;
-          width: 380px;
-          background: white;
-          border-radius: 12px;
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+          bottom: 24px;
+          right: 24px;
+          width: auto;
+          max-width: 300px;
+          height: 48px;
+          min-height: 48px;
+          background: #8b5cf6;
+          border-radius: 24px;
+          box-shadow: 0 4px 16px rgba(139, 92, 246, 0.3);
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
           z-index: 99999;
           overflow: hidden;
+          cursor: default;
+          transition: all 0.2s;
         }
-        .cc360-not-authorized {
-          padding: 40px;
-          text-align: center;
+        #cc360-onboarding-widget.setup-required:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
         }
-        .cc360-icon {
-          font-size: 48px;
-          margin-bottom: 16px;
+        .cc360-setup-required-content {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          padding: 0 20px;
+          height: 48px;
+          color: white;
         }
-        .cc360-title {
-          font-size: 18px;
+        .cc360-setup-icon {
+          font-size: 20px;
+          line-height: 1;
+        }
+        .cc360-setup-text {
+          font-size: 13px;
           font-weight: 600;
-          color: #2c3e50;
-          margin: 0 0 8px 0;
-        }
-        .cc360-message {
-          font-size: 14px;
-          color: #6c757d;
-          margin: 0;
-          line-height: 1.5;
+          white-space: nowrap;
         }
       </style>
-      <div class="cc360-not-authorized">
-        <div class="cc360-icon">${isExpired ? '⏰' : '🔒'}</div>
-        <h3 class="cc360-title">${isExpired ? 'Authorization Expired' : 'Setup Required'}</h3>
-        <p class="cc360-message">
-          ${message}
-        </p>
+      <div class="cc360-setup-required-content">
+        <div class="cc360-setup-icon">🔒</div>
+        <div class="cc360-setup-text">Setup Required: Contact Admin</div>
       </div>
     `;
   }
@@ -1334,6 +2147,29 @@
   // Initialize widget
   async function init() {
     console.log('[CC360 Widget] Initializing...');
+    
+    // Check if widget has been permanently dismissed
+    try {
+      const permanentlyDismissed = localStorage.getItem('cc360_widget_dismissed_permanently');
+      if (permanentlyDismissed === 'true') {
+        console.log('[CC360 Widget] Widget has been permanently dismissed, not showing');
+        return;
+      }
+    } catch (e) {}
+    
+    // Clear minimized state on page load (widget should default to expanded)
+    try {
+      localStorage.removeItem('cc360_widget_minimized');
+    } catch (e) {}
+    
+    // Auto-detect location ID from GHL UserContext
+    const detectedLocationId = await detectLocationFromContext();
+    if (detectedLocationId) {
+      locationId = detectedLocationId;
+      console.log('[CC360 Widget] Using auto-detected location ID:', locationId);
+    } else {
+      console.warn('[CC360 Widget] Could not auto-detect location ID from GHL UserContext');
+    }
     
     // Fetch configuration from backend
     await fetchConfig();
@@ -1353,23 +2189,12 @@
     }
   }
 
-  // Restore minimized state from localStorage
-  function restoreMinimizedState() {
-    try {
-      const saved = localStorage.getItem('cc360_widget_minimized');
-      if (saved === 'true') {
-        isMinimized = true;
-        if (widgetElement) {
-          widgetElement.classList.add('minimized');
-        }
-      }
-    } catch (e) {}
-  }
-
   // Expose functions globally
   window.cc360Widget = {
-    dismiss: dismissWidget,
+    minimize: minimizeWidget,
     expand: expandWidget,
+    showDismissDialog: showDismissDialog,
+    dismissPermanently: dismissWidgetPermanently,
     forceIntoView: forceWidgetIntoView,
     resetPosition: function() {
       localStorage.removeItem('cc360_widget_position');
@@ -1391,6 +2216,9 @@
       console.log('Current Status:', currentStatus);
       console.log('');
       console.log('Available commands:');
+      console.log('  window.cc360Widget.minimize() - Minimize widget');
+      console.log('  window.cc360Widget.expand() - Expand widget');
+      console.log('  window.cc360Widget.showDismissDialog() - Show dismiss dialog');
       console.log('  window.cc360Widget.resetPosition() - Reset widget position');
       console.log('  window.cc360Widget.forceIntoView() - Force widget into viewport');
       console.log('  window.cc360Widget.reload() - Reload widget');
@@ -1401,6 +2229,8 @@
         widgetElement.remove();
         widgetElement = null;
       }
+      // Clear permanent dismissal on reload
+      localStorage.removeItem('cc360_widget_dismissed_permanently');
       await init();
     }
   };

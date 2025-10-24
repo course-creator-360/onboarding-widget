@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Onboarding Call Scheduler Widget</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #f3f4f6;
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .demo-container {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .demo-button {
+            padding: 14px 28px;
+            font-size: 1rem;
+            font-weight: 600;
+            background: #1E88E5;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .demo-button:hover {
+            background: #1976D2;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(30, 136, 229, 0.3);
+        }
+
+        /* Modal Overlay */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 9998;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        /* Modal Container */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow: hidden;
+            z-index: 9999;
+            animation: slideUp 0.3s ease;
+        }
+
+        .modal.active {
+            display: block;
+        }
+
+        .modal-header {
+            padding: 24px;
+            text-align: center;
+            border-bottom: 1px solid #e5e7eb;
+            position: relative;
+        }
+
+        .modal-logo {
+            height: 36px;
+            width: auto;
+            margin-bottom: 16px;
+        }
+
+        .close-button {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: none;
+            border: none;
+            font-size: 28px;
+            color: #6b7280;
+            cursor: pointer;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .close-button:hover {
+            background: #f3f4f6;
+            color: #374151;
+        }
+
+        .modal-content {
+            padding: 32px 24px;
+            text-align: center;
+        }
+
+        .modal-content.calendar-view {
+            padding: 0;
+            height: 700px;
+            overflow: hidden;
+        }
+
+        .stat-highlight {
+            display: inline-block;
+            background: linear-gradient(135deg, #1E88E5 0%, #1565C0 100%);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            margin: 0 4px;
+        }
+
+        .modal-icon {
+            font-size: 3.5rem;
+            margin-bottom: 16px;
+        }
+
+        .modal-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 16px;
+            line-height: 1.3;
+        }
+
+        .modal-description {
+            font-size: 1.1rem;
+            color: #4b5563;
+            margin-bottom: 24px;
+            line-height: 1.6;
+        }
+
+        .benefits-list {
+            text-align: left;
+            margin: 24px auto;
+            max-width: 400px;
+        }
+
+        .benefit-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            font-size: 1rem;
+            color: #374151;
+        }
+
+        .benefit-icon {
+            font-size: 1.25rem;
+            margin-right: 12px;
+            min-width: 24px;
+        }
+
+        .modal-button {
+            padding: 16px 40px;
+            font-size: 1.125rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, #1E88E5 0%, #1565C0 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 14px rgba(30, 136, 229, 0.4);
+            margin-top: 8px;
+        }
+
+        .modal-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(30, 136, 229, 0.5);
+        }
+
+        .modal-button:active {
+            transform: translateY(0);
+        }
+
+        .skip-button {
+            background: none;
+            border: none;
+            color: #9ca3af;
+            font-size: 0.9rem;
+            cursor: pointer;
+            margin-top: 16px;
+            padding: 8px;
+            transition: color 0.2s ease;
+        }
+
+        .skip-button:hover {
+            color: #6b7280;
+            text-decoration: underline;
+        }
+
+        .calendar-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .back-button {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            background: #f3f4f6;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            color: #374151;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .back-button:hover {
+            background: #e5e7eb;
+        }
+
+        @media (max-width: 640px) {
+            .modal {
+                width: 95%;
+                max-height: 95vh;
+            }
+
+            .modal-title {
+                font-size: 1.5rem;
+            }
+
+            .modal-description {
+                font-size: 1rem;
+            }
+
+            .modal-content.calendar-view {
+                height: 600px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-container">
+        <h1 style="margin-bottom: 20px; color: #111827;">Onboarding Call Scheduler Widget Demo</h1>
+        <p style="margin-bottom: 24px; color: #6b7280;">Click the button below to see the widget in action:</p>
+        <button class="demo-button" onclick="openModal()">Show Widget</button>
+    </div>
+
+    <!-- Modal Overlay -->
+    <div class="modal-overlay" id="modalOverlay" onclick="closeModal()"></div>
+
+    <!-- Modal -->
+    <div class="modal" id="modal">
+        <div class="modal-header" id="modalHeader">
+            <img src="https://cc360-pages.s3.us-west-2.amazonaws.com/course-creator-360-logo.webp" 
+                 alt="Course Creator 360" 
+                 class="modal-logo">
+            <button class="close-button" onclick="closeModal()">&times;</button>
+        </div>
+
+        <!-- Initial Content View -->
+        <div class="modal-content" id="initialContent">
+            <div class="modal-icon">📞</div>
+            <h2 class="modal-title">
+                Did you know that creators who have an onboarding call make money <span class="stat-highlight">57% faster</span> than those who don't?
+            </h2>
+            <p class="modal-description">
+                Book your free 1-on-1 onboarding call and get personalized guidance to accelerate your success.
+            </p>
+
+            <div class="benefits-list">
+                <div class="benefit-item">
+                    <span class="benefit-icon">✅</span>
+                    <span>Personalized platform walkthrough</span>
+                </div>
+                <div class="benefit-item">
+                    <span class="benefit-icon">✅</span>
+                    <span>Custom strategy for your business</span>
+                </div>
+                <div class="benefit-item">
+                    <span class="benefit-icon">✅</span>
+                    <span>Answer all your questions live</span>
+                </div>
+                <div class="benefit-item">
+                    <span class="benefit-icon">✅</span>
+                    <span>Fast-track your first course launch</span>
+                </div>
+            </div>
+
+            <button class="modal-button" onclick="showCalendar()">
+                📅 Schedule My Free Onboarding Call
+            </button>
+
+            <button class="skip-button" onclick="closeModal()">
+                Maybe later
+            </button>
+        </div>
+
+        <!-- Calendar View -->
+        <div class="modal-content calendar-view" id="calendarContent" style="display: none;">
+            <button class="back-button" onclick="showInitialContent()">← Back</button>
+            <div id="calendarContainer" style="width: 100%; height: 100%; overflow: hidden;">
+                <iframe 
+                    src="https://my.coursecreator360.com/widget/booking/k0yrAymNvet7hUvzBxTh" 
+                    style="width: 100%; height: 100%; border: none; overflow: hidden;" 
+                    scrolling="no" 
+                    id="cc360BookingIframe">
+                </iframe>
+            </div>
+        </div>
+    </div>
+
+    <!-- CourseCreator360 Form Embed Script -->
+    <script src="https://my.coursecreator360.com/js/form_embed.js" type="text/javascript"></script>
+
+    <script>
+        function openModal() {
+            const overlay = document.getElementById('modalOverlay');
+            const modal = document.getElementById('modal');
+            overlay.classList.add('active');
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            const overlay = document.getElementById('modalOverlay');
+            const modal = document.getElementById('modal');
+            overlay.classList.remove('active');
+            modal.classList.remove('active');
+            document.body.style.overflow = 'auto';
+            
+            // Reset to initial content after closing
+            setTimeout(() => {
+                showInitialContent();
+            }, 300);
+        }
+
+        function showCalendar() {
+            const initialContent = document.getElementById('initialContent');
+            const calendarContent = document.getElementById('calendarContent');
+            const modalHeader = document.getElementById('modalHeader');
+            
+            initialContent.style.display = 'none';
+            calendarContent.style.display = 'block';
+            modalHeader.style.display = 'none';
+            
+            // CourseCreator360 booking iframe is already loaded
+            // URL: https://my.coursecreator360.com/widget/booking/k0yrAymNvet7hUvzBxTh
+        }
+
+        function showInitialContent() {
+            const initialContent = document.getElementById('initialContent');
+            const calendarContent = document.getElementById('calendarContent');
+            const modalHeader = document.getElementById('modalHeader');
+            
+            initialContent.style.display = 'block';
+            calendarContent.style.display = 'none';
+            modalHeader.style.display = 'block';
+        }
+
+        // Optional: Auto-show modal after a delay (e.g., 3 seconds after page load)
+        // Uncomment the lines below to enable auto-popup
+        /*
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                openModal();
+            }, 3000);
+        });
+        */
+
+        // Optional: Show modal when user is about to leave the page
+        // Uncomment to enable exit-intent popup
+        /*
+        let exitIntentShown = false;
+        document.addEventListener('mouseleave', (e) => {
+            if (e.clientY < 0 && !exitIntentShown) {
+                exitIntentShown = true;
+                openModal();
+            }
+        });
+        */
+    </script>
+</body>
+</html>

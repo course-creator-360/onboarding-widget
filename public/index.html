@@ -152,24 +152,17 @@
     <div class="info-box">
       <strong>Widget Configuration:</strong>
       <div style="margin-top: 12px;">
-        <label for="locationIdInput" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">Enter Location ID:</label>
-        <input 
-          type="text" 
-          id="locationIdInput" 
-          placeholder="e.g., L851uHvru1ipOe8DIwNS"
-          style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; margin-bottom: 12px;"
-        />
-        <button onclick="loadWidgetWithLocation()" style="margin-bottom: 12px;">Load Widget</button>
         <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 12px; border-radius: 6px; margin-bottom: 12px;">
-          <strong style="color: #856404; display: block; margin-bottom: 6px;">⚠️ Important Note:</strong>
+          <strong style="color: #856404; display: block; margin-bottom: 6px;">⚠️ Testing on Demo Page:</strong>
           <p style="margin: 0; font-size: 13px; color: #856404; line-height: 1.5;">
-            This Location ID input is <strong>for testing purposes only</strong> on this demo page. 
-            It allows you to test the widget with different locations to ensure everything is working as expected.
-            In production, the widget will automatically detect the location ID from the GHL dashboard context.
+            To test this demo page, add <code>?locationId=YOUR_LOCATION_ID</code> to the URL.
+            The widget will auto-detect it from the query parameter.
+            <br><br>
+            Example: <code>https://your-domain.com/?locationId=L851uHvru1ipOe8DIwNS</code>
           </p>
         </div>
         <p style="margin: 0; font-size: 13px; color: #6c757d;">
-          Current Location: <code id="currentLocationId">Not loaded</code><br>
+          Detected Location: <code id="currentLocationId">Auto-detecting...</code><br>
           API Base: <code id="apiBaseUrl">Loading...</code>
         </p>
       </div>
@@ -217,6 +210,7 @@
         <li><code>GET /api/events?locationId=...</code> - SSE stream for real-time updates</li>
         <li><code>GET /api/onboarding/:locationId/check-products</code> - Check if products exist (polling)</li>
         <li><code>POST /api/dismiss</code> - Dismiss the widget</li>
+        <li><code>POST /api/toggle</code> - Toggle a specific field (testing)</li>
         <li><code>POST /api/mock/set</code> - Update checklist flags (testing)</li>
         <li><code>POST /api/test/clear-location</code> - Clear location data (keep agency auth)</li>
         <li><code>GET /api/oauth/install</code> - OAuth installation flow</li>
@@ -226,16 +220,21 @@
 
     <h2>How It Works</h2>
     <p>
-      The widget uses Server-Sent Events (SSE) for real-time updates. When you click 
+      <strong>🎯 Auto-Detection:</strong> The widget now automatically detects the location ID when embedded in the GHL dashboard. 
+      It checks multiple sources including the URL path, query parameters, GHL context objects, and parent window URLs (for iframes). 
+      This eliminates the need for manual configuration in production.
+    </p>
+    <p>
+      <strong>🔄 Real-Time Updates:</strong> The widget uses Server-Sent Events (SSE) for real-time updates. When you click 
       the testing buttons above, the widget will automatically update without refreshing the page.
     </p>
     <p>
-      <strong>Product Detection:</strong> The widget now uses <strong>fetch interception</strong> to detect 
+      <strong>📦 Product Detection:</strong> The widget uses <strong>fetch interception</strong> to detect 
       when products/courses are created in GHL's admin dashboard. When the widget is loaded as custom JS 
       in the agency, it intercepts GHL's API calls and triggers a status check when product creation is detected.
     </p>
     <p> 
-      Other events (domain connection, payment integration, orders) still use webhooks from GoHighLevel 
+      <strong>🔗 Webhook Integration:</strong> Other events (domain connection, payment integration, orders) use webhooks from GoHighLevel 
       for real-time updates.
     </p>
   </div>
@@ -245,35 +244,28 @@
     let LOCATION_ID = null;
     let API_BASE = window.location.origin; // Use current origin by default
 
-    // Load widget with specified location ID
-    function loadWidgetWithLocation() {
-      const locationIdInput = document.getElementById('locationIdInput');
-      const locationId = locationIdInput.value.trim();
-      
-      if (!locationId) {
-        alert('Please enter a Location ID');
-        return;
+    // Detect location ID from URL (for demo/testing)
+    function detectLocationFromUrl() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const locationId = urlParams.get('locationId');
+      if (locationId) {
+        LOCATION_ID = locationId;
+        document.getElementById('currentLocationId').textContent = locationId;
+        console.log('Detected location ID from URL:', locationId);
+        return locationId;
       }
       
-      LOCATION_ID = locationId;
-      document.getElementById('currentLocationId').textContent = locationId;
+      // Check URL path
+      const pathMatch = window.location.pathname.match(/\/location\/([^\/]+)/);
+      if (pathMatch && pathMatch[1]) {
+        LOCATION_ID = pathMatch[1];
+        document.getElementById('currentLocationId').textContent = pathMatch[1];
+        console.log('Detected location ID from path:', pathMatch[1]);
+        return pathMatch[1];
+      }
       
-      // Remove existing widget script if any
-      const existing = document.querySelector('script[src*="widget.js"]');
-      if (existing) existing.remove();
-      
-      // Remove existing widget from DOM
-      const existingWidget = document.getElementById('cc360-onboarding-widget');
-      if (existingWidget) existingWidget.remove();
-      
-      // Load widget
-      const script = document.createElement('script');
-      script.src = `${API_BASE}/widget.js`;
-      script.setAttribute('data-location', locationId);
-      script.setAttribute('data-api', API_BASE);
-      document.body.appendChild(script);
-      
-      console.log('Widget loaded for locationId:', locationId);
+      document.getElementById('currentLocationId').textContent = 'Not detected (add ?locationId=... to URL)';
+      return null;
     }
     
     // Update agency button status
@@ -307,16 +299,19 @@
       API_BASE = window.location.origin;
       document.getElementById('apiBaseUrl').textContent = API_BASE;
       
+      // Detect location ID from URL
+      detectLocationFromUrl();
+      
       // Check agency OAuth status and update button
       await updateAgencyButtonStatus();
       
-      // Auto-load widget without location ID to show "Setup Required" message
+      // Auto-load widget - it will auto-detect location ID from URL
       const script = document.createElement('script');
       script.src = `${API_BASE}/widget.js`;
       script.setAttribute('data-api', API_BASE);
-      // Note: no data-location attribute - widget will show "Setup Required"
+      // Note: no data-location attribute - widget will auto-detect from UserContext/URL
       document.body.appendChild(script);
-      console.log('Widget loaded (no location ID - will show setup required)');
+      console.log('Widget loaded - will auto-detect location ID');
     });
   </script>
 
@@ -325,7 +320,7 @@
 
     async function checkStatus() {
       if (!LOCATION_ID) {
-        alert('Please load the widget first by entering a Location ID');
+        alert('Please add ?locationId=YOUR_LOCATION_ID to the URL to test with a specific location');
         return;
       }
       try {
@@ -338,19 +333,18 @@
     }
 
     async function toggleStep(step) {
+      if (!LOCATION_ID) {
+        alert('Please add ?locationId=YOUR_LOCATION_ID to the URL to test with a specific location');
+        return;
+      }
       try {
-        // Get current status first
-        await checkStatus();
-        
-        // Toggle the step
-        const newValue = !currentStatus[step];
-        
-        const response = await fetch(`${API_BASE}/api/mock/set`, {
+        // Backend handles the toggle logic - just send the field name
+        const response = await fetch(`${API_BASE}/api/toggle`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             locationId: LOCATION_ID,
-            updates: { [step]: newValue }
+            field: step
           })
         });
         
@@ -362,6 +356,10 @@
     }
 
     async function resetAll() {
+      if (!LOCATION_ID) {
+        alert('Please add ?locationId=YOUR_LOCATION_ID to the URL to test with a specific location');
+        return;
+      }
       try {
         const response = await fetch(`${API_BASE}/api/mock/set`, {
           method: 'POST',
@@ -419,13 +417,17 @@
         
         alert('Agency authorization successful! Widget will now work for all sub-accounts.');
         
-        // Clean URL
-        window.history.replaceState({}, document.title, window.location.pathname);
+        // Clean URL (preserve locationId param if present)
+        const locationIdParam = urlParams.get('locationId');
+        const newUrl = locationIdParam 
+          ? `${window.location.pathname}?locationId=${locationIdParam}`
+          : window.location.pathname;
+        window.history.replaceState({}, document.title, newUrl);
         
         // Update button status and reload widget
         await updateAgencyButtonStatus();
         
-        // Reload widget to show checklist
+        // Reload widget to show checklist (will auto-detect location)
         const existingWidget = document.getElementById('cc360-onboarding-widget');
         if (existingWidget) existingWidget.remove();
         const script = document.createElement('script');
@@ -466,7 +468,7 @@
           alert('Agency authorization cleared!');
           // Update button status instead of full page reload
           await updateAgencyButtonStatus();
-          // Reload widget to show "Setup Required"
+          // Reload widget to show "Setup Required" (will auto-detect location)
           const existingWidget = document.getElementById('cc360-onboarding-widget');
           if (existingWidget) existingWidget.remove();
           const script = document.createElement('script');
@@ -484,7 +486,7 @@
 
     async function checkInstallation() {
       if (!LOCATION_ID) {
-        alert('Please load the widget first by entering a Location ID');
+        alert('Please add ?locationId=YOUR_LOCATION_ID to the URL to test with a specific location');
         return;
       }
       try {
@@ -517,7 +519,7 @@
 
     async function clearLocationData() {
       if (!LOCATION_ID) {
-        alert('Please load the widget first by entering a Location ID');
+        alert('Please add ?locationId=YOUR_LOCATION_ID to the URL to test with a specific location');
         return;
       }
       if (!confirm(`⚠️ This will clear ALL data for location ${LOCATION_ID}:\n\n- All onboarding progress\n- Location-specific installation\n- Widget state\n\n✓ Agency authorization will be preserved\n\nContinue?`)) {
