@@ -1746,7 +1746,7 @@
       max-width: 600px;
       width: 90%;
       max-height: 90vh;
-      overflow: hidden;
+      overflow-y: auto;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
       animation: cc360-slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     `;
@@ -1879,7 +1879,7 @@
     // Calendar view
     const calendarContent = document.createElement('div');
     calendarContent.id = 'cc360-booking-calendar';
-    calendarContent.style.cssText = 'padding: 0; height: 700px; overflow: hidden; display: none; position: relative;';
+    calendarContent.style.cssText = 'padding: 0; height: 700px; overflow-y: auto; display: none; position: relative;';
     
     const backBtn = document.createElement('button');
     backBtn.innerHTML = '← Back';
@@ -1907,8 +1907,8 @@
     
     const iframe = document.createElement('iframe');
     iframe.src = 'https://my.coursecreator360.com/widget/booking/k0yrAymNvet7hUvzBxTh';
-    iframe.style.cssText = 'width: 100%; height: 100%; border: none; overflow: hidden;';
-    iframe.setAttribute('scrolling', 'no');
+    iframe.style.cssText = 'width: 100%; height: 100%; border: none;';
+    iframe.setAttribute('scrolling', 'yes');
     
     calendarContent.appendChild(backBtn);
     calendarContent.appendChild(iframe);
