@@ -231,6 +231,7 @@
           font-weight: 700;
           margin: 0 0 8px 0;
           letter-spacing: -0.3px;
+          color: #ffffff !important;
         }
         .cc360-widget-subtitle {
           font-size: 13px;
