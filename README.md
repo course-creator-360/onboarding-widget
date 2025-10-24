@@ -238,24 +238,49 @@ This is a **ONE-TIME setup** that allows the widget to work for ALL sub-accounts
 
 The app automatically detects Vercel environment and configures URLs accordingly.
 
-#### Step 1: Create Vercel Postgres Database
+#### Step 1: Configure Database
+
+**Option A: Vercel Postgres (Recommended)**
 
 1. Go to Vercel Dashboard → Your Project → **Storage**
 2. Click **Create Database** → **Postgres**
 3. Select plan (free tier available) and create
 
-Vercel automatically sets these environment variables:
-- `POSTGRES_URL` - Direct connection
-- `POSTGRES_PRISMA_URL` - Pooled connection for Prisma
-- `POSTGRES_URL_NON_POOLING` - Non-pooled for migrations
+Vercel automatically injects these environment variables:
+- `POSTGRES_PRISMA_URL` → maps to `DATABASE_URL`
+- `POSTGRES_URL_NON_POOLING` → maps to `DIRECT_URL`
 
-#### Step 2: Set Environment Variables
+**Option B: External Database (Neon, Supabase, etc.)**
 
-In addition to the database variables, set:
+Set in Vercel → Settings → Environment Variables:
+```bash
+DATABASE_URL=postgresql://user:password@host:5432/dbname?schema=public
+DIRECT_URL=postgresql://user:password@host:5432/dbname?schema=public
+```
+
+#### Step 2: Set Required Environment Variables
+
+Go to Vercel → Settings → Environment Variables and add:
 
 ```bash
-# Migration security
+# Required - GoHighLevel OAuth
+GHL_CLIENT_ID=your_client_id
+GHL_CLIENT_SECRET=your_client_secret
+
+# Required - Migration security (generate random string)
 VERCEL_MIGRATE_SECRET=your-secure-random-secret
+
+# Required - Skip migrations during build (set to "true")
+SKIP_BUILD_MIGRATIONS=true
+
+# Optional - Auto-detected if not set
+# APP_BASE_URL=https://your-custom-domain.com
+# GHL_REDIRECT_URI=https://your-app.vercel.app/oauth/callback
+```
+
+**Generate secure migration secret:**
+```bash
+openssl rand -base64 32
 ```
 
 #### Step 3: Deploy
@@ -268,21 +293,35 @@ npm i -g vercel
 vercel --prod
 ```
 
-The deployment automatically:
-1. Installs Prisma dependencies
-2. Generates Prisma Client (via `postinstall` script)
-3. Builds your app
+Or push to your connected Git repository (Vercel auto-deploys).
 
-#### Step 4: Run Migrations
+The deployment process:
+1. Installs dependencies (`npm install`)
+2. Generates Prisma Client (`npx prisma generate`)
+3. Builds TypeScript → JavaScript (`npm run build`)
+4. ⚠️ **Skips migrations** (handled separately in Step 4)
 
-After deployment, run migrations via the dedicated endpoint:
+#### Step 4: Run Migrations (Required)
+
+**After deployment succeeds**, run migrations via the API endpoint:
 
 ```bash
 curl -X POST https://your-app.vercel.app/api/migrate \
-  -H "x-vercel-migrate-secret: your-secure-random-secret"
+  -H "x-vercel-migrate-secret: YOUR_SECRET_FROM_STEP_2"
 ```
 
-**Note:** Migrations are not run automatically at runtime in serverless environments. They must be triggered manually via the `/api/migrate` endpoint after each deployment that includes schema changes.
+**Expected success response:**
+```json
+{
+  "success": true,
+  "message": "Database migrations completed successfully"
+}
+```
+
+**Why migrations are separate:**
+- Serverless environments lack writable home directories for npm
+- Running migrations during build can timeout or fail
+- Dedicated endpoint provides better error handling and control
 
 #### Step 5: Update GHL Marketplace
 
@@ -293,17 +332,31 @@ After deployment, update your GHL app settings:
 3. Re-authorize agency with production URL
 4. Update Custom Values script with production URLs
 
+#### Step 6: Verify Deployment
+
+1. Visit `https://your-app.vercel.app` - should load demo page
+2. Check migration status - if you get database errors, run Step 4 again
+3. Test OAuth flow with your GHL account
+4. Monitor Vercel logs for any errors
+
 ### Environment Variables
 
 Set these in Vercel Dashboard (Settings → Environment Variables):
 
 ```bash
-# Required
+# Required - Database (if using external, not needed for Vercel Postgres)
+DATABASE_URL=postgresql://user:password@host:5432/dbname?schema=public
+DIRECT_URL=postgresql://user:password@host:5432/dbname?schema=public
+
+# Required - GoHighLevel OAuth
 GHL_CLIENT_ID=your_ghl_client_id
 GHL_CLIENT_SECRET=your_ghl_client_secret
 
-# Migration security (required for /api/migrate endpoint)
+# Required - Migration security (for /api/migrate endpoint)
 VERCEL_MIGRATE_SECRET=your_secure_random_secret
+
+# Required - Skip migrations during build
+SKIP_BUILD_MIGRATIONS=true
 
 # Optional (auto-detected from VERCEL_URL)
 # APP_BASE_URL=https://your-custom-domain.com
@@ -659,18 +712,51 @@ Or visit `http://localhost:4002` and click "Setup Agency OAuth"
 
 #### Database Migration Errors
 
-**Error**: `npm error code ENOENT` or `mkdir` permission errors
+**Error 1**: `npm error code ENOENT` or `mkdir '/home/sbx_user1051'` permission errors
 
-**Cause**: Attempting to run migrations at runtime in serverless environment
+**Cause**: Serverless environment doesn't have writable home directory for npm/npx
 
 **Solution**:
-1. Ensure `VERCEL_MIGRATE_SECRET` is set in environment variables
-2. Run migrations via endpoint after deployment:
+1. ✅ Code has been updated to use local Prisma binary instead of npx
+2. Set `SKIP_BUILD_MIGRATIONS=true` in Vercel environment variables
+3. Rebuild and redeploy:
+   ```bash
+   npm run build
+   git add -A
+   git commit -m "fix: update for serverless deployment"
+   git push
+   ```
+4. After deployment, run migrations via endpoint:
    ```bash
    curl -X POST https://your-app.vercel.app/api/migrate \
      -H "x-vercel-migrate-secret: your-secret"
    ```
-3. Check response for success/error details
+
+**Error 2**: `Can't reach database server at db.prisma.io:5432`
+
+**Cause**: `DATABASE_URL` environment variable is not set or using placeholder value
+
+**Solution**:
+1. Check Vercel → Settings → Environment Variables
+2. If using Vercel Postgres: Ensure database is linked to project
+3. If using external database: Set `DATABASE_URL` and `DIRECT_URL` manually
+4. Redeploy after adding environment variables (Vercel → Deployments → Redeploy)
+5. Verify connection string format:
+   ```
+   postgresql://user:password@host:5432/dbname?schema=public
+   ```
+
+**Error 3**: Migration timeout or hanging
+
+**Cause**: Database connection slow or migrations taking too long
+
+**Solution**:
+1. Check database is accessible from Vercel (firewall/IP restrictions)
+2. Increase timeout in `vercel.json` (already set to 60s for migrate endpoint)
+3. Or run migrations manually via database client:
+   ```bash
+   DATABASE_URL="your_url" npx prisma migrate deploy
+   ```
 
 **Note**: Migrations are never run automatically in production. Always use the `/api/migrate` endpoint.
 
@@ -774,17 +860,25 @@ curl "http://localhost:4002/api/status?locationId=test123"
 ```
 ☐ GHL Marketplace app created
 ☐ OAuth scopes configured
-☐ Vercel Postgres database created
-☐ Environment variables set in Vercel (including VERCEL_MIGRATE_SECRET)
+☐ Vercel Postgres database created (or external database configured)
+☐ Environment variables set in Vercel:
+  ☐ DATABASE_URL (if external DB)
+  ☐ DIRECT_URL (if external DB)
+  ☐ GHL_CLIENT_ID
+  ☐ GHL_CLIENT_SECRET
+  ☐ VERCEL_MIGRATE_SECRET
+  ☐ SKIP_BUILD_MIGRATIONS=true
 ☐ App deployed to Vercel
 ☐ Database migrations run via /api/migrate endpoint
-☐ GHL Marketplace OAuth URI updated
-☐ GHL Marketplace webhook URL updated
+☐ Migration successful (check response)
+☐ GHL Marketplace OAuth URI updated to production URL
+☐ GHL Marketplace webhook URL updated to production URL
 ☐ Agency authorized with production URL
 ☐ Custom Values script updated with production URLs
 ☐ Tested with real sub-account
 ☐ Webhooks delivering successfully
 ☐ SSE updates working
+☐ Verified no errors in Vercel logs
 ```
 
 ---
