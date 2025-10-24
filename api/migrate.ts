@@ -25,7 +25,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
       env: {
         ...process.env,
         DATABASE_URL: process.env.DATABASE_URL,
-        DIRECT_URL: process.env.DIRECT_URL
+        POSTGRES_URL: process.env.POSTGRES_URL
       }
     });
 

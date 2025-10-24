@@ -247,15 +247,15 @@ The app automatically detects Vercel environment and configures URLs accordingly
 3. Select plan (free tier available) and create
 
 Vercel automatically injects these environment variables:
-- `POSTGRES_PRISMA_URL` → maps to `DATABASE_URL`
-- `POSTGRES_URL_NON_POOLING` → maps to `DIRECT_URL`
+- `DATABASE_URL` or `POSTGRES_PRISMA_URL` → pooled connection for queries
+- `POSTGRES_URL` → direct connection for migrations
 
 **Option B: External Database (Neon, Supabase, etc.)**
 
 Set in Vercel → Settings → Environment Variables:
 ```bash
 DATABASE_URL=postgresql://user:password@host:5432/dbname?schema=public
-DIRECT_URL=postgresql://user:password@host:5432/dbname?schema=public
+POSTGRES_URL=postgresql://user:password@host:5432/dbname?schema=public
 ```
 
 #### Step 2: Set Required Environment Variables
@@ -344,9 +344,9 @@ After deployment, update your GHL app settings:
 Set these in Vercel Dashboard (Settings → Environment Variables):
 
 ```bash
-# Required - Database (if using external, not needed for Vercel Postgres)
+# Required - Database (if using external DB, not needed for Vercel Postgres)
 DATABASE_URL=postgresql://user:password@host:5432/dbname?schema=public
-DIRECT_URL=postgresql://user:password@host:5432/dbname?schema=public
+POSTGRES_URL=postgresql://user:password@host:5432/dbname?schema=public
 
 # Required - GoHighLevel OAuth
 GHL_CLIENT_ID=your_ghl_client_id
@@ -738,8 +738,8 @@ Or visit `http://localhost:4002` and click "Setup Agency OAuth"
 
 **Solution**:
 1. Check Vercel → Settings → Environment Variables
-2. If using Vercel Postgres: Ensure database is linked to project
-3. If using external database: Set `DATABASE_URL` and `DIRECT_URL` manually
+2. If using Vercel Postgres: Ensure database is linked to project (auto-injects `DATABASE_URL` and `POSTGRES_URL`)
+3. If using external database: Set `DATABASE_URL` and `POSTGRES_URL` manually
 4. Redeploy after adding environment variables (Vercel → Deployments → Redeploy)
 5. Verify connection string format:
    ```
@@ -862,8 +862,8 @@ curl "http://localhost:4002/api/status?locationId=test123"
 ☐ OAuth scopes configured
 ☐ Vercel Postgres database created (or external database configured)
 ☐ Environment variables set in Vercel:
-  ☐ DATABASE_URL (if external DB)
-  ☐ DIRECT_URL (if external DB)
+  ☐ DATABASE_URL (auto-set by Vercel Postgres, or set manually for external DB)
+  ☐ POSTGRES_URL (auto-set by Vercel Postgres, or set manually for external DB)
   ☐ GHL_CLIENT_ID
   ☐ GHL_CLIENT_SECRET
   ☐ VERCEL_MIGRATE_SECRET

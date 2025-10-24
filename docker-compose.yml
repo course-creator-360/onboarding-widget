@@ -29,7 +29,7 @@ services:
       - NODE_ENV=development
       - PORT=4002
       - DATABASE_URL=postgresql://user:password@postgres:5432/onboarding?schema=public
-      - DIRECT_URL=postgresql://user:password@postgres:5432/onboarding?schema=public
+      - POSTGRES_URL=postgresql://user:password@postgres:5432/onboarding?schema=public
     env_file:
       - .env
     command: sh -c "npx prisma migrate deploy && npm run dev"

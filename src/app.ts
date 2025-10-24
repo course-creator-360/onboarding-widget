@@ -59,7 +59,7 @@ app.post('/api/migrate', async (_req, res) => {
       env: {
         ...process.env,
         DATABASE_URL: process.env.DATABASE_URL,
-        DIRECT_URL: process.env.DIRECT_URL
+        POSTGRES_URL: process.env.POSTGRES_URL
       }
     });
     
