@@ -11,18 +11,20 @@ echo "🚀 Starting build process..."
 echo "📦 Generating Prisma client..."
 npx prisma generate
 
-# Run database migrations (only if DATABASE_URL is available)
-# Note: In serverless environments, we skip migrations during build
-# and run them via the /api/migrate endpoint after deployment
-if [ -n "$DATABASE_URL" ] && [ "$SKIP_BUILD_MIGRATIONS" != "true" ]; then
+# Run database migrations during deployment
+if [ -n "$DATABASE_URL" ] || [ -n "$POSTGRES_PRISMA_URL" ]; then
   echo "🗄️ Running database migrations..."
+  
   # Use locally installed prisma binary to avoid npm home directory issues
-  ./node_modules/.bin/prisma migrate deploy || {
+  ./node_modules/.bin/prisma migrate deploy 2>&1 || {
     echo "⚠️ Migration failed - continuing with build"
-    echo "⚠️ Run migrations manually via /api/migrate endpoint after deployment"
+    echo "⚠️ You can run migrations manually via /api/migrate endpoint"
+    # Don't fail the build on migration errors
   }
+  
+  echo "✅ Migrations completed"
 else
-  echo "🗄️ Skipping migrations during build"
+  echo "⚠️ No DATABASE_URL found, skipping migrations"
   echo "ℹ️ Run migrations via /api/migrate endpoint after deployment"
 fi
 

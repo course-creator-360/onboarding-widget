@@ -35,8 +35,7 @@
     }
   ],
   "env": {
-    "NODE_ENV": "production",
-    "SKIP_BUILD_MIGRATIONS": "true"
+    "NODE_ENV": "production"
   }
 }
 

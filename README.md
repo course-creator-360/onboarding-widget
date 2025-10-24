@@ -298,32 +298,12 @@ Or push to your connected Git repository (Vercel auto-deploys).
 The deployment process:
 1. Installs dependencies (`npm install`)
 2. Generates Prisma Client (`npx prisma generate`)
-3. Builds TypeScript → JavaScript (`npm run build`)
-4. ⚠️ **Skips migrations** (handled separately in Step 4)
+3. **Runs database migrations automatically** (`prisma migrate deploy`)
+4. Builds TypeScript → JavaScript (`npm run build`)
 
-#### Step 4: Run Migrations (Required)
+**Note:** Migrations now run automatically during deployment. If they fail, check Vercel build logs and you can run them manually via the `/api/migrate` endpoint.
 
-**After deployment succeeds**, run migrations via the API endpoint:
-
-```bash
-curl -X POST https://your-app.vercel.app/api/migrate \
-  -H "x-vercel-migrate-secret: YOUR_SECRET_FROM_STEP_2"
-```
-
-**Expected success response:**
-```json
-{
-  "success": true,
-  "message": "Database migrations completed successfully"
-}
-```
-
-**Why migrations are separate:**
-- Serverless environments lack writable home directories for npm
-- Running migrations during build can timeout or fail
-- Dedicated endpoint provides better error handling and control
-
-#### Step 5: Update GHL Marketplace
+#### Step 4: Update GHL Marketplace
 
 After deployment, update your GHL app settings:
 
@@ -332,12 +312,12 @@ After deployment, update your GHL app settings:
 3. Re-authorize agency with production URL
 4. Update Custom Values script with production URLs
 
-#### Step 6: Verify Deployment
+#### Step 5: Verify Deployment
 
 1. Visit `https://your-app.vercel.app` - should load demo page
-2. Check migration status - if you get database errors, run Step 4 again
+2. Check Vercel build logs to confirm migrations ran successfully
 3. Test OAuth flow with your GHL account
-4. Monitor Vercel logs for any errors
+4. Monitor Vercel runtime logs for any errors
 
 ### Environment Variables
 
@@ -352,11 +332,8 @@ POSTGRES_URL=postgresql://user:password@host:5432/dbname?schema=public
 GHL_CLIENT_ID=your_ghl_client_id
 GHL_CLIENT_SECRET=your_ghl_client_secret
 
-# Required - Migration security (for /api/migrate endpoint)
+# Optional - Migration security (for manual /api/migrate endpoint if needed)
 VERCEL_MIGRATE_SECRET=your_secure_random_secret
-
-# Required - Skip migrations during build
-SKIP_BUILD_MIGRATIONS=true
 
 # Optional (auto-detected from VERCEL_URL)
 # APP_BASE_URL=https://your-custom-domain.com
@@ -866,11 +843,8 @@ curl "http://localhost:4002/api/status?locationId=test123"
   ☐ POSTGRES_URL (auto-set by Vercel Postgres, or set manually for external DB)
   ☐ GHL_CLIENT_ID
   ☐ GHL_CLIENT_SECRET
-  ☐ VERCEL_MIGRATE_SECRET
-  ☐ SKIP_BUILD_MIGRATIONS=true
 ☐ App deployed to Vercel
-☐ Database migrations run via /api/migrate endpoint
-☐ Migration successful (check response)
+☐ Migrations ran successfully (check Vercel build logs)
 ☐ GHL Marketplace OAuth URI updated to production URL
 ☐ GHL Marketplace webhook URL updated to production URL
 ☐ Agency authorized with production URL
