@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import path from 'path';
 import oauthRouter from './oauth';
 import webhookRouter from './webhooks';
@@ -29,6 +30,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '1mb' }));
+app.use(cookieParser()); // Required for OAuth state management in serverless
 
 // Mount routers under /api for serverless compatibility
 app.use('/api/oauth', oauthRouter);

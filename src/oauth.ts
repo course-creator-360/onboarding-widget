@@ -5,6 +5,14 @@ import { getRedirectUri, getBaseUrl } from './config';
 
 const router = express.Router();
 
+// Cookie options for secure state storage (works in serverless)
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  maxAge: 600000 // 10 minutes
+};
+
 const DEFAULT_AUTHORIZE_URL = process.env.GHL_AUTHORIZE_URL || 'https://marketplace.gohighlevel.com/oauth/authorize';
 const MARKETPLACE_INSTALL_URL = process.env.GHL_MARKETPLACE_INSTALL_URL || 'https://marketplace.gohighlevel.com/oauth/chooselocation';
 const DEFAULT_TOKEN_URL = process.env.GHL_TOKEN_URL || 'https://services.leadconnectorhq.com/oauth/token';
@@ -34,8 +42,6 @@ const OAUTH_SCOPES = (
     'payments/transactions.readonly'
   ].join(' ')
 );
-
-const stateStore = new Map<string, { locationId?: string; tokenType?: 'agency' | 'location' }>();
 
 // Agency OAuth endpoints
 router.get('/agency/install', (req, res) => {
@@ -105,7 +111,10 @@ router.get('/agency/install', (req, res) => {
 
   const companyId = req.query.companyId as string | undefined;
   const state = crypto.randomBytes(16).toString('hex');
-  stateStore.set(state, { locationId: companyId || 'agency', tokenType: 'agency' });
+  
+  // Store state in cookie (works in serverless, unlike in-memory Map)
+  const stateData = { locationId: companyId || 'agency', tokenType: 'agency' };
+  res.cookie(`oauth_state_${state}`, JSON.stringify(stateData), COOKIE_OPTIONS);
   
   // Extract version_id from client_id (part before the hyphen)
   const versionId = clientId.split('-')[0];
@@ -305,7 +314,11 @@ router.get('/install', (req, res) => {
   
   // Real OAuth flow
   const state = crypto.randomBytes(16).toString('hex');
-  stateStore.set(state, { locationId });
+  
+  // Store state in cookie (works in serverless, unlike in-memory Map)
+  const stateData = { locationId };
+  res.cookie(`oauth_state_${state}`, JSON.stringify(stateData), COOKIE_OPTIONS);
+  
   const authorizeUrl = new URL(DEFAULT_AUTHORIZE_URL);
   authorizeUrl.searchParams.set('response_type', 'code');
   authorizeUrl.searchParams.set('client_id', clientId);
@@ -319,9 +332,62 @@ router.get('/callback', async (req, res) => {
   const code = req.query.code as string | undefined;
   const state = req.query.state as string | undefined;
   if (!code || !state) return res.status(400).send('Missing code/state');
-  const context = stateStore.get(state);
-  if (!context) return res.status(400).send('Invalid state');
-  stateStore.delete(state);
+  
+  // Retrieve state from cookie (serverless-compatible)
+  const cookieName = `oauth_state_${state}`;
+  const stateCookie = req.cookies?.[cookieName];
+  if (!stateCookie) {
+    return res.status(400).send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Invalid State</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              height: 100vh;
+              margin: 0;
+              background: #f8f9fa;
+              text-align: center;
+            }
+            .container { padding: 40px; }
+            .error { font-size: 64px; margin-bottom: 20px; color: #dc3545; }
+            h1 { margin: 0 0 10px 0; color: #333; }
+            p { color: #666; margin: 10px 0; }
+            button {
+              background: #667eea;
+              color: white;
+              border: none;
+              padding: 12px 24px;
+              border-radius: 5px;
+              cursor: pointer;
+              margin-top: 20px;
+              font-size: 14px;
+            }
+            button:hover { background: #5568d3; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="error">⚠️</div>
+            <h1>Invalid OAuth State</h1>
+            <p>The OAuth session has expired or is invalid.</p>
+            <p>This can happen if you waited too long to complete the authorization.</p>
+            <button onclick="window.location.href='${getBaseUrl()}'">Try Again</button>
+          </div>
+        </body>
+      </html>
+    `);
+  }
+  
+  const context = JSON.parse(stateCookie);
+  
+  // Clear the cookie after use
+  res.clearCookie(cookieName);
 
   const clientId = process.env.GHL_CLIENT_ID;
   const clientSecret = process.env.GHL_CLIENT_SECRET;
