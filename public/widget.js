@@ -60,7 +60,6 @@
 
   // Widget state
   let currentStatus = null;
-  let eventSource = null;
   let widgetElement = null;
   let isInstalled = false;
   let shouldShowWidget = true;
@@ -1155,64 +1154,8 @@
     }
   }
 
-  // Connect to SSE for real-time updates
-  function connectSSE() {
-    // Can't connect SSE without location ID
-    if (!locationId) {
-      console.warn('[CC360 Widget] Cannot connect SSE without location ID');
-      return;
-    }
-    
-    if (eventSource) {
-      eventSource.close();
-    }
-
-    eventSource = new EventSource(`${apiBase}/api/events?locationId=${locationId}`);
-    
-    eventSource.addEventListener('message', (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'status' && data.payload) {
-          console.log('[CC360 Widget] Status update:', data.payload);
-          currentStatus = data.payload;
-          
-          // Check if widget should still be shown
-          shouldShowWidget = currentStatus.shouldShowWidget !== false;
-          
-          if (!shouldShowWidget) {
-            console.log('[CC360 Widget] Widget should no longer be shown, removing...');
-            if (widgetElement) {
-              widgetElement.remove();
-              widgetElement = null;
-            }
-            if (eventSource) {
-              eventSource.close();
-              eventSource = null;
-            }
-            return;
-          }
-          
-          // Update checklist with new data
-          renderChecklist(currentStatus);
-        }
-      } catch (error) {
-        console.error('[CC360 Widget] Error parsing SSE data:', error);
-      }
-    });
-
-    eventSource.addEventListener('ping', () => {
-      console.log('[CC360 Widget] Heartbeat received');
-    });
-
-    eventSource.onerror = (error) => {
-      console.error('[CC360 Widget] SSE error:', error);
-      // Reconnect after 5 seconds
-      setTimeout(() => {
-        console.log('[CC360 Widget] Reconnecting SSE...');
-        connectSSE();
-      }, 5000);
-    };
-  }
+  // Removed SSE - using polling instead (serverless-friendly)
+  // SSE connections don't work well in Vercel serverless (timeout issues)
 
   // Show start onboarding screen
   function showStartScreen() {
@@ -2039,11 +1982,8 @@
       }
     }
     
-    // Close SSE connection
-    if (eventSource) {
-      eventSource.close();
-      eventSource = null;
-    }
+    // Stop polling
+    stopStatusPolling();
     
     console.log('[CC360 Widget] Widget dismissed permanently');
   }
@@ -2123,8 +2063,8 @@
     // Safety check after initialization to ensure widget is visible
     setTimeout(() => forceWidgetIntoView(), 150);
     
-    // Connect SSE for real-time updates
-    connectSSE();
+    // Start polling for status updates (serverless-friendly)
+    startStatusPolling();
   }
 
   // Show not authorized message (minimized widget)
