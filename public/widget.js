@@ -624,7 +624,7 @@
       {
         key: 'paymentIntegrated',
         title: 'Connect Payments',
-        url: 'payments/integrations/',
+        url: 'payments/integrations/?userpilot=ZXhwZXJpZW5jZTpmQXRoSHhaVDlt',
         completed: status.paymentIntegrated
       },
       {
