@@ -629,7 +629,7 @@
       {
         key: 'courseCreated',
         title: 'Create a Course',
-        url: 'memberships/courses/products-v2',
+        url: 'memberships/courses/products-v2?userpilot=ZXhwZXJpZW5jZTpaM19SblNpY0Zq',
         completed: status.courseCreated
       },
       {
