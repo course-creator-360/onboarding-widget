@@ -635,7 +635,7 @@
       {
         key: 'domainConnected',
         title: 'Connect a Domain',
-        url: 'settings/domain',
+        url: 'settings/domain?userpilot=ZXhwZXJpZW5jZTpKbncxMkVPWHlj',
         completed: status.domainConnected
       }
     ];
