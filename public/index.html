@@ -152,17 +152,26 @@
     <div class="info-box">
       <strong>Widget Configuration:</strong>
       <div style="margin-top: 12px;">
-        <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 12px; border-radius: 6px; margin-bottom: 12px;">
-          <strong style="color: #856404; display: block; margin-bottom: 6px;">⚠️ Testing on Demo Page:</strong>
+        <div id="locationSelector" style="background: #f0f8ff; border: 1px solid #0066cc; padding: 12px; border-radius: 6px; margin-bottom: 12px; display: none;">
+          <strong style="color: #004080; display: block; margin-bottom: 8px;">🎯 Select a Location:</strong>
+          <select id="locationDropdown" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 14px; margin-bottom: 8px;">
+            <option value="">Loading locations...</option>
+          </select>
+          <button onclick="selectLocation()" style="width: 100%; padding: 8px; background: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+            Load Selected Location
+          </button>
+        </div>
+        <div id="locationWarning" style="background: #fff3cd; border: 1px solid #ffc107; padding: 12px; border-radius: 6px; margin-bottom: 12px; display: none;">
+          <strong style="color: #856404; display: block; margin-bottom: 6px;">⚠️ Manual Testing:</strong>
           <p style="margin: 0; font-size: 13px; color: #856404; line-height: 1.5;">
-            To test this demo page, add <code>?locationId=YOUR_LOCATION_ID</code> to the URL.
-            The widget will auto-detect it from the query parameter.
+            You can also manually add <code>?locationId=YOUR_LOCATION_ID</code> to the URL.
             <br><br>
-            Example: <code>https://your-domain.com/?locationId=L851uHvru1ipOe8DIwNS</code>
+            Example: <code>?locationId=L851uHvru1ipOe8DIwNS</code>
           </p>
         </div>
         <p style="margin: 0; font-size: 13px; color: #6c757d;">
-          Detected Location: <code id="currentLocationId">Auto-detecting...</code><br>
+          Current Location: <code id="currentLocationId">None selected</code><br>
+          <span id="locationValidation" style="display: none; margin-top: 4px; display: block;"></span>
           API Base: <code id="apiBaseUrl">Loading...</code>
         </p>
       </div>
@@ -188,7 +197,19 @@
     </div>
 
     <h2>Onboarding Progress</h2>
-    <p>Simulate onboarding steps for the current location:</p>
+    <p>Test onboarding steps for the current location:</p>
+    
+    <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin-bottom: 16px; border-radius: 4px;">
+      <label style="display: flex; align-items: center; cursor: pointer;">
+        <input type="checkbox" id="skipApiChecks" style="margin-right: 8px; cursor: pointer;" onchange="toggleApiChecks()">
+        <span style="color: #856404; font-size: 14px;">
+          <strong>Skip GHL API checks</strong> - Enable this to test toggles without real API overwriting your changes
+        </span>
+      </label>
+      <p style="margin: 8px 0 0 28px; font-size: 12px; color: #856404; line-height: 1.4;">
+        When enabled, manual toggles will persist. When disabled, real GHL data will be reflected.
+      </p>
+    </div>
     
     <div class="controls">
       <button onclick="toggleStep('paymentIntegrated')">Toggle Payment</button>
@@ -206,12 +227,14 @@
     <h2>Available Endpoints</h2>
     <div class="endpoint-list">
       <ul>
-        <li><code>GET /api/status?locationId=...</code> - Get current checklist status</li>
+        <li><code>GET /api/status?locationId=...&skipApiChecks=true</code> - Get current checklist status (skipApiChecks prevents real API overwrites)</li>
         <li><code>GET /api/events?locationId=...</code> - SSE stream for real-time updates</li>
+        <li><code>GET /api/agency/locations</code> - Get all locations from agency (requires OAuth)</li>
+        <li><code>GET /api/location/validate?locationId=...</code> - Validate if locationId exists in agency</li>
         <li><code>GET /api/onboarding/:locationId/check-products</code> - Check if products exist (polling)</li>
         <li><code>POST /api/dismiss</code> - Dismiss the widget</li>
-        <li><code>POST /api/toggle</code> - Toggle a specific field (testing)</li>
-        <li><code>POST /api/mock/set</code> - Update checklist flags (testing)</li>
+        <li><code>POST /api/onboarding/toggle</code> - Toggle a specific onboarding field (for testing)</li>
+        <li><code>POST /api/onboarding/update</code> - Update onboarding status fields (for testing)</li>
         <li><code>POST /api/test/clear-location</code> - Clear location data (keep agency auth)</li>
         <li><code>GET /api/oauth/install</code> - OAuth installation flow</li>
         <li><code>POST /api/webhooks/ghl</code> - GHL webhook receiver</li>
@@ -243,6 +266,7 @@
   <script>
     let LOCATION_ID = null;
     let API_BASE = window.location.origin; // Use current origin by default
+    let availableLocations = [];
 
     // Detect location ID from URL (for demo/testing)
     function detectLocationFromUrl() {
@@ -252,6 +276,7 @@
         LOCATION_ID = locationId;
         document.getElementById('currentLocationId').textContent = locationId;
         console.log('Detected location ID from URL:', locationId);
+        validateCurrentLocation();
         return locationId;
       }
       
@@ -261,11 +286,92 @@
         LOCATION_ID = pathMatch[1];
         document.getElementById('currentLocationId').textContent = pathMatch[1];
         console.log('Detected location ID from path:', pathMatch[1]);
+        validateCurrentLocation();
         return pathMatch[1];
       }
       
-      document.getElementById('currentLocationId').textContent = 'Not detected (add ?locationId=... to URL)';
+      document.getElementById('currentLocationId').textContent = 'None selected';
       return null;
+    }
+
+    // Validate the current location ID
+    async function validateCurrentLocation() {
+      if (!LOCATION_ID) return;
+      
+      try {
+        const response = await fetch(`${API_BASE}/api/location/validate?locationId=${LOCATION_ID}`);
+        const data = await response.json();
+        
+        const validationEl = document.getElementById('locationValidation');
+        if (data.valid) {
+          validationEl.innerHTML = `<span style="color: #28a745;">✓ Valid location: ${data.location.name}</span>`;
+          validationEl.style.display = 'block';
+        } else {
+          validationEl.innerHTML = `<span style="color: #dc3545;">✗ Invalid location ID - not found in agency</span>`;
+          validationEl.style.display = 'block';
+        }
+      } catch (error) {
+        console.error('Error validating location:', error);
+      }
+    }
+
+    // Load available locations from the agency
+    async function loadAgencyLocations() {
+      try {
+        const response = await fetch(`${API_BASE}/api/agency/locations`);
+        
+        if (!response.ok) {
+          if (response.status === 401) {
+            // Not authorized yet - show manual mode
+            document.getElementById('locationWarning').style.display = 'block';
+            return;
+          }
+          throw new Error('Failed to fetch locations');
+        }
+        
+        const data = await response.json();
+        availableLocations = data.locations || [];
+        
+        if (availableLocations.length === 0) {
+          document.getElementById('locationWarning').style.display = 'block';
+          return;
+        }
+        
+        // Populate dropdown
+        const dropdown = document.getElementById('locationDropdown');
+        dropdown.innerHTML = '<option value="">-- Select a location --</option>';
+        
+        availableLocations.forEach(loc => {
+          const option = document.createElement('option');
+          option.value = loc.id;
+          option.textContent = `${loc.name} (${loc.id})`;
+          dropdown.appendChild(option);
+        });
+        
+        // Show the selector
+        document.getElementById('locationSelector').style.display = 'block';
+        
+        console.log(`Loaded ${availableLocations.length} locations from agency`);
+        
+      } catch (error) {
+        console.error('Error loading locations:', error);
+        document.getElementById('locationWarning').style.display = 'block';
+      }
+    }
+
+    // Handle location selection
+    function selectLocation() {
+      const dropdown = document.getElementById('locationDropdown');
+      const selectedId = dropdown.value;
+      
+      if (!selectedId) {
+        alert('Please select a location from the dropdown');
+        return;
+      }
+      
+      // Update URL with selected location
+      const newUrl = `${window.location.pathname}?locationId=${selectedId}`;
+      window.location.href = newUrl;
     }
     
     // Update agency button status
@@ -305,6 +411,9 @@
       // Check agency OAuth status and update button
       await updateAgencyButtonStatus();
       
+      // Load available locations from agency
+      await loadAgencyLocations();
+      
       // Auto-load widget - it will auto-detect location ID from URL
       const script = document.createElement('script');
       script.src = `${API_BASE}/widget.js`;
@@ -317,51 +426,143 @@
 
   <script>
     let currentStatus = {};
+    let skipApiChecks = false;
+
+    function toggleApiChecks() {
+      skipApiChecks = document.getElementById('skipApiChecks').checked;
+      console.log('[Demo] Skip API checks:', skipApiChecks);
+      
+      // Reload widget with new setting
+      const existingWidget = document.getElementById('cc360-onboarding-widget');
+      if (existingWidget) existingWidget.remove();
+      const script = document.createElement('script');
+      script.src = `${API_BASE}/widget.js`;
+      script.setAttribute('data-api', API_BASE);
+      if (skipApiChecks) {
+        script.setAttribute('data-skip-api-checks', 'true');
+      }
+      document.body.appendChild(script);
+    }
 
     async function checkStatus() {
       if (!LOCATION_ID) {
-        alert('Please add ?locationId=YOUR_LOCATION_ID to the URL to test with a specific location');
+        showError('No location selected. Please select a location from the dropdown above or add ?locationId=YOUR_LOCATION_ID to the URL.');
         return;
       }
       try {
-        const response = await fetch(`${API_BASE}/api/status?locationId=${LOCATION_ID}`);
+        const skipParam = skipApiChecks ? '&skipApiChecks=true' : '';
+        const response = await fetch(`${API_BASE}/api/status?locationId=${LOCATION_ID}${skipParam}`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
         currentStatus = await response.json();
         displayStatus(currentStatus);
       } catch (error) {
         console.error('Error fetching status:', error);
+        showError(`Failed to fetch status: ${error.message}`);
       }
     }
 
     async function toggleStep(step) {
       if (!LOCATION_ID) {
-        alert('Please add ?locationId=YOUR_LOCATION_ID to the URL to test with a specific location');
+        showError('No location selected. Please select a location from the dropdown above.');
         return;
       }
+      
+      // Show loading indicator
+      const statusDisplay = document.getElementById('status-display');
+      const statusContent = document.getElementById('status-content');
+      statusDisplay.classList.add('show');
+      statusContent.textContent = `Toggling ${step}...`;
+      
       try {
-        // Backend handles the toggle logic - just send the field name
-        const response = await fetch(`${API_BASE}/api/toggle`, {
+        console.log(`[Toggle] Fetching current status for ${LOCATION_ID}...`);
+        
+        // Step 1: Get current status
+        const skipParam = skipApiChecks ? '&skipApiChecks=true' : '';
+        const statusResponse = await fetch(`${API_BASE}/api/status?locationId=${LOCATION_ID}${skipParam}`);
+        if (!statusResponse.ok) {
+          throw new Error(`Failed to fetch status: HTTP ${statusResponse.status}`);
+        }
+        
+        const currentData = await statusResponse.json();
+        console.log('[Toggle] Current status:', currentData);
+        
+        // Step 2: Toggle only the specific field
+        const newValue = !currentData[step];
+        console.log(`[Toggle] Toggling ${step} from ${currentData[step]} to ${newValue}`);
+        
+        const updates = {
+          [step]: newValue
+        };
+        
+        // Step 3: Update only this field via API
+        console.log('[Toggle] Sending update to API...', updates);
+        const updateResponse = await fetch(`${API_BASE}/api/onboarding/update`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             locationId: LOCATION_ID,
-            field: step
+            updates: updates
           })
         });
         
-        const updatedStatus = await response.json();
+        if (!updateResponse.ok) {
+          const errorData = await updateResponse.json();
+          throw new Error(errorData.error || `HTTP ${updateResponse.status}: Update failed`);
+        }
+        
+        const updatedStatus = await updateResponse.json();
+        console.log('[Toggle] ✅ Updated status:', updatedStatus);
         displayStatus(updatedStatus);
+        
+        // Trigger immediate widget refresh with skipApiChecks setting
+        if (window.cc360Widget && typeof window.cc360Widget.refresh === 'function') {
+          console.log('[Toggle] Triggering immediate widget refresh (skipApiChecks:', skipApiChecks, ')...');
+          await window.cc360Widget.refresh(skipApiChecks);
+        } else {
+          console.log('[Toggle] Widget refresh not available, will update on next poll');
+        }
+        
+        // Show success message in the status box instead of alert
+        const stepName = step.replace(/([A-Z])/g, ' $1').toLowerCase();
+        statusContent.textContent = `✅ Successfully toggled ${stepName} to: ${newValue}\n\n${JSON.stringify(updatedStatus, null, 2)}`;
+        
       } catch (error) {
         console.error('Error toggling step:', error);
+        showError(`Failed to toggle ${step}: ${error.message}`);
+        statusContent.textContent = `❌ Error: ${error.message}`;
       }
+    }
+
+    // Helper to show errors
+    function showError(message) {
+      const statusDisplay = document.getElementById('status-display');
+      const statusContent = document.getElementById('status-content');
+      statusContent.textContent = `❌ ${message}`;
+      statusDisplay.classList.add('show');
+      statusDisplay.style.background = '#f8d7da';
+      statusDisplay.style.borderColor = '#dc3545';
+      
+      // Reset background after a moment
+      setTimeout(() => {
+        statusDisplay.style.background = '#fff3cd';
+        statusDisplay.style.borderColor = '#ffc107';
+      }, 3000);
     }
 
     async function resetAll() {
       if (!LOCATION_ID) {
-        alert('Please add ?locationId=YOUR_LOCATION_ID to the URL to test with a specific location');
+        showError('No location selected. Please select a location from the dropdown above.');
         return;
       }
+      
+      if (!confirm('Reset all onboarding progress for this location?')) {
+        return;
+      }
+      
       try {
-        const response = await fetch(`${API_BASE}/api/mock/set`, {
+        const response = await fetch(`${API_BASE}/api/onboarding/update`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -375,10 +576,19 @@
           })
         });
         
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: Reset failed`);
+        }
+        
         const updatedStatus = await response.json();
         displayStatus(updatedStatus);
+        
+        // Show success in status box
+        const statusContent = document.getElementById('status-content');
+        statusContent.textContent = `✅ All progress reset successfully\n\n${JSON.stringify(updatedStatus, null, 2)}`;
       } catch (error) {
         console.error('Error resetting:', error);
+        showError(`Failed to reset: ${error.message}`);
       }
     }
 
@@ -486,19 +696,26 @@
 
     async function checkInstallation() {
       if (!LOCATION_ID) {
-        alert('Please add ?locationId=YOUR_LOCATION_ID to the URL to test with a specific location');
+        showError('No location selected. Please select a location from the dropdown above.');
         return;
       }
       try {
         const response = await fetch(`${API_BASE}/api/installation/check?locationId=${LOCATION_ID}`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const data = await response.json();
         
         const typeLabel = data.tokenType === 'agency' ? '(via Agency)' : '(Location-specific)';
-        alert(`Installation Status:\n\nInstalled: ${data.installed}\nHas Token: ${data.hasToken}\nToken Type: ${data.tokenType} ${typeLabel}`);
-        displayStatus(data);
+        const statusContent = document.getElementById('status-content');
+        statusContent.textContent = `Installation Status:\n\nInstalled: ${data.installed}\nHas Token: ${data.hasToken}\nToken Type: ${data.tokenType} ${typeLabel}\n\n${JSON.stringify(data, null, 2)}`;
+        
+        const statusDisplay = document.getElementById('status-display');
+        statusDisplay.classList.add('show');
       } catch (error) {
         console.error('Error checking installation:', error);
-        alert('Error checking installation. See console for details.');
+        showError(`Failed to check installation: ${error.message}`);
       }
     }
 
@@ -519,7 +736,7 @@
 
     async function clearLocationData() {
       if (!LOCATION_ID) {
-        alert('Please add ?locationId=YOUR_LOCATION_ID to the URL to test with a specific location');
+        showError('No location selected. Please select a location from the dropdown above.');
         return;
       }
       if (!confirm(`⚠️ This will clear ALL data for location ${LOCATION_ID}:\n\n- All onboarding progress\n- Location-specific installation\n- Widget state (including dismissal)\n- Local storage (position, minimized state)\n\n✓ Agency authorization will be preserved\n\nContinue?`)) {
@@ -536,7 +753,7 @@
         const data = await response.json();
         
         if (response.ok) {
-          alert(`✓ ${data.message}\n\nClearing local storage and reloading...`);
+          console.log(`✓ ${data.message} - Clearing local storage and reloading...`);
           
           // Clear all widget-related localStorage items (especially dismissed state)
           try {
@@ -551,11 +768,11 @@
           // Reload page
           setTimeout(() => location.reload(), 500);
         } else {
-          alert(`Error: ${data.error}\n\n${data.message || 'Unknown error'}`);
+          showError(`${data.error}: ${data.message || 'Unknown error'}`);
         }
       } catch (error) {
         console.error('Error clearing location data:', error);
-        alert('Error clearing location data. See console for details.');
+        showError(`Failed to clear location data: ${error.message}`);
       }
     }
   </script>

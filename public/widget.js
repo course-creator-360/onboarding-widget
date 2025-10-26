@@ -4,9 +4,14 @@
   // Get configuration from script tag
   const currentScript = document.currentScript || document.querySelector('script[src*="widget.js"]');
   const apiBase = currentScript?.getAttribute('data-api') || 'http://localhost:4002';
+  const skipApiChecks = currentScript?.getAttribute('data-skip-api-checks') === 'true';
 
   // Location ID will be auto-detected from GHL UserContext
   let locationId = null;
+  
+  if (skipApiChecks) {
+    console.log('[CC360 Widget] ⚠️ API checks disabled - manual toggles will persist');
+  }
 
   // Auto-detect location ID from GHL user context
   async function detectLocationFromContext() {
@@ -1118,7 +1123,7 @@
   }
 
   // Fetch initial status
-  async function fetchStatus() {
+  async function fetchStatus(forceSkipApiChecks) {
     // Can't fetch status without location ID
     if (!locationId) {
       console.warn('[CC360 Widget] Cannot fetch status without location ID');
@@ -1126,7 +1131,10 @@
     }
     
     try {
-      const response = await fetch(`${apiBase}/api/status?locationId=${locationId}`);
+      // Use forceSkipApiChecks if provided, otherwise use the widget's setting
+      const shouldSkip = forceSkipApiChecks !== undefined ? forceSkipApiChecks : skipApiChecks;
+      const skipParam = shouldSkip ? '&skipApiChecks=true' : '';
+      const response = await fetch(`${apiBase}/api/status?locationId=${locationId}${skipParam}`);
       if (!response.ok) throw new Error('Failed to fetch status');
       currentStatus = await response.json();
       console.log('[CC360 Widget] Status:', currentStatus);
@@ -1154,8 +1162,52 @@
     }
   }
 
-  // Removed SSE - using polling instead (serverless-friendly)
-  // SSE connections don't work well in Vercel serverless (timeout issues)
+  // Poll for status updates (serverless-friendly alternative to SSE)
+  let pollInterval = null;
+  
+  function startStatusPolling() {
+    if (!locationId) {
+      console.warn('[CC360 Widget] Cannot poll status without location ID');
+      return;
+    }
+    
+    // Stop existing polling
+    if (pollInterval) {
+      clearInterval(pollInterval);
+    }
+    
+    // Poll every 10 seconds for status updates
+    pollInterval = setInterval(async () => {
+      try {
+        const shouldShow = await fetchStatus();
+        
+        if (!shouldShow || !currentStatus || !shouldShowWidget) {
+          console.log('[CC360 Widget] Widget should no longer be shown, removing...');
+          if (widgetElement) {
+            widgetElement.remove();
+            widgetElement = null;
+          }
+          stopStatusPolling();
+          return;
+        }
+        
+        // Update UI with current status
+        renderChecklist(currentStatus);
+      } catch (error) {
+        console.error('[CC360 Widget] Error polling status:', error);
+      }
+    }, 10000);
+    
+    console.log('[CC360 Widget] ✅ Status polling started (every 10 seconds)');
+  }
+  
+  function stopStatusPolling() {
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+      console.log('[CC360 Widget] Status polling stopped');
+    }
+  }
 
   // Show start onboarding screen
   function showStartScreen() {
@@ -2318,8 +2370,25 @@
       console.log('  window.cc360Widget.showDismissDialog() - Show dismiss dialog');
       console.log('  window.cc360Widget.resetPosition() - Reset widget position');
       console.log('  window.cc360Widget.forceIntoView() - Force widget into viewport');
+      console.log('  window.cc360Widget.refresh() - Refresh checklist status');
       console.log('  window.cc360Widget.reload() - Reload widget');
       console.log('===========================');
+    },
+    refresh: async function(forceSkipApiChecks) {
+      console.log('[CC360 Widget] Refreshing checklist status...');
+      try {
+        // Allow caller to override skipApiChecks for this refresh
+        const shouldShow = await fetchStatus(forceSkipApiChecks);
+        
+        if (shouldShow && currentStatus && shouldShowWidget) {
+          renderChecklist(currentStatus);
+          console.log('[CC360 Widget] ✅ Checklist refreshed successfully');
+        } else {
+          console.log('[CC360 Widget] Widget should not be shown, skipping render');
+        }
+      } catch (error) {
+        console.error('[CC360 Widget] Error refreshing checklist:', error);
+      }
     },
     reload: async function() {
       if (widgetElement) {
