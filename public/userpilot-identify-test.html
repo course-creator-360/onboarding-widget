@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Userpilot Identify Test</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 { color: #333; margin-bottom: 20px; }
+    button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      margin: 10px 10px 10px 0;
+    }
+    button:hover { background: #5568d3; }
+    pre {
+      background: #2c3e50;
+      color: #0f0;
+      padding: 15px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 12px;
+      max-height: 500px;
+      overflow-y: auto;
+    }
+    .status {
+      padding: 10px 15px;
+      border-radius: 6px;
+      margin: 15px 0;
+      font-weight: 600;
+    }
+    .success { background: #d4edda; color: #155724; }
+    .error { background: #f8d7da; color: #721c24; }
+    .info { background: #d1ecf1; color: #0c5460; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧪 Userpilot Identify Test</h1>
+    <p>Testing Userpilot SDK initialization and user identification with location: <strong>L851uHvru1ipOe8DIwNS</strong></p>
+    
+    <div id="status" class="status info">Ready to test...</div>
+    
+    <button onclick="runTest()">▶️ Run Userpilot Identify Test</button>
+    <button onclick="clearLog()" style="background: #6c757d;">Clear Log</button>
+    
+    <h3>Console Output:</h3>
+    <pre id="log"></pre>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:4002';
+    const LOCATION_ID = 'L851uHvru1ipOe8DIwNS';
+    const logEl = document.getElementById('log');
+    const statusEl = document.getElementById('status');
+    const networkRequests = [];
+
+    // Intercept fetch to monitor Userpilot API calls
+    const originalFetch = window.fetch;
+    window.fetch = function(...args) {
+      const url = args[0];
+      if (url.includes('userpilot')) {
+        const request = {
+          url: url,
+          method: args[1]?.method || 'GET',
+          timestamp: new Date().toISOString()
+        };
+        networkRequests.push(request);
+        log('📡 Userpilot API Call Detected:', request);
+      }
+      return originalFetch.apply(this, args).then(response => {
+        if (url.includes('userpilot')) {
+          log('📥 Userpilot API Response:', {
+            status: response.status,
+            statusText: response.statusText,
+            url: url
+          });
+        }
+        return response;
+      });
+    };
+
+    function log(message, data = null) {
+      const timestamp = new Date().toLocaleTimeString();
+      let output = `[${timestamp}] ${message}`;
+      if (data) {
+        output += '\n' + JSON.stringify(data, null, 2);
+      }
+      logEl.textContent += output + '\n\n';
+      logEl.scrollTop = logEl.scrollHeight;
+      console.log(message, data || '');
+    }
+
+    function setStatus(message, type = 'info') {
+      statusEl.textContent = message;
+      statusEl.className = `status ${type}`;
+    }
+
+    function clearLog() {
+      logEl.textContent = '';
+    }
+
+    async function runTest() {
+      clearLog();
+      setStatus('Running test...', 'info');
+      
+      try {
+        // Step 1: Get config
+        log('📡 Fetching config from backend...');
+        const configRes = await fetch(`${API_BASE}/api/config`);
+        const config = await configRes.json();
+        log('✅ Config received:', config);
+        
+        if (!config.userpilotToken) {
+          throw new Error('No Userpilot token in config');
+        }
+        
+        // Step 2: Get location context
+        log('📡 Fetching location context...');
+        const contextRes = await fetch(`${API_BASE}/api/location-context?locationId=${LOCATION_ID}`);
+        const context = await contextRes.json();
+        
+        if (context.error) {
+          throw new Error(`Failed to fetch context: ${context.error}`);
+        }
+        
+        log('✅ Location context fetched:', context);
+        
+        // Step 3: Load Userpilot SDK (must set token BEFORE loading)
+        log('📦 Loading Userpilot SDK with token...');
+        if (!window.userpilot) {
+          // Set token in settings object BEFORE loading SDK (required by Userpilot)
+          window.userpilotSettings = { 
+            token: config.userpilotToken 
+          };
+          log('✅ Set window.userpilotSettings:', window.userpilotSettings);
+          
+          const script = document.createElement('script');
+          script.src = 'https://js.userpilot.io/sdk/latest.js';
+          // Note: NOT using async - load synchronously for proper initialization
+          
+          await new Promise((resolve, reject) => {
+            script.onload = () => {
+              log('✅ Userpilot SDK loaded successfully');
+              resolve();
+            };
+            script.onerror = (err) => {
+              log('❌ Failed to load Userpilot SDK', err);
+              reject(new Error('SDK load failed'));
+            };
+            document.head.appendChild(script);
+          });
+          
+          // Wait for SDK to initialize and make initial requests
+          log('⏳ Waiting for SDK to initialize and connect...');
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        } else {
+          log('ℹ️ Userpilot SDK already loaded');
+        }
+        
+        // Step 4: Initialize Userpilot
+        if (!window.userpilot) {
+          throw new Error('Userpilot SDK not available after load');
+        }
+        
+        // Check what methods are available
+        log('🔍 Checking Userpilot SDK methods...');
+        log('  Available methods:', Object.keys(window.userpilot || {}));
+        log('  Type:', typeof window.userpilot);
+        
+        // Userpilot SDK auto-initializes with the token from the script
+        // We just need to use the global userpilot object
+        log('✅ Userpilot SDK ready');
+        
+        // Step 5: Identify user
+        const userData = {
+          name: context.name,
+          email: context.email,
+          phone: context.phone,
+          companyId: context.companyId,
+          city: context.city,
+          state: context.state,
+          country: context.country,
+          website: context.website,
+          timezone: context.timezone,
+          // Test properties
+          onboarding_status: 'testing',
+          test_run: true,
+          test_timestamp: new Date().toISOString()
+        };
+        
+        log('👤 Calling userpilot.identify()...');
+        log('  User ID:', LOCATION_ID);
+        log('  User Data:', userData);
+        
+        // The SDK should auto-initialize with the token from userpilotSettings
+        // Now just identify the user
+        if (typeof window.userpilot === 'function') {
+          log('ℹ️ Userpilot is a function (Segment-like API)');
+          log('  Calling: userpilot("identify", userId, traits)');
+          window.userpilot('identify', LOCATION_ID, userData);
+        } else if (window.userpilot && typeof window.userpilot.identify === 'function') {
+          log('ℹ️ Using userpilot.identify() method...');
+          window.userpilot.identify(LOCATION_ID, userData);
+        } else if (window.userpilot && typeof window.userpilot.reload === 'function') {
+          log('ℹ️ Using userpilot.reload() for identification...');
+          window.userpilot.reload({ id: LOCATION_ID, ...userData });
+        } else {
+          log('⚠️ Unknown Userpilot SDK API - trying direct call anyway');
+          if (window.userpilot) {
+            window.userpilot.identify?.(LOCATION_ID, userData);
+          }
+        }
+        
+        log('✅ Identify call completed!');
+        log('📊 Check your Userpilot dashboard at: https://analytex.userpilot.io');
+        log('   Look for user: ' + LOCATION_ID + ' (' + context.name + ')');
+        
+        setStatus('✅ Test completed successfully! Check Userpilot dashboard.', 'success');
+        
+        // Step 6: Track a test event
+        log('\n📊 Tracking test event...');
+        if (typeof window.userpilot === 'function') {
+          window.userpilot('track', 'test_identify_call', {
+            location_id: LOCATION_ID,
+            test_source: 'manual_test_page',
+            timestamp: new Date().toISOString()
+          });
+        } else if (window.userpilot && typeof window.userpilot.track === 'function') {
+          window.userpilot.track('test_identify_call', {
+            location_id: LOCATION_ID,
+            test_source: 'manual_test_page',
+            timestamp: new Date().toISOString()
+          });
+        }
+        log('✅ Track call completed!');
+        
+        // Wait a bit for async requests to complete
+        log('\n⏳ Waiting 3 seconds for network requests...');
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        if (networkRequests.length > 0) {
+          log('📊 Network Summary:');
+          log(`  Total Userpilot API calls: ${networkRequests.length}`, networkRequests);
+        } else {
+          log('⚠️ No Userpilot API calls detected');
+          log('💡 Check browser DevTools → Network tab for userpilot.io requests');
+        }
+        
+        log('\n✅ Test complete!');
+        log('🔍 To verify:');
+        log('  1. Open browser DevTools (F12)');
+        log('  2. Go to Network tab');
+        log('  3. Filter by "userpilot"');
+        log('  4. Look for POST requests to userpilot.io/api');
+        log('  5. Check Userpilot dashboard for user: L851uHvru1ipOe8DIwNS');
+        
+      } catch (error) {
+        log('❌ Test failed:', error);
+        log('Error stack:', error.stack);
+        setStatus('❌ Test failed: ' + error.message, 'error');
+      }
+    }
+  </script>
+</body>
+</html>
+

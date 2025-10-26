@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Userpilot Integration Test</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.2);
+      padding: 40px;
+    }
+    h1 {
+      color: #2c3e50;
+      margin-bottom: 10px;
+    }
+    h2 {
+      color: #667eea;
+      margin-top: 30px;
+      margin-bottom: 15px;
+    }
+    .test-section {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+    .status {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 14px;
+      margin-left: 10px;
+    }
+    .status.success {
+      background: #d4edda;
+      color: #155724;
+    }
+    .status.error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+    .status.pending {
+      background: #fff3cd;
+      color: #856404;
+    }
+    button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin: 10px 10px 10px 0;
+      transition: all 0.2s;
+    }
+    button:hover {
+      background: #5568d3;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+    button:active {
+      transform: translateY(0);
+    }
+    button.secondary {
+      background: #6c757d;
+    }
+    button.secondary:hover {
+      background: #5a6268;
+    }
+    pre {
+      background: #2c3e50;
+      color: #00ff00;
+      padding: 15px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 13px;
+      line-height: 1.5;
+      margin: 10px 0;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .log-entry {
+      margin: 2px 0;
+    }
+    .log-error {
+      color: #ff6b6b;
+    }
+    .log-success {
+      color: #51cf66;
+    }
+    .log-info {
+      color: #74c0fc;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 14px;
+      margin: 10px 0;
+    }
+    input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    .info-box {
+      background: #e7f3ff;
+      border-left: 4px solid #2196f3;
+      padding: 15px;
+      margin: 15px 0;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧪 Userpilot Integration Test</h1>
+    <p style="color: #6c757d; margin: 10px 0 30px 0;">
+      This page tests the Userpilot integration with GHL location context.
+    </p>
+
+    <div class="info-box">
+      <strong>Prerequisites:</strong><br>
+      1. Set <code>USERPILOT_TOKEN</code> in your environment variables<br>
+      2. Have a valid GHL location ID<br>
+      3. Agency must be authorized
+    </div>
+
+    <!-- Test Controls -->
+    <div class="test-section">
+      <h2>Configuration</h2>
+      <label for="locationId" style="display: block; margin-bottom: 5px; font-weight: 600;">Location ID:</label>
+      <input type="text" id="locationId" placeholder="Enter GHL Location ID" />
+      
+      <button onclick="runAllTests()">▶️ Run All Tests</button>
+      <button class="secondary" onclick="clearLogs()">Clear Logs</button>
+    </div>
+
+    <!-- Test 1: Config Endpoint -->
+    <div class="test-section">
+      <h2>
+        Test 1: Config Endpoint
+        <span id="status1" class="status pending">Pending</span>
+      </h2>
+      <p>Tests if <code>/api/config</code> returns Userpilot token from environment variables.</p>
+      <button onclick="test1()">Run Test 1</button>
+      <pre id="result1">Waiting...</pre>
+    </div>
+
+    <!-- Test 2: Location Context -->
+    <div class="test-section">
+      <h2>
+        Test 2: Location Context API
+        <span id="status2" class="status pending">Pending</span>
+      </h2>
+      <p>Tests if <code>/api/location-context</code> fetches GHL location data.</p>
+      <button onclick="test2()">Run Test 2</button>
+      <pre id="result2">Waiting...</pre>
+    </div>
+
+    <!-- Test 3: Userpilot SDK Loading -->
+    <div class="test-section">
+      <h2>
+        Test 3: Userpilot SDK Loading
+        <span id="status3" class="status pending">Pending</span>
+      </h2>
+      <p>Tests if Userpilot SDK loads successfully.</p>
+      <button onclick="test3()">Run Test 3</button>
+      <pre id="result3">Waiting...</pre>
+    </div>
+
+    <!-- Test 4: User Identification -->
+    <div class="test-section">
+      <h2>
+        Test 4: User Identification
+        <span id="status4" class="status pending">Pending</span>
+      </h2>
+      <p>Tests complete Userpilot initialization and user identification flow.</p>
+      <button onclick="test4()">Run Test 4</button>
+      <pre id="result4">Waiting...</pre>
+    </div>
+
+    <!-- Test 5: Event Tracking -->
+    <div class="test-section">
+      <h2>
+        Test 5: Event Tracking
+        <span id="status5" class="status pending">Pending</span>
+      </h2>
+      <p>Tests if events can be tracked to Userpilot.</p>
+      <button onclick="test5()">Run Test 5</button>
+      <pre id="result5">Waiting...</pre>
+    </div>
+
+    <!-- Console Output -->
+    <div class="test-section">
+      <h2>Console Output</h2>
+      <pre id="console-output"></pre>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:4002';
+    let testConfig = null;
+    let testContext = null;
+
+    // Intercept console.log
+    const originalLog = console.log;
+    const originalError = console.error;
+    const originalWarn = console.warn;
+    const consoleOutput = document.getElementById('console-output');
+    
+    function addLog(message, type = 'info') {
+      const entry = document.createElement('div');
+      entry.className = `log-entry log-${type}`;
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      consoleOutput.appendChild(entry);
+      consoleOutput.scrollTop = consoleOutput.scrollHeight;
+    }
+    
+    console.log = (...args) => {
+      originalLog(...args);
+      addLog(args.join(' '), 'info');
+    };
+    
+    console.error = (...args) => {
+      originalError(...args);
+      addLog(args.join(' '), 'error');
+    };
+    
+    console.warn = (...args) => {
+      originalWarn(...args);
+      addLog(args.join(' '), 'info');
+    };
+
+    function clearLogs() {
+      consoleOutput.innerHTML = '';
+    }
+
+    function setStatus(testNum, status, message) {
+      const statusEl = document.getElementById(`status${testNum}`);
+      statusEl.className = `status ${status}`;
+      statusEl.textContent = message;
+    }
+
+    function logResult(testNum, content) {
+      const resultEl = document.getElementById(`result${testNum}`);
+      resultEl.textContent = content;
+    }
+
+    // Test 1: Config Endpoint
+    async function test1() {
+      console.log('=== Test 1: Config Endpoint ===');
+      setStatus(1, 'pending', 'Running...');
+      
+      try {
+        const response = await fetch(`${API_BASE}/api/config`);
+        const config = await response.json();
+        
+        testConfig = config;
+        
+        const output = JSON.stringify(config, null, 2);
+        logResult(1, output);
+        
+        if (config.userpilotToken) {
+          console.log('✅ Userpilot token found in config');
+          setStatus(1, 'success', 'PASS');
+        } else {
+          console.warn('⚠️ Userpilot token not found in config');
+          console.log('💡 Set USERPILOT_TOKEN in your .env file');
+          setStatus(1, 'error', 'FAIL - No Token');
+        }
+      } catch (error) {
+        console.error('❌ Test 1 failed:', error);
+        logResult(1, `Error: ${error.message}`);
+        setStatus(1, 'error', 'ERROR');
+      }
+    }
+
+    // Test 2: Location Context
+    async function test2() {
+      console.log('=== Test 2: Location Context API ===');
+      setStatus(2, 'pending', 'Running...');
+      
+      const locationId = document.getElementById('locationId').value;
+      if (!locationId) {
+        alert('Please enter a Location ID first');
+        setStatus(2, 'error', 'No Location ID');
+        return;
+      }
+      
+      try {
+        console.log('Fetching context for location:', locationId);
+        const response = await fetch(`${API_BASE}/api/location-context?locationId=${locationId}`);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+        
+        const context = await response.json();
+        testContext = context;
+        
+        const output = JSON.stringify(context, null, 2);
+        logResult(2, output);
+        
+        console.log('✅ Location context fetched successfully');
+        console.log('   Name:', context.name);
+        console.log('   Email:', context.email);
+        console.log('   Company ID:', context.companyId);
+        
+        setStatus(2, 'success', 'PASS');
+      } catch (error) {
+        console.error('❌ Test 2 failed:', error);
+        logResult(2, `Error: ${error.message}`);
+        setStatus(2, 'error', 'ERROR');
+      }
+    }
+
+    // Test 3: Load Userpilot SDK
+    async function test3() {
+      console.log('=== Test 3: Userpilot SDK Loading ===');
+      setStatus(3, 'pending', 'Running...');
+      
+      if (!testConfig || !testConfig.userpilotToken) {
+        console.error('❌ No Userpilot token available (run Test 1 first)');
+        logResult(3, 'Error: No token available. Set USERPILOT_TOKEN in environment.');
+        setStatus(3, 'error', 'No Token');
+        return;
+      }
+      
+      try {
+        if (window.userpilot) {
+          console.log('✅ Userpilot SDK already loaded');
+          logResult(3, 'Userpilot SDK already present\nVersion: ' + (window.userpilot.version || 'unknown'));
+          setStatus(3, 'success', 'PASS');
+          return;
+        }
+        
+        console.log('Loading Userpilot SDK from CDN...');
+        const script = document.createElement('script');
+        script.src = 'https://js.userpilot.io/sdk/latest.js';
+        script.async = true;
+        
+        await new Promise((resolve, reject) => {
+          script.onload = () => {
+            console.log('✅ SDK loaded successfully');
+            resolve();
+          };
+          script.onerror = (err) => {
+            console.error('❌ SDK failed to load');
+            reject(new Error('Failed to load SDK'));
+          };
+          document.head.appendChild(script);
+        });
+        
+        // Wait for SDK to initialize
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        if (window.userpilot) {
+          console.log('✅ Userpilot object is available');
+          logResult(3, 'SDK loaded successfully\nUserpilot object: Available');
+          setStatus(3, 'success', 'PASS');
+        } else {
+          throw new Error('Userpilot object not available after load');
+        }
+      } catch (error) {
+        console.error('❌ Test 3 failed:', error);
+        logResult(3, `Error: ${error.message}`);
+        setStatus(3, 'error', 'ERROR');
+      }
+    }
+
+    // Test 4: User Identification
+    async function test4() {
+      console.log('=== Test 4: User Identification ===');
+      setStatus(4, 'pending', 'Running...');
+      
+      const locationId = document.getElementById('locationId').value;
+      if (!locationId) {
+        alert('Please enter a Location ID first');
+        setStatus(4, 'error', 'No Location ID');
+        return;
+      }
+      
+      if (!testConfig || !testConfig.userpilotToken) {
+        console.error('❌ No Userpilot token available (run Test 1 first)');
+        setStatus(4, 'error', 'No Token');
+        return;
+      }
+      
+      if (!testContext) {
+        console.warn('⚠️ No location context available (run Test 2 first)');
+        setStatus(4, 'error', 'No Context');
+        return;
+      }
+      
+      if (!window.userpilot) {
+        console.error('❌ Userpilot SDK not loaded (run Test 3 first)');
+        setStatus(4, 'error', 'SDK Not Loaded');
+        return;
+      }
+      
+      try {
+        console.log('Initializing Userpilot...');
+        window.userpilot.initialize(testConfig.userpilotToken);
+        console.log('✅ Userpilot initialized');
+        
+        console.log('Identifying user...');
+        const userData = {
+          name: testContext.name,
+          email: testContext.email,
+          phone: testContext.phone,
+          companyId: testContext.companyId,
+          city: testContext.city,
+          state: testContext.state,
+          country: testContext.country,
+          website: testContext.website,
+          timezone: testContext.timezone,
+          // Test properties
+          onboarding_status: 'testing',
+          test_run: true,
+          test_timestamp: new Date().toISOString()
+        };
+        
+        window.userpilot.identify(locationId, userData);
+        console.log('✅ User identified successfully');
+        console.log('   Location ID:', locationId);
+        console.log('   Name:', userData.name);
+        
+        const output = `User Identified:\n\nLocation ID: ${locationId}\n\n` + 
+                      JSON.stringify(userData, null, 2);
+        logResult(4, output);
+        setStatus(4, 'success', 'PASS');
+      } catch (error) {
+        console.error('❌ Test 4 failed:', error);
+        logResult(4, `Error: ${error.message}\n\n${error.stack || ''}`);
+        setStatus(4, 'error', 'ERROR');
+      }
+    }
+
+    // Test 5: Event Tracking
+    async function test5() {
+      console.log('=== Test 5: Event Tracking ===');
+      setStatus(5, 'pending', 'Running...');
+      
+      const locationId = document.getElementById('locationId').value;
+      
+      if (!window.userpilot) {
+        console.error('❌ Userpilot SDK not loaded (run Test 3 & 4 first)');
+        setStatus(5, 'error', 'SDK Not Ready');
+        return;
+      }
+      
+      try {
+        console.log('Tracking test event...');
+        
+        const eventData = {
+          test_event: true,
+          location_id: locationId,
+          timestamp: new Date().toISOString(),
+          test_source: 'userpilot_test_page'
+        };
+        
+        window.userpilot.track('test_event_from_widget', eventData);
+        console.log('✅ Event tracked successfully');
+        
+        const output = `Event Tracked: test_event_from_widget\n\n` + 
+                      JSON.stringify(eventData, null, 2) +
+                      '\n\nCheck your Userpilot dashboard to verify the event was received.';
+        logResult(5, output);
+        setStatus(5, 'success', 'PASS');
+      } catch (error) {
+        console.error('❌ Test 5 failed:', error);
+        logResult(5, `Error: ${error.message}`);
+        setStatus(5, 'error', 'ERROR');
+      }
+    }
+
+    // Run all tests sequentially
+    async function runAllTests() {
+      clearLogs();
+      console.log('🚀 Running all Userpilot tests...\n');
+      
+      await test1();
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      await test2();
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      await test3();
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      await test4();
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      await test5();
+      
+      console.log('\n✅ All tests completed!');
+    }
+
+    // Auto-populate location ID from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const locationIdFromUrl = urlParams.get('locationId');
+    if (locationIdFromUrl) {
+      document.getElementById('locationId').value = locationIdFromUrl;
+    }
+  </script>
+</body>
+</html>
+
