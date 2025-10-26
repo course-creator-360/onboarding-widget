@@ -1,11 +1,11 @@
 # CourseCreator360 Onboarding Widget
 
-A persistent onboarding checklist widget for CourseCreator360 sub-accounts. Tracks 4 onboarding steps with real-time updates via webhooks and SSE.
+A persistent onboarding checklist widget for CourseCreator360 sub-accounts. Tracks 4 onboarding steps with real-time updates via webhooks and automatic status polling.
 
 ## Features
 
 - ✅ **4-Step Onboarding Checklist**: Domain, Course, Product, Payment
-- ✅ **Real-time Updates**: SSE streaming for instant UI updates
+- ✅ **Real-time Updates**: Automatic status polling for live updates (serverless-optimized)
 - ✅ **Agency-Level OAuth**: One authorization for all sub-accounts
 - ✅ **Prisma + PostgreSQL**: Cloud-ready database with type-safe ORM
 - ✅ **Vercel Ready**: Auto-detects environment, deploys seamlessly
@@ -490,10 +490,6 @@ npm run db:studio
 - `GET /api/oauth/callback` - OAuth callback handler
 - `DELETE /api/installation?locationId=...` - Clear auth (testing only)
 
-### Real-time Endpoints
-
-- `GET /api/events?locationId=...` - SSE stream for live updates
-
 ### Webhook Endpoints
 
 - `POST /api/webhooks/ghl` - GHL webhook receiver
@@ -687,7 +683,7 @@ Or visit `http://localhost:4002` and click "Setup Agency OAuth"
 
 **Check**:
 1. Webhooks configured in GHL Marketplace
-2. SSE connection active (browser console)
+2. Status polling active (check browser console for polling logs)
 3. Server logs: `make logs`
 
 ### Vercel Deployment Issues
@@ -781,7 +777,7 @@ onboarding-widget/
 │   ├── ghl-api.ts    # GHL API client
 │   ├── oauth.ts      # OAuth handlers
 │   ├── server.ts     # Server entry point
-│   ├── sse.ts        # Server-Sent Events
+│   ├── sse.ts        # SSE broker (legacy, kept for compatibility)
 │   ├── userpilot.ts  # Analytics
 │   └── webhooks.ts   # Webhook handlers
 ├── .env              # Local environment variables
@@ -872,7 +868,7 @@ curl "http://localhost:4002/api/status?locationId=test123"
 ☐ Custom Values script updated with production URLs
 ☐ Tested with real sub-account
 ☐ Webhooks delivering successfully
-☐ SSE updates working
+☐ Status polling working (check browser console)
 ☐ Verified no errors in Vercel logs
 ```
 
@@ -906,11 +902,11 @@ curl "http://localhost:4002/api/status?locationId=test123"
 └────────────┬────────────────────────────┘
              ↓
 ┌─────────────────────────────────────────┐
-│ 4. Real-Time Connection                 │
+│ 4. Widget Polls for Updates             │
 ├─────────────────────────────────────────┤
-│ EventSource: GET /api/events            │
-│ → SSE connection maintained             │
-│ → Heartbeat every 25 seconds            │
+│ GET /api/status (every 10 seconds)      │
+│ → Checks onboarding progress            │
+│ → Serverless-friendly polling           │
 └────────────┬────────────────────────────┘
              ↓
 ┌─────────────────────────────────────────┐
@@ -919,14 +915,13 @@ curl "http://localhost:4002/api/status?locationId=test123"
 │ Create course in GHL                    │
 │ → GHL sends webhook                     │
 │ → Server updates database               │
-│ → Broadcasts via SSE                    │
 └────────────┬────────────────────────────┘
              ↓
 ┌─────────────────────────────────────────┐
-│ 6. Widget Updates in Real-Time         │
+│ 6. Widget Detects Update on Next Poll  │
 ├─────────────────────────────────────────┤
-│ Widget receives SSE message             │
-│ → Updates UI with checkmark             │
+│ Status API returns updated data         │
+│ → Widget updates UI with checkmark      │
 │ → Progress bar animates                 │
 └─────────────────────────────────────────┘
 ```
@@ -945,7 +940,7 @@ The widget builds dashboard URLs dynamically based on `data-location`:
 
 - **Backend**: Node.js + Express + TypeScript
 - **Database**: Prisma ORM + PostgreSQL
-- **Real-time**: Server-Sent Events (SSE)
+- **Real-time**: Status polling (serverless-optimized)
 - **OAuth**: GoHighLevel OAuth 2.0
 - **Deployment**: Vercel (serverless)
 - **Frontend**: Vanilla JavaScript (no framework)
