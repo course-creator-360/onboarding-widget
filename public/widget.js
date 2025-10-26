@@ -2233,9 +2233,15 @@
       // Load Userpilot SDK if not already loaded
       if (!window.userpilot) {
         console.log('[Userpilot] 📦 Loading Userpilot SDK...');
+        
+        // Set token BEFORE loading SDK (required by Userpilot)
+        window.userpilotSettings = { 
+          token: token 
+        };
+        console.log('[Userpilot] ✅ Set userpilotSettings with token:', token.substring(0, 10) + '...');
+        
         const script = document.createElement('script');
         script.src = 'https://js.userpilot.io/sdk/latest.js';
-        script.async = true;
         
         await new Promise((resolve, reject) => {
           script.onload = () => {
@@ -2249,45 +2255,49 @@
           document.head.appendChild(script);
         });
         
-        // Wait a bit for SDK to fully initialize
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Wait for SDK to fully initialize and make initial requests
+        console.log('[Userpilot] ⏳ Waiting for SDK to initialize and connect...');
+        await new Promise(resolve => setTimeout(resolve, 3000));
       } else {
         console.log('[Userpilot] SDK already loaded');
       }
       
-      // Initialize Userpilot
-      if (window.userpilot) {
-        console.log('[Userpilot] 🔧 Initializing with token:', token.substring(0, 10) + '...');
-        window.userpilot.initialize(token);
-        console.log('[Userpilot] ✅ Initialized successfully');
-        
-        // Prepare user data
-        const userData = {
-          name: context.name,
-          email: context.email,
-          phone: context.phone,
-          companyId: context.companyId,
-          city: context.city,
-          state: context.state,
-          country: context.country,
-          website: context.website,
-          timezone: context.timezone,
-          // Add onboarding progress
-          onboarding_status: currentStatus?.allTasksCompleted ? 'completed' : 'active',
-          domain_connected: currentStatus?.domainConnected || false,
-          course_created: currentStatus?.courseCreated || false,
-          payment_integrated: currentStatus?.paymentIntegrated || false
-        };
-        
-        console.log('[Userpilot] 👤 Identifying user:', locationId);
-        console.log('[Userpilot] User data:', userData);
-        
-        // Identify user with context from GHL
-        window.userpilot.identify(locationId, userData);
-        
-        console.log('[Userpilot] ✅ User identified successfully:', context.name);
-      } else {
+      // Check if SDK is available
+      if (!window.userpilot) {
         console.error('[Userpilot] ❌ SDK not available after load');
+        return;
+      }
+      
+      console.log('[Userpilot] 🔍 SDK type:', typeof window.userpilot);
+      console.log('[Userpilot] 🔍 Available methods:', Object.keys(window.userpilot || {}));
+      
+      // Prepare user data with GHL context
+      const userData = {
+        name: context.name,
+        email: context.email,
+        phone: context.phone,
+        companyId: context.companyId,
+        city: context.city,
+        state: context.state,
+        country: context.country,
+        website: context.website,
+        timezone: context.timezone,
+        // Add onboarding progress
+        onboarding_status: currentStatus?.allTasksCompleted ? 'completed' : 'active',
+        domain_connected: currentStatus?.domainConnected || false,
+        course_created: currentStatus?.courseCreated || false,
+        payment_integrated: currentStatus?.paymentIntegrated || false
+      };
+      
+      console.log('[Userpilot] 👤 Identifying user:', locationId);
+      console.log('[Userpilot] User data:', userData);
+      
+      // Identify user with context from GHL
+      if (typeof window.userpilot.identify === 'function') {
+        window.userpilot.identify(locationId, userData);
+        console.log('[Userpilot] ✅ Called userpilot.identify()');
+      } else {
+        console.warn('[Userpilot] ⚠️ identify method not available');
       }
     } catch (error) {
       console.error('[Userpilot] ❌ Failed to initialize:', error);
