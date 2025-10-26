@@ -149,18 +149,23 @@ app.get('/api/location-context', async (req, res) => {
   try {
     console.log(`[Location Context] Fetching context for location: ${locationId}`);
     
-    // Use GHL SDK to fetch location details
-    const ghl = await getSDKClient(locationId);
-    const response = await ghl.locations.getLocation({ locationId });
-    const location = response?.location;
+    // First validate the location ID
+    const validation = await validateLocationId(locationId);
+    if (!validation.valid) {
+      console.error(`[Location Context] Location validation failed for ${locationId}`);
+      throw new Error('Invalid or inaccessible location ID');
+    }
+    
+    const location = validation.location;
     
     if (!location) {
-      throw new Error('Location not found');
+      throw new Error('Location not found in validation response');
     }
     
     console.log(`[Location Context] Successfully fetched context for: ${location.name}`);
+    console.log(`[Location Context] Company ID: ${location.companyId}`);
     
-    // Return sanitized user context for Userpilot
+    // Return sanitized user context (widget will handle Userpilot identify client-side)
     return res.json({
       locationId: location.id,
       name: location.name || 'Unknown',
@@ -176,7 +181,11 @@ app.get('/api/location-context', async (req, res) => {
     });
   } catch (error) {
     console.error('[Location Context] Error fetching location data:', error);
-    return res.status(500).json({ error: 'Failed to fetch location context' });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch location context';
+    return res.status(500).json({ 
+      error: errorMessage,
+      details: process.env.NODE_ENV !== 'production' ? error : undefined
+    });
   }
 });
 
