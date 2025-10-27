@@ -8,7 +8,7 @@ import webhookRouter from './webhooks';
 import { getOnboardingStatus, setDismissed, updateOnboardingStatus, getInstallation, hasAgencyAuthorization, getAgencyInstallation, deleteInstallation, OnboardingStatus, toggleOnboardingField } from './db';
 import { sseBroker } from './sse';
 import { checkLocationDomain, checkLocationProducts, checkPaymentIntegration, validateToken, getAuthToken } from './ghl-api';
-import { validateLocationId, getSDKClient } from './ghl-sdk';
+import { validateLocationId, getSDKClient, getAgencyLocations } from './ghl-sdk';
 import { getBaseUrl, getEnvironment, getGhlAppBaseUrl } from './config';
 
 const app = express();
@@ -86,13 +86,16 @@ app.get('/api/status', async (req, res) => {
   const locationId = (req.query.locationId as string) || '';
   if (!locationId) return res.status(400).json({ error: 'locationId is required' });
   
+  // Check if API checks should be skipped (for testing)
+  const skipApiChecks = req.query.skipApiChecks === 'true';
+  
   let status = await getOnboardingStatus(locationId);
   
-  // Proactively check all onboarding steps via GHL API if authorized
+  // Proactively check all onboarding steps via GHL API if authorized (unless skipped)
   const isAuthorized = await hasAgencyAuthorization();
-  console.log(`[Status] Checking status for ${locationId}, agency authorized: ${isAuthorized}`);
+  console.log(`[Status] Checking status for ${locationId}, agency authorized: ${isAuthorized}, skipApiChecks: ${skipApiChecks}`);
   
-  if (isAuthorized) {
+  if (isAuthorized && !skipApiChecks) {
     try {
       // Check domain and payment statuses via API (products use webhooks)
       const [hasDomain, hasPayment] = await Promise.all([
@@ -133,7 +136,11 @@ app.get('/api/status', async (req, res) => {
       // Continue with cached status if API check fails
     }
   } else {
-    console.log('[Status] Agency not authorized, skipping API checks');
+    if (skipApiChecks) {
+      console.log('[Status] Skipping API checks (testing mode enabled)');
+    } else {
+      console.log('[Status] Agency not authorized, skipping API checks');
+    }
   }
   
   // Log widget visibility decision
@@ -298,6 +305,67 @@ app.get('/api/agency/status', async (req, res) => {
   });
 });
 
+// Get all locations from the agency (for demo page)
+app.get('/api/agency/locations', async (req, res) => {
+  try {
+    const hasAgency = await hasAgencyAuthorization();
+    if (!hasAgency) {
+      return res.status(401).json({ 
+        error: 'Agency not authorized',
+        message: 'Please setup agency OAuth first'
+      });
+    }
+    
+    const locations = await getAgencyLocations();
+    
+    // Format locations for demo page
+    const formattedLocations = locations.map((loc: any) => ({
+      id: loc.id,
+      name: loc.name,
+      companyId: loc.companyId,
+      address: loc.address || null,
+      website: loc.website || null
+    }));
+    
+    return res.json({
+      locations: formattedLocations,
+      count: formattedLocations.length
+    });
+  } catch (error) {
+    console.error('[API] Error fetching agency locations:', error);
+    return res.status(500).json({ 
+      error: 'Failed to fetch locations',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Validate a specific locationId
+app.get('/api/location/validate', async (req, res) => {
+  const locationId = (req.query.locationId as string) || '';
+  if (!locationId) {
+    return res.status(400).json({ error: 'locationId is required' });
+  }
+  
+  try {
+    const result = await validateLocationId(locationId);
+    return res.json({
+      valid: result.valid,
+      location: result.valid ? {
+        id: result.location?.id,
+        name: result.location?.name,
+        companyId: result.companyId
+      } : null
+    });
+  } catch (error) {
+    console.error('[API] Error validating locationId:', error);
+    return res.status(500).json({ 
+      error: 'Failed to validate location',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 app.delete('/api/installation', async (req, res) => {
   const locationId = (req.query.locationId as string) || '';
   if (!locationId) return res.status(400).json({ error: 'locationId is required' });
@@ -388,19 +456,38 @@ app.post('/api/dismiss', async (req, res) => {
   res.json(status);
 });
 
-app.post('/api/mock/set', async (req, res) => {
+// Update onboarding status fields (for testing/demo)
+app.post('/api/onboarding/update', async (req, res) => {
   const { locationId, updates } = req.body as { locationId?: string; updates?: Partial<OnboardingStatus> };
+  
+  console.log('[Onboarding Update] Request received:', { locationId, updates });
+  
   if (!locationId) return res.status(400).json({ error: 'locationId is required' });
   if (!updates) return res.status(400).json({ error: 'updates is required' });
   
-  // Pass updates directly - db layer handles filtering
-  const status = await updateOnboardingStatus(locationId, updates);
-  await sseBroker.broadcastStatus(locationId);
-  res.json(status);
+  try {
+    // Get status before update
+    const beforeUpdate = await getOnboardingStatus(locationId);
+    console.log('[Onboarding Update] Before update:', beforeUpdate);
+    
+    // Pass updates directly - db layer handles filtering
+    const status = await updateOnboardingStatus(locationId, updates);
+    console.log('[Onboarding Update] After update:', status);
+    console.log('[Onboarding Update] Database update successful!');
+    
+    await sseBroker.broadcastStatus(locationId);
+    res.json(status);
+  } catch (error) {
+    console.error('[Onboarding Update] Error updating status:', error);
+    res.status(500).json({ 
+      error: 'Failed to update onboarding status',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
 });
 
-// Toggle a specific field (for demo page) - atomic operation
-app.post('/api/toggle', async (req, res) => {
+// Toggle a specific onboarding field (for testing/demo) - atomic operation
+app.post('/api/onboarding/toggle', async (req, res) => {
   const { locationId, field } = req.body as { locationId?: string; field?: string };
   if (!locationId) return res.status(400).json({ error: 'locationId is required' });
   if (!field) return res.status(400).json({ error: 'field is required' });

@@ -125,6 +125,8 @@ export async function updateOnboardingStatus(
   locationId: string,
   updates: Partial<Omit<OnboardingStatus, 'locationId' | 'createdAt' | 'updatedAt' | 'shouldShowWidget' | 'allTasksCompleted'>>
 ): Promise<OnboardingStatus> {
+  console.log(`[DB] updateOnboardingStatus called for ${locationId}`, updates);
+  
   await ensureOnboardingRow(locationId);
 
   // Filter out undefined values to only update fields that are explicitly provided
@@ -134,10 +136,14 @@ export async function updateOnboardingStatus(
   if (updates.paymentIntegrated !== undefined) data.paymentIntegrated = updates.paymentIntegrated;
   if (updates.dismissed !== undefined) data.dismissed = updates.dismissed;
 
-  await prisma.onboarding.update({
+  console.log(`[DB] Updating database with data:`, data);
+  
+  const result = await prisma.onboarding.update({
     where: { locationId },
     data,
   });
+  
+  console.log(`[DB] Database update result:`, result);
 
   return getOnboardingStatus(locationId);
 }

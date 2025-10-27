@@ -478,13 +478,16 @@ npm run db:studio
 
 ### Onboarding Endpoints
 
-- `GET /api/status?locationId=...` - Get checklist status for a location
+- `GET /api/status?locationId=...&skipApiChecks=true` - Get checklist status for a location (skipApiChecks prevents real API overwrites)
 - `POST /api/dismiss` - Mark widget as dismissed
-- `POST /api/mock/set` - Update flags for testing (dev only)
+- `POST /api/onboarding/update` - Update onboarding status fields (for testing)
+- `POST /api/onboarding/toggle` - Toggle a specific onboarding field (for testing)
 
 ### Authorization Endpoints
 
 - `GET /api/agency/status` - Check if agency is authorized
+- `GET /api/agency/locations` - Get all locations from agency (requires OAuth)
+- `GET /api/location/validate?locationId=...` - Validate if locationId exists in agency
 - `GET /api/installation/check?locationId=...` - Check auth status
 - `GET /api/oauth/agency/install` - Agency-level OAuth setup
 - `GET /api/oauth/callback` - OAuth callback handler
