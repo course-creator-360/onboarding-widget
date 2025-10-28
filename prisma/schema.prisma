@@ -71,3 +71,30 @@ model SubAccount {
   @@index([isActive])
   @@map("sub_accounts")
 }
+
+// Cache of all locations from GHL agencies
+// Synced on widget init for fast lookups
+// MULTI-TENANT: Each agency (accountId) has their own set of locations
+// This allows multiple GHL agencies to use the same app instance
+model AgencyLocation {
+  locationId   String   @id @map("location_id") // GHL location ID (globally unique)
+  accountId    String   @map("account_id") // GHL agency account ID (multi-tenant key)
+  companyId    String?  @map("company_id") // GHL company ID
+  name         String // Location name
+  email        String?
+  phone        String?
+  website      String?
+  address      String?
+  city         String?
+  state        String?
+  country      String?
+  timezone     String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  lastSyncedAt DateTime @default(now()) @map("last_synced_at") // When synced from GHL
+
+  @@index([accountId])
+  @@index([companyId])
+  @@index([lastSyncedAt])
+  @@map("agency_locations")
+}
