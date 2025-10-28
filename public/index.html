@@ -349,7 +349,8 @@
         
         const validationEl = document.getElementById('locationValidation');
         if (data.valid) {
-          validationEl.innerHTML = `<span style="color: #0475FF; font-weight: 600;">✓ Valid location: ${data.location.name}</span>`;
+          const locationName = data.location?.name || data.locationName || LOCATION_ID;
+          validationEl.innerHTML = `<span style="color: #0475FF; font-weight: 600;">✓ Valid location: ${locationName}</span>`;
           validationEl.style.display = 'block';
         } else {
           validationEl.innerHTML = `<span style="color: #FF2F00; font-weight: 600;">✗ Invalid location ID - not found in agency</span>`;
@@ -357,6 +358,9 @@
         }
       } catch (error) {
         console.error('Error validating location:', error);
+        const validationEl = document.getElementById('locationValidation');
+        validationEl.innerHTML = `<span style="color: #FF2F00; font-weight: 600;">✗ Error validating location</span>`;
+        validationEl.style.display = 'block';
       }
     }
 

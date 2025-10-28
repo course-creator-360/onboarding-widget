@@ -364,38 +364,7 @@ app.get('/api/installation/check', async (req, res) => {
   });
 });
 
-app.get('/api/location/validate', async (req, res) => {
-  const locationId = (req.query.locationId as string) || '';
-  if (!locationId) return res.status(400).json({ error: 'locationId is required' });
-  
-  try {
-    console.log('[Location Validation] Validating locationId:', locationId);
-    
-    const validation = await validateLocationId(locationId);
-    
-    if (validation.valid) {
-      console.log('[Location Validation] Location is valid:', locationId);
-      return res.json({
-        valid: true,
-        locationId: locationId,
-        companyId: validation.companyId,
-        locationName: validation.location?.name || null
-      });
-    } else {
-      console.log('[Location Validation] Location not found or unauthorized:', locationId);
-      return res.status(404).json({
-        valid: false,
-        error: 'Location not found or not accessible with current authorization'
-      });
-    }
-  } catch (error) {
-    console.error('[Location Validation] Error validating location:', error);
-    return res.status(500).json({
-      valid: false,
-      error: 'Failed to validate location'
-    });
-  }
-});
+// Removed duplicate - see line 450 for the active /api/location/validate endpoint
 
 app.get('/api/agency/status', async (req, res) => {
   const hasAgency = await hasAgencyAuthorization();
@@ -454,18 +423,33 @@ app.get('/api/location/validate', async (req, res) => {
   }
   
   try {
+    console.log('[Location Validation] Validating locationId:', locationId);
     const result = await validateLocationId(locationId);
-    return res.json({
-      valid: result.valid,
-      location: result.valid ? {
-        id: result.location?.id,
-        name: result.location?.name,
-        companyId: result.companyId
-      } : null
-    });
+    
+    if (result.valid) {
+      console.log('[Location Validation] Location is valid:', locationId);
+      return res.json({
+        valid: true,
+        location: {
+          id: result.location?.id || locationId,
+          name: result.location?.name || locationId,
+          companyId: result.companyId
+        },
+        locationName: result.location?.name || locationId // For backward compatibility
+      });
+    } else {
+      console.log('[Location Validation] Location not found or unauthorized:', locationId);
+      return res.json({
+        valid: false,
+        location: null,
+        error: 'Location not found or not accessible with current authorization'
+      });
+    }
   } catch (error) {
-    console.error('[API] Error validating locationId:', error);
+    console.error('[Location Validation] Error validating locationId:', error);
     return res.status(500).json({ 
+      valid: false,
+      location: null,
       error: 'Failed to validate location',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
