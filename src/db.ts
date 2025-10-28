@@ -31,6 +31,18 @@ export type Installation = {
   createdAt: number;
 };
 
+export type SubAccount = {
+  id: string;
+  locationId: string;
+  accountId: string;
+  locationName?: string;
+  companyId?: string;
+  firstAccessedAt: number;
+  lastAccessedAt: number;
+  isActive: boolean;
+  metadata?: any;
+};
+
 // Helper to convert Date to timestamp
 function dateToTimestamp(date: Date): number {
   return date.getTime();
@@ -392,6 +404,201 @@ export async function deleteInstallation(locationId: string): Promise<void> {
   }).catch(() => {
     // Ignore if doesn't exist
   });
+}
+
+/**
+ * Register or update a sub-account when it first accesses the widget
+ * This helps track which sub-accounts are using the app under an agency
+ */
+export async function registerSubAccount(data: {
+  locationId: string;
+  accountId: string;
+  locationName?: string;
+  companyId?: string;
+  metadata?: any;
+}): Promise<SubAccount> {
+  const result = await prisma.subAccount.upsert({
+    where: { locationId: data.locationId },
+    update: {
+      lastAccessedAt: new Date(),
+      locationName: data.locationName ?? undefined,
+      companyId: data.companyId ?? undefined,
+      metadata: data.metadata ?? undefined,
+    },
+    create: {
+      locationId: data.locationId,
+      accountId: data.accountId,
+      locationName: data.locationName ?? undefined,
+      companyId: data.companyId ?? undefined,
+      isActive: true,
+      metadata: data.metadata ?? undefined,
+    },
+  });
+
+  return {
+    id: result.id,
+    locationId: result.locationId,
+    accountId: result.accountId,
+    locationName: result.locationName ?? undefined,
+    companyId: result.companyId ?? undefined,
+    firstAccessedAt: dateToTimestamp(result.firstAccessedAt),
+    lastAccessedAt: dateToTimestamp(result.lastAccessedAt),
+    isActive: result.isActive,
+    metadata: result.metadata ?? undefined,
+  };
+}
+
+/**
+ * Get a specific sub-account by location ID
+ */
+export async function getSubAccount(locationId: string): Promise<SubAccount | undefined> {
+  const result = await prisma.subAccount.findUnique({
+    where: { locationId },
+  });
+
+  if (!result) return undefined;
+
+  return {
+    id: result.id,
+    locationId: result.locationId,
+    accountId: result.accountId,
+    locationName: result.locationName ?? undefined,
+    companyId: result.companyId ?? undefined,
+    firstAccessedAt: dateToTimestamp(result.firstAccessedAt),
+    lastAccessedAt: dateToTimestamp(result.lastAccessedAt),
+    isActive: result.isActive,
+    metadata: result.metadata ?? undefined,
+  };
+}
+
+/**
+ * Get all sub-accounts for a specific agency (by accountId)
+ */
+export async function getSubAccountsByAgency(accountId: string): Promise<SubAccount[]> {
+  const results = await prisma.subAccount.findMany({
+    where: { accountId },
+    orderBy: { firstAccessedAt: 'desc' },
+  });
+
+  return results.map(result => ({
+    id: result.id,
+    locationId: result.locationId,
+    accountId: result.accountId,
+    locationName: result.locationName ?? undefined,
+    companyId: result.companyId ?? undefined,
+    firstAccessedAt: dateToTimestamp(result.firstAccessedAt),
+    lastAccessedAt: dateToTimestamp(result.lastAccessedAt),
+    isActive: result.isActive,
+    metadata: result.metadata ?? undefined,
+  }));
+}
+
+/**
+ * Get all sub-accounts (for admin purposes)
+ */
+export async function getAllSubAccounts(): Promise<SubAccount[]> {
+  const results = await prisma.subAccount.findMany({
+    orderBy: { firstAccessedAt: 'desc' },
+  });
+
+  return results.map(result => ({
+    id: result.id,
+    locationId: result.locationId,
+    accountId: result.accountId,
+    locationName: result.locationName ?? undefined,
+    companyId: result.companyId ?? undefined,
+    firstAccessedAt: dateToTimestamp(result.firstAccessedAt),
+    lastAccessedAt: dateToTimestamp(result.lastAccessedAt),
+    isActive: result.isActive,
+    metadata: result.metadata ?? undefined,
+  }));
+}
+
+/**
+ * Deactivate a sub-account (soft delete)
+ */
+export async function deactivateSubAccount(locationId: string): Promise<SubAccount | undefined> {
+  const result = await prisma.subAccount.update({
+    where: { locationId },
+    data: { isActive: false },
+  }).catch(() => undefined);
+
+  if (!result) return undefined;
+
+  return {
+    id: result.id,
+    locationId: result.locationId,
+    accountId: result.accountId,
+    locationName: result.locationName ?? undefined,
+    companyId: result.companyId ?? undefined,
+    firstAccessedAt: dateToTimestamp(result.firstAccessedAt),
+    lastAccessedAt: dateToTimestamp(result.lastAccessedAt),
+    isActive: result.isActive,
+    metadata: result.metadata ?? undefined,
+  };
+}
+
+/**
+ * Check if a location belongs to a tracked agency
+ * Returns the agency accountId if found, null otherwise
+ */
+export async function getAgencyForLocation(locationId: string): Promise<string | null> {
+  const subAccount = await prisma.subAccount.findUnique({
+    where: { locationId },
+    select: { accountId: true }
+  });
+
+  return subAccount?.accountId || null;
+}
+
+/**
+ * Check if a location is a tracked sub-account under an agency
+ */
+export async function isSubAccountUnderAgency(locationId: string, accountId: string): Promise<boolean> {
+  const subAccount = await prisma.subAccount.findFirst({
+    where: {
+      locationId,
+      accountId,
+      isActive: true
+    }
+  });
+
+  return !!subAccount;
+}
+
+/**
+ * Get sub-account statistics for an agency
+ */
+export async function getSubAccountStats(accountId: string): Promise<{
+  total: number;
+  active: number;
+  inactive: number;
+  lastWeek: number;
+  lastMonth: number;
+}> {
+  const now = Date.now();
+  const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+  const monthAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+
+  const [total, active, inactive, lastWeek, lastMonth] = await Promise.all([
+    prisma.subAccount.count({ where: { accountId } }),
+    prisma.subAccount.count({ where: { accountId, isActive: true } }),
+    prisma.subAccount.count({ where: { accountId, isActive: false } }),
+    prisma.subAccount.count({ 
+      where: { 
+        accountId, 
+        firstAccessedAt: { gte: weekAgo } 
+      } 
+    }),
+    prisma.subAccount.count({ 
+      where: { 
+        accountId, 
+        firstAccessedAt: { gte: monthAgo } 
+      } 
+    }),
+  ]);
+
+  return { total, active, inactive, lastWeek, lastMonth };
 }
 
 // Export Prisma client for direct usage if needed

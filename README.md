@@ -7,6 +7,7 @@ A persistent onboarding checklist widget for CourseCreator360 sub-accounts. Trac
 - ✅ **4-Step Onboarding Checklist**: Domain, Course, Product, Payment
 - ✅ **Real-time Updates**: Automatic status polling for live updates (serverless-optimized)
 - ✅ **Agency-Level OAuth**: One authorization for all sub-accounts
+- ✅ **Sub-Account Tracking**: Automatically tracks newly created sub-accounts under the agency
 - ✅ **Prisma + PostgreSQL**: Cloud-ready database with type-safe ORM
 - ✅ **Vercel Ready**: Auto-detects environment, deploys seamlessly
 - ✅ **Draggable & Resizable**: User-friendly widget positioning
@@ -30,6 +31,7 @@ A persistent onboarding checklist widget for CourseCreator360 sub-accounts. Trac
   - [Schema](#schema)
   - [Commands](#commands)
 - [API Documentation](#api-documentation)
+- [Sub-Account Tracking](#sub-account-tracking)
 - [Widget Features](#widget-features)
 - [Webhooks](#webhooks)
 - [Troubleshooting](#troubleshooting)
@@ -501,10 +503,59 @@ npm run db:studio
 
 - `POST /api/migrate` - Run database migrations (requires `x-vercel-migrate-secret` header)
 
+### Sub-Account Tracking Endpoints
+
+- `GET /api/sub-accounts?accountId=...` - Get all sub-accounts for an agency
+- `GET /api/sub-accounts/:locationId` - Get specific sub-account details
+- `GET /api/sub-accounts/verify/:locationId` - Verify if location belongs to agency
+- `GET /api/sub-accounts/stats/:accountId` - Get agency sub-account statistics
+- `POST /api/sub-accounts/:locationId/deactivate` - Deactivate a sub-account
+
 ### Utility Endpoints
 
 - `GET /api/healthz` - Health check
 - `GET /api/config` - Configuration info
+
+---
+
+## Sub-Account Tracking
+
+The widget automatically tracks newly created sub-accounts under the agency. When a sub-account first accesses the widget, the system:
+
+1. ✅ Detects the location ID from the GHL context
+2. ✅ Validates it belongs to the authorized agency
+3. ✅ Registers it in the database with full details
+4. ✅ Tracks first access and last access timestamps
+5. ✅ Maintains the agency relationship
+
+**Key Benefits:**
+- 🎯 **Automatic Discovery**: No manual registration needed
+- 📊 **Analytics Ready**: Track widget adoption across sub-accounts
+- 🔍 **Full Visibility**: See all sub-accounts using the widget
+- ⏰ **Activity Monitoring**: Track when sub-accounts last accessed the widget
+
+**Console Logs:**
+```
+[Installation Check] ✨ NEW SUB-ACCOUNT DETECTED ✨
+[Installation Check] Location: Client Business (loc_abc123)
+[Installation Check] Agency: agency_xyz789
+[Installation Check] This sub-account is now tracked under the agency
+```
+
+**Example Usage:**
+```javascript
+// Get all sub-accounts for an agency
+const response = await fetch('/api/sub-accounts?accountId=agency_xyz789');
+const { subAccounts, count } = await response.json();
+console.log(`Total sub-accounts: ${count}`);
+
+// Get statistics
+const stats = await fetch('/api/sub-accounts/stats/agency_xyz789');
+const data = await stats.json();
+console.log(`New sub-accounts this week: ${data.stats.lastWeek}`);
+```
+
+📖 **Full Documentation**: See [SUB_ACCOUNT_TRACKING.md](./SUB_ACCOUNT_TRACKING.md) for complete API reference and examples.
 
 ---
 

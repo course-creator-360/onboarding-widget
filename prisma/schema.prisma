@@ -53,3 +53,21 @@ model EventLog {
   @@index([createdAt])
   @@map("event_log")
 }
+
+model SubAccount {
+  id              String   @id @default(cuid())
+  locationId      String   @unique @map("location_id")
+  accountId       String   @map("account_id")
+  locationName    String?  @map("location_name")
+  companyId       String?  @map("company_id")
+  firstAccessedAt DateTime @default(now()) @map("first_accessed_at")
+  lastAccessedAt  DateTime @updatedAt @map("last_accessed_at")
+  isActive        Boolean  @default(true) @map("is_active")
+  metadata        Json?
+
+  @@index([accountId])
+  @@index([companyId])
+  @@index([firstAccessedAt])
+  @@index([isActive])
+  @@map("sub_accounts")
+}

@@ -5,7 +5,7 @@ import cookieParser from 'cookie-parser';
 import path from 'path';
 import oauthRouter from './oauth';
 import webhookRouter from './webhooks';
-import { getOnboardingStatus, setDismissed, updateOnboardingStatus, getInstallation, hasAgencyAuthorization, getAgencyInstallation, deleteInstallation, OnboardingStatus, toggleOnboardingField, upsertInstallation } from './db';
+import { getOnboardingStatus, setDismissed, updateOnboardingStatus, getInstallation, hasAgencyAuthorization, getAgencyInstallation, deleteInstallation, OnboardingStatus, toggleOnboardingField, upsertInstallation, registerSubAccount, getSubAccount, getSubAccountsByAgency, getAllSubAccounts, getSubAccountStats, deactivateSubAccount, getAgencyForLocation, isSubAccountUnderAgency } from './db';
 import { sseBroker } from './sse';
 import { checkLocationDomain, checkLocationProducts, checkPaymentIntegration, validateToken, getAuthToken } from './ghl-api';
 import { validateLocationId, getSDKClient, getAgencyLocations } from './ghl-sdk';
@@ -278,8 +278,52 @@ app.get('/api/installation/check', async (req, res) => {
       });
     }
     
-    // Token is valid (either existing or refreshed)
+    // Token is valid - register/update sub-account tracking
     console.log('[Installation Check] Valid token obtained for location:', locationId);
+    
+    // Get agency installation to extract accountId
+    const agencyInstallation = await getAgencyInstallation();
+    
+    // Try to fetch location details for better tracking
+    try {
+      const validation = await validateLocationId(locationId);
+      if (validation.valid && validation.location && agencyInstallation?.accountId) {
+        // Check if this is a new sub-account or existing one
+        const existingSubAccount = await getSubAccount(locationId);
+        const isNewSubAccount = !existingSubAccount;
+        
+        // Register or update the sub-account
+        const subAccount = await registerSubAccount({
+          locationId: locationId,
+          accountId: agencyInstallation.accountId,
+          locationName: validation.location.name,
+          companyId: validation.location.companyId,
+          metadata: {
+            email: validation.location.email,
+            phone: validation.location.phone,
+            website: validation.location.website,
+            timezone: validation.location.timezone,
+          }
+        });
+        
+        if (isNewSubAccount) {
+          console.log(`[Installation Check] ✨ NEW SUB-ACCOUNT DETECTED ✨`);
+          console.log(`[Installation Check] Location: ${validation.location.name} (${locationId})`);
+          console.log(`[Installation Check] Agency: ${agencyInstallation.accountId}`);
+          console.log(`[Installation Check] Company: ${validation.location.companyId}`);
+          console.log(`[Installation Check] This sub-account is now tracked under the agency`);
+        } else {
+          console.log(`[Installation Check] Existing sub-account updated: ${locationId}`);
+          console.log(`[Installation Check] Last accessed updated for: ${validation.location.name}`);
+        }
+      } else if (!agencyInstallation?.accountId) {
+        console.warn('[Installation Check] Agency installation exists but accountId is missing');
+      }
+    } catch (error) {
+      console.error('[Installation Check] Failed to register sub-account:', error);
+      // Don't fail the installation check if sub-account registration fails
+    }
+    
     return res.json({
       installed: true,
       hasToken: true,
@@ -568,6 +612,169 @@ app.post('/api/onboarding/toggle', async (req, res) => {
   
   await sseBroker.broadcastStatus(locationId);
   res.json(status);
+});
+
+// Sub-account management endpoints
+app.get('/api/sub-accounts', async (req, res) => {
+  try {
+    const accountId = req.query.accountId as string | undefined;
+    
+    if (accountId) {
+      // Get sub-accounts for a specific agency
+      const subAccounts = await getSubAccountsByAgency(accountId);
+      return res.json({
+        success: true,
+        count: subAccounts.length,
+        subAccounts
+      });
+    } else {
+      // Get all sub-accounts (admin view)
+      const subAccounts = await getAllSubAccounts();
+      return res.json({
+        success: true,
+        count: subAccounts.length,
+        subAccounts
+      });
+    }
+  } catch (error) {
+    console.error('[API] Error fetching sub-accounts:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch sub-accounts',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+app.get('/api/sub-accounts/verify/:locationId', async (req, res) => {
+  try {
+    const locationId = req.params.locationId;
+    if (!locationId) {
+      return res.status(400).json({ error: 'locationId is required' });
+    }
+    
+    // Check which agency this location belongs to
+    const agencyAccountId = await getAgencyForLocation(locationId);
+    
+    if (!agencyAccountId) {
+      return res.json({
+        success: true,
+        isUnderAgency: false,
+        locationId,
+        message: 'Location is not registered under any agency'
+      });
+    }
+    
+    // Get the sub-account details
+    const subAccount = await getSubAccount(locationId);
+    
+    // Get agency installation info
+    const agencyInstallation = await getAgencyInstallation();
+    
+    return res.json({
+      success: true,
+      isUnderAgency: true,
+      locationId,
+      agencyAccountId,
+      isActive: subAccount?.isActive,
+      locationName: subAccount?.locationName,
+      firstAccessedAt: subAccount?.firstAccessedAt,
+      lastAccessedAt: subAccount?.lastAccessedAt,
+      agencyAuthorized: agencyInstallation?.accountId === agencyAccountId
+    });
+  } catch (error) {
+    console.error('[API] Error verifying sub-account:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to verify sub-account',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+app.get('/api/sub-accounts/:locationId', async (req, res) => {
+  try {
+    const locationId = req.params.locationId;
+    if (!locationId) {
+      return res.status(400).json({ error: 'locationId is required' });
+    }
+    
+    const subAccount = await getSubAccount(locationId);
+    
+    if (!subAccount) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sub-account not found'
+      });
+    }
+    
+    return res.json({
+      success: true,
+      subAccount
+    });
+  } catch (error) {
+    console.error('[API] Error fetching sub-account:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch sub-account',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+app.get('/api/sub-accounts/stats/:accountId', async (req, res) => {
+  try {
+    const accountId = req.params.accountId;
+    if (!accountId) {
+      return res.status(400).json({ error: 'accountId is required' });
+    }
+    
+    const stats = await getSubAccountStats(accountId);
+    
+    return res.json({
+      success: true,
+      accountId,
+      stats
+    });
+  } catch (error) {
+    console.error('[API] Error fetching sub-account stats:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch sub-account stats',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+app.post('/api/sub-accounts/:locationId/deactivate', async (req, res) => {
+  try {
+    const locationId = req.params.locationId;
+    if (!locationId) {
+      return res.status(400).json({ error: 'locationId is required' });
+    }
+    
+    const subAccount = await deactivateSubAccount(locationId);
+    
+    if (!subAccount) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sub-account not found'
+      });
+    }
+    
+    return res.json({
+      success: true,
+      message: 'Sub-account deactivated successfully',
+      subAccount
+    });
+  } catch (error) {
+    console.error('[API] Error deactivating sub-account:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to deactivate sub-account',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
 });
 
 app.get('/api/events', async (req, res) => {
