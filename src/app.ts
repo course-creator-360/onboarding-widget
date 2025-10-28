@@ -150,33 +150,34 @@ app.get('/api/status', async (req, res) => {
   console.log(`[Status] Agency authorized: ${isAuthorized}, skipApiChecks: ${skipApiChecks}`);
   
   if (isAuthorized && !skipApiChecks && !status.locationVerified) {
-    try {
-      console.log(`[Status] First-time location - fetching from GHL SDK: ${locationId}`);
-      
-      // Fetch location details from GHL SDK (with 5s timeout)
-      const validation = await Promise.race([
-        validateLocationId(locationId),
-        new Promise<{ valid: boolean; location?: any; companyId?: string }>((_, reject) => 
-          setTimeout(() => reject(new Error('GHL SDK timeout')), 5000)
-        )
-      ]);
-      
+    console.log(`[Status] ⚠️  First-time location - will validate via GHL SDK: ${locationId}`);
+    
+    // DO NOT AWAIT - Run validation in background to avoid blocking response
+    // Return current status immediately and let validation complete async
+    Promise.race([
+      validateLocationId(locationId),
+      new Promise<{ valid: boolean; location?: any; companyId?: string }>((_, reject) => 
+        setTimeout(() => reject(new Error('GHL SDK timeout')), 5000)
+      )
+    ])
+    .then(async (validation) => {
       if (validation.valid) {
         const locationName = 'location' in validation ? validation.location?.name : locationId;
-        console.log(`[Status] Location verified via GHL SDK: ${locationName || locationId}`);
-        // Save to database for future fast lookups
-        status = await updateOnboardingStatus(locationId, { locationVerified: true });
-        await sseBroker.broadcastStatus(locationId);
+        console.log(`[Status] ✅ Location verified via GHL SDK: ${locationName || locationId}`);
       } else {
-        console.log(`[Status] Location validation failed, marking as verified anyway`);
-        status = await updateOnboardingStatus(locationId, { locationVerified: true });
+        console.log(`[Status] ⚠️  Location validation failed`);
       }
-    } catch (error) {
-      console.error('[Status] Error validating location:', error);
+      // Mark as verified in database
+      await updateOnboardingStatus(locationId, { locationVerified: true });
+      await sseBroker.broadcastStatus(locationId);
+    })
+    .catch(async (error) => {
+      console.error('[Status] ❌ Error validating location:', error);
       // Mark as verified anyway to avoid repeated slow calls
-      console.log('[Status] Marking as verified to avoid future slow calls');
-      status = await updateOnboardingStatus(locationId, { locationVerified: true });
-    }
+      await updateOnboardingStatus(locationId, { locationVerified: true });
+    });
+    
+    console.log(`[Status] Returning immediately (validation running in background)`);
   }
   
   // All other fields (domain, payment, products) are updated via:
