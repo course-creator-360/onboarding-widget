@@ -69,7 +69,7 @@
   let isInstalled = false;
   let shouldShowWidget = true;
   let hasShownCompletionDialog = false; // Track if we've shown the completion dialog
-  let ghlAppBaseUrl = 'https://app.coursecreator360.com'; // Default, will be fetched from backend
+  let ghlAppBaseUrl = 'https://app.gohighlevel.com'; // Default, will be fetched from backend
   let userpilotToken = null; // Will be fetched from backend
 
   // Fetch configuration from backend

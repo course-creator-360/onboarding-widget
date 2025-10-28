@@ -59,6 +59,6 @@ export function getEnvironment(): string {
  * Defaults to coursecreator360 whitelabel if not specified
  */
 export function getGhlAppBaseUrl(): string {
-  return process.env.GHL_APP_BASE_URL || 'https://app.coursecreator360.com';
+  return process.env.GHL_APP_BASE_URL || 'https://app.gohighlevel.com';
 }
 
