@@ -475,7 +475,20 @@ app.get('/api/location/validate', async (req, res) => {
 app.delete('/api/installation', async (req, res) => {
   const locationId = (req.query.locationId as string) || '';
   if (!locationId) return res.status(400).json({ error: 'locationId is required' });
-  await deleteInstallation(locationId);
+  
+  // Special handling for agency deletion
+  if (locationId === 'agency') {
+    const agencyInstallation = await getAgencyInstallation();
+    if (agencyInstallation) {
+      console.log('[Delete Installation] Deleting agency installation:', agencyInstallation.locationId);
+      await deleteInstallation(agencyInstallation.locationId);
+    } else {
+      console.log('[Delete Installation] No agency installation found to delete');
+    }
+  } else {
+    await deleteInstallation(locationId);
+  }
+  
   return res.json({ success: true, message: 'Installation deleted' });
 });
 

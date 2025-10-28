@@ -204,10 +204,12 @@
           </button>
         </div>
         <div id="locationWarning" style="background: linear-gradient(135deg, rgba(255, 47, 0, 0.08) 0%, rgba(226, 255, 0, 0.08) 100%); border: 2px solid #FF2F00; padding: 14px; border-radius: 10px; margin-bottom: 12px; display: none; box-shadow: 0 2px 8px rgba(255, 47, 0, 0.1);">
-          <strong style="color: #c41e00; display: block; margin-bottom: 8px; font-size: 15px;">⚠️ Manual Testing:</strong>
+          <strong style="color: #c41e00; display: block; margin-bottom: 8px; font-size: 15px;">⚠️ Setup Required:</strong>
           <p style="margin: 0; font-size: 13px; color: #6c4a00; line-height: 1.5;">
-            You can also manually add <code style="background: rgba(255,255,255,0.6); color: #0475FF; padding: 3px 8px; border-radius: 4px;">?locationId=YOUR_LOCATION_ID</code> to the URL.
+            <strong style="color: #c41e00;">Please click "🔑 Setup Agency OAuth" below</strong> to authorize the widget and load your locations automatically.
             <br><br>
+            <strong>Alternative:</strong> For manual testing, you can add <code style="background: rgba(255,255,255,0.6); color: #0475FF; padding: 3px 8px; border-radius: 4px;">?locationId=YOUR_LOCATION_ID</code> to the URL.
+            <br>
             Example: <code style="background: rgba(255,255,255,0.6); color: #0475FF; padding: 3px 8px; border-radius: 4px;">?locationId=L851uHvru1ipOe8DIwNS</code>
           </p>
         </div>
@@ -419,12 +421,18 @@
     
     // Update agency button status
     async function updateAgencyButtonStatus() {
+      const button = document.getElementById('setupAgencyBtn');
+      
       try {
-        const response = await fetch(`${API_BASE}/api/agency/status`);
+        // Add cache-busting to ensure fresh data
+        const url = `${API_BASE}/api/agency/status?t=${Date.now()}`;
+        console.log('[UpdateButton] Fetching status from:', url);
+        const response = await fetch(url);
         const data = await response.json();
+        console.log('[UpdateButton] Status response:', data);
         
-        const button = document.getElementById('setupAgencyBtn');
         if (data.authorized) {
+          console.log('[UpdateButton] Setting button to AUTHORIZED state');
           button.textContent = '✓ Agency OAuth Connected';
           button.classList.add('success');
           button.onclick = () => {
@@ -433,12 +441,18 @@
             }
           };
         } else {
+          console.log('[UpdateButton] Setting button to NOT AUTHORIZED state');
           button.textContent = '🔑 Setup Agency OAuth';
           button.classList.remove('success');
           button.onclick = setupAgency;
         }
       } catch (error) {
-        console.error('Error checking agency status:', error);
+        console.error('[UpdateButton] Error checking agency status:', error);
+        // On error, assume not authorized (safe default)
+        console.log('[UpdateButton] Setting button to NOT AUTHORIZED state (error fallback)');
+        button.textContent = '🔑 Setup Agency OAuth';
+        button.classList.remove('success');
+        button.onclick = setupAgency;
       }
     }
     
@@ -680,8 +694,11 @@
           : window.location.pathname;
         window.history.replaceState({}, document.title, newUrl);
         
-        // Update button status and reload widget
+        // Update button status
         await updateAgencyButtonStatus();
+        
+        // Reload locations from agency
+        await loadAgencyLocations();
         
         // Reload widget to show checklist (will auto-detect location)
         const existingWidget = document.getElementById('cc360-onboarding-widget');
@@ -695,7 +712,8 @@
 
     async function checkAgencyStatus() {
       try {
-        const response = await fetch(`${API_BASE}/api/agency/status`);
+        // Add cache-busting to ensure fresh data
+        const response = await fetch(`${API_BASE}/api/agency/status?t=${Date.now()}`);
         const data = await response.json();
         
         if (data.authorized) {
@@ -716,26 +734,54 @@
       }
       
       try {
+        console.log('[ClearAuth] Sending DELETE request...');
         const response = await fetch(`${API_BASE}/api/installation?locationId=agency`, {
-          method: 'DELETE'
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json'
+          }
         });
         
+        console.log('[ClearAuth] Response status:', response.status, response.ok);
+        const result = await response.json();
+        console.log('[ClearAuth] Response data:', result);
+        
         if (response.ok) {
-          alert('Agency authorization cleared!');
-          // Update button status instead of full page reload
+          console.log('[ClearAuth] Agency auth cleared, updating UI...');
+          
+          // Wait a moment for database to update
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
+          // Update button status (with cache busting)
+          console.log('[ClearAuth] Updating button status...');
           await updateAgencyButtonStatus();
+          
+          // Hide location dropdown and show warning
+          console.log('[ClearAuth] Updating location selector visibility...');
+          document.getElementById('locationSelector').style.display = 'none';
+          document.getElementById('locationWarning').style.display = 'block';
+          
+          // Clear current location
+          LOCATION_ID = null;
+          document.getElementById('currentLocationId').textContent = 'None selected';
+          document.getElementById('locationValidation').style.display = 'none';
+          
           // Reload widget to show "Setup Required" (will auto-detect location)
+          console.log('[ClearAuth] Reloading widget...');
           const existingWidget = document.getElementById('cc360-onboarding-widget');
           if (existingWidget) existingWidget.remove();
           const script = document.createElement('script');
-          script.src = `${API_BASE}/widget.js`;
+          script.src = `${API_BASE}/widget.js?t=${Date.now()}`;
           script.setAttribute('data-api', API_BASE);
           document.body.appendChild(script);
+          
+          alert('Agency authorization cleared!');
         } else {
-          alert('Failed to clear agency authorization');
+          console.error('[ClearAuth] Failed:', result);
+          alert(`Failed to clear agency authorization: ${result.error || 'Unknown error'}`);
         }
       } catch (error) {
-        console.error('Error:', error);
+        console.error('[ClearAuth] Error:', error);
         alert('Error clearing agency authorization. See console for details.');
       }
     }
