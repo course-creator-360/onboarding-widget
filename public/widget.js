@@ -128,7 +128,7 @@
           height: auto;
           background: transparent;
           border-radius: 16px;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+          font-family: Arial, sans-serif;
           z-index: 99999;
           overflow: visible;
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -157,7 +157,7 @@
         }
         #cc360-onboarding-widget.minimized:hover .cc360-widget-minimized {
           transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+          box-shadow: 0 6px 24px rgba(4, 117, 255, 0.35);
         }
         #cc360-onboarding-widget.minimized .cc360-widget-full {
           opacity: 0;
@@ -182,20 +182,20 @@
           justify-content: center;
           flex-direction: row;
           height: 50px;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: linear-gradient(135deg, #0E325E 0%, #0475FF 100%);
           color: white;
           gap: 12px;
           padding: 0 22px;
           text-align: center;
           border-radius: 25px;
           overflow: hidden;
-          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+          box-shadow: 0 4px 16px rgba(4, 117, 255, 0.25);
           opacity: 0;
           visibility: hidden;
           transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.2s ease;
         }
         .cc360-widget-minimized.complete {
-          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+          background: linear-gradient(135deg, #0E325E 0%, #00D9A3 100%);
         }
         .cc360-widget-minimized-icon {
           font-size: 20px;
@@ -214,17 +214,20 @@
           max-width: 160px;
           display: flex;
           align-items: center;
+          font-family: 'Helvetica Now', 'Helvetica Neue', Helvetica, Arial, sans-serif;
         }
         .cc360-widget-minimized-count {
           font-size: 13px;
           font-weight: 700;
           line-height: 1;
-          background: rgba(255, 255, 255, 0.25);
+          background: rgba(255, 255, 255, 0.3);
           padding: 6px 11px;
           border-radius: 14px;
           display: flex;
           align-items: center;
           justify-content: center;
+          backdrop-filter: blur(4px);
+          font-family: 'Helvetica Now', 'Helvetica Neue', Helvetica, Arial, sans-serif;
         }
         .cc360-widget-full {
           display: block;
@@ -232,10 +235,10 @@
           background: white;
           border-radius: 16px;
           overflow: hidden;
-          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+          box-shadow: 0 8px 32px rgba(14, 50, 94, 0.15), 0 4px 16px rgba(4, 117, 255, 0.1);
         }
         .cc360-widget-header {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: linear-gradient(135deg, #0E325E 0%, #0475FF 100%);
           color: white;
           padding: 20px 50px 16px 18px;
           position: relative;
@@ -247,6 +250,7 @@
           margin: 0 0 8px 0;
           letter-spacing: -0.3px;
           color: #ffffff !important;
+          font-family: 'Helvetica Now', 'Helvetica Neue', Helvetica, Arial, sans-serif;
         }
         .cc360-widget-subtitle {
           font-size: 13px;
@@ -291,7 +295,7 @@
         }
         .cc360-widget-footer {
           padding: 14px 18px;
-          background: #f8f9fa;
+          background: #f5f7fa;
           text-align: center;
           position: relative;
           z-index: 10;
@@ -368,17 +372,17 @@
           z-index: 1;
         }
         .cc360-checklist-item.completed:not(:last-child)::before {
-          background: #10b981;
+          background: #0475FF;
         }
         .cc360-checklist-item:hover {
-          background: #f5f6f7;
+          background: #f5f7fa;
         }
         .cc360-checklist-item:hover .cc360-chevron-icon {
           opacity: 1;
-          color: #667eea;
+          color: #0475FF;
         }
         .cc360-checklist-item.completed .cc360-checklist-title {
-          color: #10b981;
+          color: #0E325E;
         }
         .cc360-checklist-item.disabled {
           opacity: 0.5;
@@ -406,12 +410,12 @@
           z-index: 2;
         }
         .cc360-checklist-item:hover .cc360-checkbox {
-          border-color: #667eea;
+          border-color: #0475FF;
           transform: scale(1.1);
         }
         .cc360-checklist-item.completed .cc360-checkbox {
-          background: #10b981;
-          border-color: #10b981;
+          background: #0475FF;
+          border-color: #0475FF;
         }
         .cc360-checklist-item.disabled .cc360-checkbox {
           border-color: #e9ecef;
@@ -446,6 +450,7 @@
           color: #1a202c;
           transition: color 0.2s;
           line-height: 1.4;
+          font-family: 'Helvetica Now', 'Helvetica Neue', Helvetica, Arial, sans-serif;
         }
         .cc360-checklist-item.disabled .cc360-checklist-title {
           color: #adb5bd;
@@ -476,7 +481,8 @@
           left: 0;
           right: 0;
           bottom: 0;
-          background: rgba(0, 0, 0, 0.5);
+          background: rgba(14, 50, 94, 0.6);
+          backdrop-filter: blur(4px);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -511,6 +517,7 @@
           font-weight: 600;
           margin: 0 0 12px 0;
           color: #1a202c;
+          font-family: 'Helvetica Now', 'Helvetica Neue', Helvetica, Arial, sans-serif;
         }
         .cc360-dialog-message {
           font-size: 14px;
@@ -533,12 +540,12 @@
           transition: all 0.2s;
         }
         .cc360-dialog-btn-primary {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: linear-gradient(135deg, #0E325E 0%, #0475FF 100%);
           color: white;
         }
         .cc360-dialog-btn-primary:hover {
           transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+          box-shadow: 0 4px 12px rgba(4, 117, 255, 0.4);
         }
         .cc360-dialog-btn-secondary {
           background: #f8f9fa;
@@ -554,7 +561,7 @@
         }
         .cc360-dialog-success .cc360-dialog-title {
           text-align: center;
-          color: #28a745;
+          color: #0475FF;
         }
         .cc360-dialog-success .cc360-dialog-message {
           text-align: center;
@@ -569,6 +576,7 @@
           margin-bottom: 8px;
           font-weight: 500;
           line-height: 1.4;
+          font-family: 'Helvetica Now', 'Helvetica Neue', Helvetica, Arial, sans-serif;
         }
         .cc360-progress-bar-bg {
           height: 6px;
@@ -581,7 +589,7 @@
           background: white;
           transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
           border-radius: 3px;
-          box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+          box-shadow: 0 0 12px rgba(255, 255, 255, 0.5);
         }
       </style>
       <div class="cc360-widget-minimized" id="cc360-widget-minimized">
@@ -1248,6 +1256,7 @@
           font-weight: 600;
           color: #2c3e50;
           margin: 0 0 12px 0;
+          font-family: 'Helvetica Now', 'Helvetica Neue', Helvetica, Arial, sans-serif;
         }
         .cc360-start-subtitle {
           font-size: 14px;
@@ -1256,7 +1265,7 @@
           line-height: 1.5;
         }
         .cc360-start-button {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: linear-gradient(135deg, #0E325E 0%, #0475FF 100%);
           color: white;
           border: none;
           padding: 14px 32px;
@@ -1269,7 +1278,7 @@
         }
         .cc360-start-button:hover {
           transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+          box-shadow: 0 4px 12px rgba(4, 117, 255, 0.4);
         }
         .cc360-start-button:active {
           transform: translateY(0);
@@ -1577,7 +1586,7 @@
         
         const renderStep = () => {
           const styles = {
-            heading: { fontSize: '1.75rem', fontWeight: 600, marginBottom: '16px', lineHeight: 1.3, color: '#111827' },
+            heading: { fontSize: '1.75rem', fontWeight: 600, marginBottom: '16px', lineHeight: 1.3, color: '#111827', fontFamily: "'Helvetica Now', 'Helvetica Neue', Helvetica, Arial, sans-serif" },
             subtext: { fontSize: '1rem', color: '#6b7280', marginBottom: '24px', lineHeight: 1.5 },
             optionList: { display: 'flex', flexDirection: 'column', gap: '12px' },
             optionItem: { display: 'flex', alignItems: 'center', padding: '16px 20px', border: '2px solid #e5e7eb', borderRadius: '8px', cursor: 'pointer', fontSize: '1rem', color: '#374151', backgroundColor: '#ffffff', transition: 'all 0.2s ease' },
@@ -1698,10 +1707,10 @@
             ),
             React.createElement('div', { style: { maxWidth: '600px', margin: '0 auto' } },
               React.createElement('div', { style: { width: '100%', height: '8px', backgroundColor: '#e5e7eb', borderRadius: '4px', marginBottom: '32px', overflow: 'hidden' } },
-                React.createElement('div', { style: { height: '100%', backgroundColor: '#1E88E5', borderRadius: '4px', width: '100%' } })
+                React.createElement('div', { style: { height: '100%', background: 'linear-gradient(90deg, #0E325E 0%, #0475FF 100%)', borderRadius: '4px', width: '100%' } })
               ),
               React.createElement('div', null,
-                React.createElement('h2', { style: { fontSize: '1.75rem', fontWeight: 600, marginBottom: '16px', lineHeight: 1.3, color: '#111827' } },
+                React.createElement('h2', { style: { fontSize: '1.75rem', fontWeight: 600, marginBottom: '16px', lineHeight: 1.3, color: '#111827', fontFamily: "'Helvetica Now', 'Helvetica Neue', Helvetica, Arial, sans-serif" } },
                   '🎉 Thanks! We\'ve received your responses.'
                 ),
                 React.createElement('p', { style: { fontSize: '1rem', color: '#6b7280', marginBottom: '24px', lineHeight: 1.5 } },
@@ -1715,7 +1724,7 @@
         const buttonStyles = {
           button: { flex: 1, padding: '14px 24px', fontSize: '1rem', fontWeight: 600, borderRadius: '8px', border: 'none', cursor: 'pointer', transition: 'all 0.2s ease' },
           backButton: { backgroundColor: '#f3f4f6', color: '#374151' },
-          primaryButton: { backgroundColor: '#1E88E5', color: '#ffffff' }
+          primaryButton: { background: 'linear-gradient(135deg, #0E325E 0%, #0475FF 100%)', color: '#ffffff' }
         };
         
         return React.createElement('div', null,
@@ -1724,7 +1733,7 @@
           ),
           React.createElement('div', { style: { maxWidth: '600px', margin: '0 auto' } },
             React.createElement('div', { style: { width: '100%', height: '8px', backgroundColor: '#e5e7eb', borderRadius: '4px', marginBottom: '32px', overflow: 'hidden' } },
-              React.createElement('div', { style: { height: '100%', backgroundColor: '#1E88E5', borderRadius: '4px', width: `${progressPercent}%`, transition: 'width 0.3s ease' } })
+              React.createElement('div', { style: { height: '100%', background: 'linear-gradient(90deg, #0E325E 0%, #0475FF 100%)', borderRadius: '4px', width: `${progressPercent}%`, transition: 'width 0.3s ease' } })
             ),
             renderStep(),
             React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', gap: '16px', marginTop: '32px' } },
@@ -1823,9 +1832,9 @@
     initialContent.style.cssText = 'padding: 32px 24px; text-align: center;';
     initialContent.innerHTML = `
       <div style="font-size: 3.5rem; margin-bottom: 16px;">📞</div>
-      <h2 style="font-size: 1.75rem; font-weight: 700; color: #111827; margin-bottom: 16px; line-height: 1.3;">
+      <h2 style="font-size: 1.75rem; font-weight: 700; color: #111827; margin-bottom: 16px; line-height: 1.3; font-family: 'Helvetica Now', 'Helvetica Neue', Helvetica, Arial, sans-serif;">
         Did you know that creators who have an onboarding call make money 
-        <span style="display: inline-block; background: linear-gradient(135deg, #1E88E5 0%, #1565C0 100%); color: white; padding: 4px 12px; border-radius: 6px; font-weight: 700; font-size: 1.1rem; margin: 0 4px;">57% faster</span> 
+        <span style="display: inline-block; background: linear-gradient(135deg, #0E325E 0%, #0475FF 100%); color: white; padding: 4px 12px; border-radius: 6px; font-weight: 700; font-size: 1.1rem; margin: 0 4px;">57% faster</span> 
         than those who don't?
       </h2>
       <p style="font-size: 1.1rem; color: #4b5563; margin-bottom: 24px; line-height: 1.6;">
@@ -1857,22 +1866,22 @@
       padding: 16px 40px;
       font-size: 1.125rem;
       font-weight: 600;
-      background: linear-gradient(135deg, #1E88E5 0%, #1565C0 100%);
+      background: linear-gradient(135deg, #0E325E 0%, #0475FF 100%);
       color: white;
       border: none;
       border-radius: 10px;
       cursor: pointer;
       transition: all 0.3s ease;
-      box-shadow: 0 4px 14px rgba(30, 136, 229, 0.4);
+      box-shadow: 0 4px 14px rgba(4, 117, 255, 0.4);
       margin-top: 8px;
     `;
     scheduleBtn.onmouseover = () => {
       scheduleBtn.style.transform = 'translateY(-2px)';
-      scheduleBtn.style.boxShadow = '0 6px 20px rgba(30, 136, 229, 0.5)';
+      scheduleBtn.style.boxShadow = '0 6px 20px rgba(4, 117, 255, 0.5)';
     };
     scheduleBtn.onmouseout = () => {
       scheduleBtn.style.transform = 'translateY(0)';
-      scheduleBtn.style.boxShadow = '0 4px 14px rgba(30, 136, 229, 0.4)';
+      scheduleBtn.style.boxShadow = '0 4px 14px rgba(4, 117, 255, 0.4)';
     };
     scheduleBtn.onclick = () => {
       initialContent.style.display = 'none';
@@ -2141,9 +2150,9 @@
           max-width: 300px;
           height: 48px;
           min-height: 48px;
-          background: #8b5cf6;
+          background: linear-gradient(135deg, #FF2F00 0%, #E2FF00 100%);
           border-radius: 24px;
-          box-shadow: 0 4px 16px rgba(139, 92, 246, 0.3);
+          box-shadow: 0 4px 16px rgba(255, 47, 0, 0.3);
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
           z-index: 99999;
           overflow: hidden;
@@ -2152,7 +2161,7 @@
         }
         #cc360-onboarding-widget.setup-required:hover {
           transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+          box-shadow: 0 6px 20px rgba(255, 47, 0, 0.4);
         }
         .cc360-setup-required-content {
           display: flex;
@@ -2171,6 +2180,8 @@
           font-size: 13px;
           font-weight: 600;
           white-space: nowrap;
+          color: #131313;
+          font-family: 'Helvetica Now', 'Helvetica Neue', Helvetica, Arial, sans-serif;
         }
       </style>
       <div class="cc360-setup-required-content">

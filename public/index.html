@@ -11,32 +11,65 @@
       box-sizing: border-box;
     }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: Arial, sans-serif;
+      background: #0a0a0a;
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 20px;
+      position: relative;
+    }
+    body > * {
+      position: relative;
+      z-index: 1;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      top: -20%;
+      left: -15%;
+      width: 900px;
+      height: 900px;
+      background: radial-gradient(circle, rgba(14, 50, 94, 0.5) 0%, rgba(4, 117, 255, 0.35) 20%, transparent 60%);
+      pointer-events: none;
+      filter: blur(100px);
+      z-index: 0;
+    }
+    body::after {
+      content: '';
+      position: fixed;
+      bottom: -25%;
+      right: -15%;
+      width: 1000px;
+      height: 1000px;
+      background: radial-gradient(circle, rgba(4, 117, 255, 0.45) 0%, rgba(4, 117, 255, 0.25) 25%, transparent 65%);
+      pointer-events: none;
+      filter: blur(120px);
+      z-index: 0;
     }
     .demo-container {
       background: white;
-      border-radius: 16px;
-      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.2);
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(14, 50, 94, 0.3), 0 8px 24px rgba(4, 117, 255, 0.2);
       max-width: 800px;
       width: 100%;
       padding: 48px;
     }
     h1 {
-      color: #2c3e50;
+      color: #0E325E;
       font-size: 32px;
       margin-bottom: 16px;
+      font-weight: 700;
+      font-family: 'Helvetica Now', 'Helvetica Neue', Helvetica, Arial, sans-serif;
     }
     h2 {
-      color: #667eea;
+      color: #0475FF;
       font-size: 20px;
       margin-top: 32px;
       margin-bottom: 16px;
+      font-weight: 600;
+      font-family: 'Helvetica Now', 'Helvetica Neue', Helvetica, Arial, sans-serif;
     }
     p {
       color: #6c757d;
@@ -44,24 +77,27 @@
       margin-bottom: 16px;
     }
     .info-box {
-      background: #f8f9fa;
-      border-left: 4px solid #667eea;
+      background: #f5f7fa;
+      border-left: 4px solid #0475FF;
       padding: 16px;
       margin: 24px 0;
-      border-radius: 4px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(4, 117, 255, 0.08);
     }
     .info-box strong {
       color: #2c3e50;
       display: block;
       margin-bottom: 8px;
+      font-family: 'Helvetica Now', 'Helvetica Neue', Helvetica, Arial, sans-serif;
     }
     code {
-      background: #e9ecef;
-      padding: 2px 6px;
-      border-radius: 4px;
+      background: #f5f7fa;
+      padding: 3px 8px;
+      border-radius: 6px;
       font-family: 'Monaco', 'Courier New', monospace;
       font-size: 14px;
-      color: #e83e8c;
+      color: #0475FF;
+      font-weight: 500;
     }
     .controls {
       display: flex;
@@ -70,7 +106,7 @@
       flex-wrap: wrap;
     }
     button {
-      background: #667eea;
+      background: linear-gradient(135deg, #0E325E 0%, #0475FF 100%);
       color: white;
       border: none;
       padding: 12px 24px;
@@ -79,32 +115,37 @@
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s;
+      box-shadow: 0 2px 8px rgba(4, 117, 255, 0.2);
+      font-family: 'Helvetica Now', 'Helvetica Neue', Helvetica, Arial, sans-serif;
     }
     button:hover {
-      background: #5568d3;
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      box-shadow: 0 4px 16px rgba(4, 117, 255, 0.4);
     }
     button:active {
       transform: translateY(0);
     }
     button.secondary {
-      background: #6c757d;
+      background: #111D2C;
+      box-shadow: 0 2px 8px rgba(17, 29, 44, 0.2);
     }
     button.secondary:hover {
-      background: #5a6268;
+      background: #1a2a3d;
+      box-shadow: 0 4px 16px rgba(17, 29, 44, 0.3);
     }
     button.success {
-      background: #28a745;
+      background: linear-gradient(135deg, #0E325E 0%, #00D9A3 100%);
+      box-shadow: 0 2px 8px rgba(0, 217, 163, 0.2);
     }
     button.success:hover {
-      background: #218838;
+      box-shadow: 0 4px 16px rgba(0, 217, 163, 0.4);
     }
     .endpoint-list {
-      background: #f8f9fa;
+      background: linear-gradient(135deg, rgba(14, 50, 94, 0.03) 0%, rgba(4, 117, 255, 0.03) 100%);
       padding: 20px;
-      border-radius: 8px;
+      border-radius: 12px;
       margin: 16px 0;
+      border: 1px solid rgba(4, 117, 255, 0.1);
     }
     .endpoint-list li {
       margin-bottom: 8px;
@@ -130,13 +171,14 @@
     }
     .badge {
       display: inline-block;
-      background: #28a745;
+      background: linear-gradient(135deg, #0475FF 0%, #00D9A3 100%);
       color: white;
-      padding: 4px 12px;
-      border-radius: 12px;
+      padding: 6px 14px;
+      border-radius: 16px;
       font-size: 12px;
       font-weight: 600;
       margin-left: 8px;
+      box-shadow: 0 2px 8px rgba(4, 117, 255, 0.3);
     }
   </style>
 </head>
@@ -152,21 +194,21 @@
     <div class="info-box">
       <strong>Widget Configuration:</strong>
       <div style="margin-top: 12px;">
-        <div id="locationSelector" style="background: #f0f8ff; border: 1px solid #0066cc; padding: 12px; border-radius: 6px; margin-bottom: 12px; display: none;">
-          <strong style="color: #004080; display: block; margin-bottom: 8px;">🎯 Select a Location:</strong>
-          <select id="locationDropdown" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 14px; margin-bottom: 8px;">
+        <div id="locationSelector" style="background: linear-gradient(135deg, rgba(14, 50, 94, 0.05) 0%, rgba(4, 117, 255, 0.05) 100%); border: 2px solid #0475FF; padding: 16px; border-radius: 10px; margin-bottom: 12px; display: none; box-shadow: 0 2px 8px rgba(4, 117, 255, 0.1);">
+          <strong style="color: #0E325E; display: block; margin-bottom: 10px; font-size: 15px;">🎯 Select a Location:</strong>
+          <select id="locationDropdown" style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e5e7eb; font-size: 14px; margin-bottom: 10px; outline: none; transition: border-color 0.2s;">
             <option value="">Loading locations...</option>
           </select>
-          <button onclick="selectLocation()" style="width: 100%; padding: 8px; background: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+          <button onclick="selectLocation()" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #0E325E 0%, #0475FF 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; box-shadow: 0 2px 8px rgba(4, 117, 255, 0.2); transition: all 0.2s;">
             Load Selected Location
           </button>
         </div>
-        <div id="locationWarning" style="background: #fff3cd; border: 1px solid #ffc107; padding: 12px; border-radius: 6px; margin-bottom: 12px; display: none;">
-          <strong style="color: #856404; display: block; margin-bottom: 6px;">⚠️ Manual Testing:</strong>
-          <p style="margin: 0; font-size: 13px; color: #856404; line-height: 1.5;">
-            You can also manually add <code>?locationId=YOUR_LOCATION_ID</code> to the URL.
+        <div id="locationWarning" style="background: linear-gradient(135deg, rgba(255, 47, 0, 0.08) 0%, rgba(226, 255, 0, 0.08) 100%); border: 2px solid #FF2F00; padding: 14px; border-radius: 10px; margin-bottom: 12px; display: none; box-shadow: 0 2px 8px rgba(255, 47, 0, 0.1);">
+          <strong style="color: #c41e00; display: block; margin-bottom: 8px; font-size: 15px;">⚠️ Manual Testing:</strong>
+          <p style="margin: 0; font-size: 13px; color: #6c4a00; line-height: 1.5;">
+            You can also manually add <code style="background: rgba(255,255,255,0.6); color: #0475FF; padding: 3px 8px; border-radius: 4px;">?locationId=YOUR_LOCATION_ID</code> to the URL.
             <br><br>
-            Example: <code>?locationId=L851uHvru1ipOe8DIwNS</code>
+            Example: <code style="background: rgba(255,255,255,0.6); color: #0475FF; padding: 3px 8px; border-radius: 4px;">?locationId=L851uHvru1ipOe8DIwNS</code>
           </p>
         </div>
         <p style="margin: 0; font-size: 13px; color: #6c757d;">
@@ -199,14 +241,14 @@
     <h2>Onboarding Progress</h2>
     <p>Test onboarding steps for the current location:</p>
     
-    <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin-bottom: 16px; border-radius: 4px;">
+    <div style="background: linear-gradient(135deg, rgba(255, 47, 0, 0.06) 0%, rgba(226, 255, 0, 0.06) 100%); border-left: 4px solid #FF2F00; padding: 14px; margin-bottom: 16px; border-radius: 8px; box-shadow: 0 2px 8px rgba(255, 47, 0, 0.08);">
       <label style="display: flex; align-items: center; cursor: pointer;">
-        <input type="checkbox" id="skipApiChecks" style="margin-right: 8px; cursor: pointer;" onchange="toggleApiChecks()">
-        <span style="color: #856404; font-size: 14px;">
-          <strong>Skip GHL API checks</strong> - Enable this to test toggles without real API overwriting your changes
+        <input type="checkbox" id="skipApiChecks" style="margin-right: 10px; cursor: pointer; width: 18px; height: 18px; accent-color: #0475FF;" onchange="toggleApiChecks()">
+        <span style="color: #6c4a00; font-size: 14px; font-weight: 500;">
+          <strong style="color: #c41e00;">Skip GHL API checks</strong> - Enable this to test toggles without real API overwriting your changes
         </span>
       </label>
-      <p style="margin: 8px 0 0 28px; font-size: 12px; color: #856404; line-height: 1.4;">
+      <p style="margin: 10px 0 0 28px; font-size: 12px; color: #6c4a00; line-height: 1.5;">
         When enabled, manual toggles will persist. When disabled, real GHL data will be reflected.
       </p>
     </div>
@@ -304,10 +346,10 @@
         
         const validationEl = document.getElementById('locationValidation');
         if (data.valid) {
-          validationEl.innerHTML = `<span style="color: #28a745;">✓ Valid location: ${data.location.name}</span>`;
+          validationEl.innerHTML = `<span style="color: #0475FF; font-weight: 600;">✓ Valid location: ${data.location.name}</span>`;
           validationEl.style.display = 'block';
         } else {
-          validationEl.innerHTML = `<span style="color: #dc3545;">✗ Invalid location ID - not found in agency</span>`;
+          validationEl.innerHTML = `<span style="color: #FF2F00; font-weight: 600;">✗ Invalid location ID - not found in agency</span>`;
           validationEl.style.display = 'block';
         }
       } catch (error) {
@@ -541,13 +583,15 @@
       const statusContent = document.getElementById('status-content');
       statusContent.textContent = `❌ ${message}`;
       statusDisplay.classList.add('show');
-      statusDisplay.style.background = '#f8d7da';
-      statusDisplay.style.borderColor = '#dc3545';
+      statusDisplay.style.background = 'linear-gradient(135deg, rgba(255, 47, 0, 0.1) 0%, rgba(226, 255, 0, 0.1) 100%)';
+      statusDisplay.style.borderColor = '#FF2F00';
+      statusDisplay.style.borderWidth = '2px';
       
       // Reset background after a moment
       setTimeout(() => {
         statusDisplay.style.background = '#fff3cd';
         statusDisplay.style.borderColor = '#ffc107';
+        statusDisplay.style.borderWidth = '1px';
       }, 3000);
     }
 
