@@ -5,7 +5,7 @@
   "functions": {
     "api/index.ts": {
       "runtime": "@vercel/node@4.0.0",
-      "maxDuration": 30
+      "maxDuration": 60
     },
     "api/migrate.ts": {
       "runtime": "@vercel/node@4.0.0",

@@ -138,18 +138,58 @@ app.get('/api/status', async (req, res) => {
   // Check if API checks should be skipped (for testing)
   const skipApiChecks = req.query.skipApiChecks === 'true';
   
+  const startTime = Date.now();
+  console.log(`[Status] Starting status check for ${locationId}`);
+  
   let status = await getOnboardingStatus(locationId);
+  console.log(`[Status] Got status from DB in ${Date.now() - startTime}ms`);
   
   // Proactively check all onboarding steps via GHL API if authorized (unless skipped)
   const isAuthorized = await hasAgencyAuthorization();
-  console.log(`[Status] Checking status for ${locationId}, agency authorized: ${isAuthorized}, skipApiChecks: ${skipApiChecks}`);
+  console.log(`[Status] Agency authorized: ${isAuthorized}, skipApiChecks: ${skipApiChecks}`);
   
   if (isAuthorized && !skipApiChecks) {
+    // Return cached status immediately if location is already verified
+    // API checks will happen in the background on next poll
+    if (status.locationVerified && Date.now() - startTime < 5000) {
+      console.log(`[Status] Fast path - returning cached status for verified location`);
+      
+      // Do API checks async (don't await) for next request
+      Promise.all([
+        checkLocationDomain(locationId).catch(e => { console.error('[Status] Domain check error:', e); return status.domainConnected; }),
+        checkPaymentIntegration(locationId).catch(e => { console.error('[Status] Payment check error:', e); return status.paymentIntegrated; })
+      ]).then(async ([hasDomain, hasPayment]) => {
+        const updates: any = {};
+        let changed = false;
+        
+        if (hasDomain !== status.domainConnected) {
+          updates.domainConnected = hasDomain;
+          changed = true;
+        }
+        if (hasPayment !== status.paymentIntegrated) {
+          updates.paymentIntegrated = hasPayment;
+          changed = true;
+        }
+        
+        if (changed) {
+          await updateOnboardingStatus(locationId, updates);
+          await sseBroker.broadcastStatus(locationId);
+          console.log(`[Status] Background update completed for ${locationId}`);
+        }
+      }).catch(err => console.error('[Status] Background check error:', err));
+      
+      console.log(`[Status] Returning cached status in ${Date.now() - startTime}ms`);
+      return res.json(status);
+    }
+    
     try {
       // Verify locationId via GHL SDK if not yet verified
       if (!status.locationVerified) {
         console.log(`[Status] Location not yet verified, validating ${locationId} via GHL SDK...`);
+        const validationStart = Date.now();
         const validation = await validateLocationId(locationId);
+        console.log(`[Status] Validation took ${Date.now() - validationStart}ms`);
+        
         if (validation.valid) {
           console.log(`[Status] Location ${locationId} verified successfully`);
           status = await updateOnboardingStatus(locationId, { locationVerified: true });
@@ -159,11 +199,24 @@ app.get('/api/status', async (req, res) => {
         }
       }
       
-      // Check domain and payment statuses via API (products use webhooks)
-      const [hasDomain, hasPayment] = await Promise.all([
-        checkLocationDomain(locationId),
-        checkPaymentIntegration(locationId)
-      ]);
+      // Check domain and payment statuses via API with timeout (products use webhooks)
+      console.log(`[Status] Checking domain and payment status...`);
+      const checkStart = Date.now();
+      
+      const [hasDomain, hasPayment] = await Promise.race([
+        Promise.all([
+          checkLocationDomain(locationId).catch(e => { console.error('[Status] Domain check error:', e); return status.domainConnected; }),
+          checkPaymentIntegration(locationId).catch(e => { console.error('[Status] Payment check error:', e); return status.paymentIntegrated; })
+        ]),
+        new Promise<[boolean, boolean]>((_, reject) => 
+          setTimeout(() => reject(new Error('API check timeout')), 15000)
+        )
+      ]).catch(error => {
+        console.error('[Status] API checks timed out or failed:', error);
+        return [status.domainConnected, status.paymentIntegrated];
+      });
+      
+      console.log(`[Status] API checks took ${Date.now() - checkStart}ms`);
       
       // Track if any status changed
       let statusChanged = false;
@@ -171,26 +224,21 @@ app.get('/api/status', async (req, res) => {
       
       // Check domain status
       if (hasDomain !== status.domainConnected) {
-        console.log(`[Status] Domain status changed for ${locationId}: ${status.domainConnected} -> ${hasDomain}`);
+        console.log(`[Status] Domain status changed: ${status.domainConnected} -> ${hasDomain}`);
         updates.domainConnected = hasDomain;
         statusChanged = true;
       }
       
       // Check payment integration status
       if (hasPayment !== status.paymentIntegrated) {
-        console.log(`[Status] Payment integration status changed for ${locationId}: ${status.paymentIntegrated} -> ${hasPayment}`);
+        console.log(`[Status] Payment integration status changed: ${status.paymentIntegrated} -> ${hasPayment}`);
         updates.paymentIntegrated = hasPayment;
         statusChanged = true;
       }
       
-      // Note: Product/course status is now checked via webhooks only
-      // This prevents false positives and only updates when products are actually created
-      
       // Update database if any status changed
       if (statusChanged) {
         status = await updateOnboardingStatus(locationId, updates);
-        
-        // Broadcast update to other connected clients
         await sseBroker.broadcastStatus(locationId);
       }
     } catch (error) {
@@ -205,8 +253,8 @@ app.get('/api/status', async (req, res) => {
     }
   }
   
-  // Log widget visibility decision
-  console.log(`[Status] Widget visibility for ${locationId}: ${status.shouldShowWidget} (dismissed: ${status.dismissed}, allTasksCompleted: ${status.allTasksCompleted})`);
+  console.log(`[Status] Total time: ${Date.now() - startTime}ms`);
+  console.log(`[Status] Widget visibility: ${status.shouldShowWidget}`);
   
   return res.json(status);
 });
