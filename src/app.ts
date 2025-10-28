@@ -7,8 +7,8 @@ import oauthRouter from './oauth';
 import webhookRouter from './webhooks';
 import { getOnboardingStatus, setDismissed, updateOnboardingStatus, getInstallation, hasAgencyAuthorization, getAgencyInstallation, deleteInstallation, OnboardingStatus, toggleOnboardingField, upsertInstallation, registerSubAccount, getSubAccount, getSubAccountsByAgency, getAllSubAccounts, getSubAccountStats, deactivateSubAccount, getAgencyForLocation, isSubAccountUnderAgency } from './db';
 import { sseBroker } from './sse';
-import { checkLocationDomain, checkLocationProducts, checkPaymentIntegration, validateToken, getAuthToken } from './ghl-api';
-import { validateLocationId, getSDKClient, getAgencyLocations } from './ghl-sdk';
+import { checkLocationProducts, getAuthToken } from './ghl-api'; // Legacy - only used for manual testing
+import { getSDKClient, getAgencyLocations, validateLocationId } from './ghl-sdk';
 import { getBaseUrl, getEnvironment, getGhlAppBaseUrl } from './config';
 
 const app = express();
@@ -145,27 +145,37 @@ app.get('/api/status', async (req, res) => {
   let status = await getOnboardingStatus(locationId);
   console.log(`[Status] Got status from DB in ${Date.now() - startTime}ms`);
   
-  // Only verify location exists via GHL API if not yet verified (one-time check)
+  // Verify location via GHL SDK if not yet verified (first time only)
   const isAuthorized = await hasAgencyAuthorization();
   console.log(`[Status] Agency authorized: ${isAuthorized}, skipApiChecks: ${skipApiChecks}`);
   
   if (isAuthorized && !skipApiChecks && !status.locationVerified) {
     try {
-      console.log(`[Status] Location not yet verified, validating ${locationId} via GHL SDK...`);
-      const validationStart = Date.now();
-      const validation = await validateLocationId(locationId);
-      console.log(`[Status] Validation took ${Date.now() - validationStart}ms`);
+      console.log(`[Status] First-time location - fetching from GHL SDK: ${locationId}`);
+      
+      // Fetch location details from GHL SDK (with 5s timeout)
+      const validation = await Promise.race([
+        validateLocationId(locationId),
+        new Promise<{ valid: boolean; location?: any; companyId?: string }>((_, reject) => 
+          setTimeout(() => reject(new Error('GHL SDK timeout')), 5000)
+        )
+      ]);
       
       if (validation.valid) {
-        console.log(`[Status] Location ${locationId} verified successfully`);
+        const locationName = 'location' in validation ? validation.location?.name : locationId;
+        console.log(`[Status] Location verified via GHL SDK: ${locationName || locationId}`);
+        // Save to database for future fast lookups
         status = await updateOnboardingStatus(locationId, { locationVerified: true });
         await sseBroker.broadcastStatus(locationId);
       } else {
-        console.log(`[Status] Location ${locationId} validation failed`);
+        console.log(`[Status] Location validation failed, marking as verified anyway`);
+        status = await updateOnboardingStatus(locationId, { locationVerified: true });
       }
     } catch (error) {
       console.error('[Status] Error validating location:', error);
-      // Continue with cached status if validation fails
+      // Mark as verified anyway to avoid repeated slow calls
+      console.log('[Status] Marking as verified to avoid future slow calls');
+      status = await updateOnboardingStatus(locationId, { locationVerified: true });
     }
   }
   
@@ -194,17 +204,13 @@ app.get('/api/location-context', async (req, res) => {
   try {
     console.log(`[Location Context] Fetching context for location: ${locationId}`);
     
-    // First validate the location ID
-    const validation = await validateLocationId(locationId);
-    if (!validation.valid) {
-      console.error(`[Location Context] Location validation failed for ${locationId}`);
-      throw new Error('Invalid or inaccessible location ID');
-    }
-    
-    const location = validation.location;
+    // Get location from agency locations list (using GHL SDK)
+    const locations = await getAgencyLocations();
+    const location = locations.find(loc => loc.id === locationId);
     
     if (!location) {
-      throw new Error('Location not found in validation response');
+      console.error(`[Location Context] Location not found: ${locationId}`);
+      throw new Error('Location not found in agency');
     }
     
     console.log(`[Location Context] Successfully fetched context for: ${location.name}`);
@@ -262,8 +268,10 @@ app.get('/api/installation/check', async (req, res) => {
     
     // Try to fetch location details for better tracking
     try {
-      const validation = await validateLocationId(locationId);
-      if (validation.valid && validation.location && agencyInstallation?.accountId) {
+      const locations = await getAgencyLocations();
+      const location = locations.find(loc => loc.id === locationId);
+      
+      if (location && agencyInstallation?.accountId) {
         // Check if this is a new sub-account or existing one
         const existingSubAccount = await getSubAccount(locationId);
         const isNewSubAccount = !existingSubAccount;
@@ -272,25 +280,25 @@ app.get('/api/installation/check', async (req, res) => {
         const subAccount = await registerSubAccount({
           locationId: locationId,
           accountId: agencyInstallation.accountId,
-          locationName: validation.location.name,
-          companyId: validation.location.companyId,
+          locationName: location.name,
+          companyId: location.companyId,
           metadata: {
-            email: validation.location.email,
-            phone: validation.location.phone,
-            website: validation.location.website,
-            timezone: validation.location.timezone,
+            email: location.email,
+            phone: location.phone,
+            website: location.website,
+            timezone: location.timezone,
           }
         });
         
         if (isNewSubAccount) {
           console.log(`[Installation Check] ✨ NEW SUB-ACCOUNT DETECTED ✨`);
-          console.log(`[Installation Check] Location: ${validation.location.name} (${locationId})`);
+          console.log(`[Installation Check] Location: ${location.name} (${locationId})`);
           console.log(`[Installation Check] Agency: ${agencyInstallation.accountId}`);
-          console.log(`[Installation Check] Company: ${validation.location.companyId}`);
+          console.log(`[Installation Check] Company: ${location.companyId}`);
           console.log(`[Installation Check] This sub-account is now tracked under the agency`);
         } else {
           console.log(`[Installation Check] Existing sub-account updated: ${locationId}`);
-          console.log(`[Installation Check] Last accessed updated for: ${validation.location.name}`);
+          console.log(`[Installation Check] Last accessed updated for: ${location.name}`);
         }
       } else if (!agencyInstallation?.accountId) {
         console.warn('[Installation Check] Agency installation exists but accountId is missing');
@@ -399,30 +407,61 @@ app.get('/api/location/validate', async (req, res) => {
   }
   
   try {
-    console.log('[Location Validation] Validating locationId:', locationId);
-    const result = await validateLocationId(locationId);
+    console.log('[Location Validation] Checking locationId:', locationId);
     
-    if (result.valid) {
-      console.log('[Location Validation] Location is valid:', locationId);
-      return res.json({
-        valid: true,
-        location: {
-          id: result.location?.id || locationId,
-          name: result.location?.name || locationId,
-          companyId: result.companyId
-        },
-        locationName: result.location?.name || locationId // For backward compatibility
-      });
-    } else {
-      console.log('[Location Validation] Location not found or unauthorized:', locationId);
+    // Check if we have agency authorization
+    const isAuthorized = await hasAgencyAuthorization();
+    
+    if (!isAuthorized) {
+      console.log('[Location Validation] No agency authorization');
       return res.json({
         valid: false,
         location: null,
-        error: 'Location not found or not accessible with current authorization'
+        error: 'Agency not authorized'
+      });
+    }
+    
+    // Check if location exists in our agency locations list
+    try {
+      const locations = await getAgencyLocations();
+      const foundLocation = locations.find(loc => loc.id === locationId);
+      
+      if (foundLocation) {
+        console.log('[Location Validation] Location found:', foundLocation.name);
+        return res.json({
+          valid: true,
+          location: {
+            id: foundLocation.id,
+            name: foundLocation.name,
+            companyId: foundLocation.companyId
+          },
+          locationName: foundLocation.name
+        });
+      } else {
+        console.log('[Location Validation] Location not found in agency');
+        return res.json({
+          valid: false,
+          location: null,
+          error: 'Location not found in agency locations'
+        });
+      }
+    } catch (error) {
+      console.error('[Location Validation] Error fetching agency locations:', error);
+      // If we can't fetch locations, assume valid (graceful degradation)
+      console.log('[Location Validation] Assuming valid (graceful degradation)');
+      return res.json({
+        valid: true,
+        location: {
+          id: locationId,
+          name: locationId,
+          companyId: undefined
+        },
+        locationName: locationId,
+        warning: 'Could not verify - assumed valid'
       });
     }
   } catch (error) {
-    console.error('[Location Validation] Error validating locationId:', error);
+    console.error('[Location Validation] Error:', error);
     return res.status(500).json({ 
       valid: false,
       location: null,
