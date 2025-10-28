@@ -2,7 +2,6 @@ import express from 'express';
 import { logEvent, updateOnboardingStatus, getOnboardingStatus } from './db';
 import { sseBroker } from './sse';
 import { sendUserpilotEvent } from './userpilot';
-import { checkPaymentIntegration } from './ghl-api';
 
 const router = express.Router();
 
@@ -75,30 +74,11 @@ router.post('/ghl', async (req, res) => {
     }
     
     if (/LocationUpdate/i.test(eventType)) {
-      console.log('✅ Matched: LocationUpdate webhook');
-      
-      // LocationUpdate webhooks don't include payment provider info in payload
-      // Query the API to check current payment integration status
-      try {
-        const hasPayment = await checkPaymentIntegration(locationId);
-        console.log('   Payment integration detected via API:', hasPayment);
-        
-        // Get current status to see if it changed
-        const currentStatus = await getOnboardingStatus(locationId);
-        
-        if (hasPayment !== currentStatus.paymentIntegrated) {
-          console.log(`   Payment status changed: ${currentStatus.paymentIntegrated} -> ${hasPayment}`);
-          await updateOnboardingStatus(locationId, { paymentIntegrated: hasPayment });
-          await sendUserpilotEvent('locationId', locationId, 
-            hasPayment ? 'payment_integrated' : 'payment_disconnected'
-          );
-          updated = true;
-        } else {
-          console.log('   Payment status unchanged, skipping update');
-        }
-      } catch (error) {
-        console.error('   Error checking payment integration:', error);
-      }
+      console.log('✅ Matched: LocationUpdate webhook (no action - waiting for specific events)');
+      // LocationUpdate is too generic - we rely on specific webhooks like:
+      // - Domain webhooks for domain changes
+      // - Payment provider webhooks for payment changes
+      // - Product webhooks for course creation
     }
 
     if (!updated) {

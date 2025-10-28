@@ -141,120 +141,48 @@ app.get('/api/status', async (req, res) => {
   const startTime = Date.now();
   console.log(`[Status] Starting status check for ${locationId}`);
   
+  // Get status from database
   let status = await getOnboardingStatus(locationId);
   console.log(`[Status] Got status from DB in ${Date.now() - startTime}ms`);
   
-  // Proactively check all onboarding steps via GHL API if authorized (unless skipped)
+  // Only verify location exists via GHL API if not yet verified (one-time check)
   const isAuthorized = await hasAgencyAuthorization();
   console.log(`[Status] Agency authorized: ${isAuthorized}, skipApiChecks: ${skipApiChecks}`);
   
-  if (isAuthorized && !skipApiChecks) {
-    // Return cached status immediately if location is already verified
-    // API checks will happen in the background on next poll
-    if (status.locationVerified && Date.now() - startTime < 5000) {
-      console.log(`[Status] Fast path - returning cached status for verified location`);
-      
-      // Do API checks async (don't await) for next request
-      Promise.all([
-        checkLocationDomain(locationId).catch(e => { console.error('[Status] Domain check error:', e); return status.domainConnected; }),
-        checkPaymentIntegration(locationId).catch(e => { console.error('[Status] Payment check error:', e); return status.paymentIntegrated; })
-      ]).then(async ([hasDomain, hasPayment]) => {
-        const updates: any = {};
-        let changed = false;
-        
-        if (hasDomain !== status.domainConnected) {
-          updates.domainConnected = hasDomain;
-          changed = true;
-        }
-        if (hasPayment !== status.paymentIntegrated) {
-          updates.paymentIntegrated = hasPayment;
-          changed = true;
-        }
-        
-        if (changed) {
-          await updateOnboardingStatus(locationId, updates);
-          await sseBroker.broadcastStatus(locationId);
-          console.log(`[Status] Background update completed for ${locationId}`);
-        }
-      }).catch(err => console.error('[Status] Background check error:', err));
-      
-      console.log(`[Status] Returning cached status in ${Date.now() - startTime}ms`);
-      return res.json(status);
-    }
-    
+  if (isAuthorized && !skipApiChecks && !status.locationVerified) {
     try {
-      // Verify locationId via GHL SDK if not yet verified
-      if (!status.locationVerified) {
-        console.log(`[Status] Location not yet verified, validating ${locationId} via GHL SDK...`);
-        const validationStart = Date.now();
-        const validation = await validateLocationId(locationId);
-        console.log(`[Status] Validation took ${Date.now() - validationStart}ms`);
-        
-        if (validation.valid) {
-          console.log(`[Status] Location ${locationId} verified successfully`);
-          status = await updateOnboardingStatus(locationId, { locationVerified: true });
-          await sseBroker.broadcastStatus(locationId);
-        } else {
-          console.log(`[Status] Location ${locationId} validation failed`);
-        }
-      }
+      console.log(`[Status] Location not yet verified, validating ${locationId} via GHL SDK...`);
+      const validationStart = Date.now();
+      const validation = await validateLocationId(locationId);
+      console.log(`[Status] Validation took ${Date.now() - validationStart}ms`);
       
-      // Check domain and payment statuses via API with timeout (products use webhooks)
-      console.log(`[Status] Checking domain and payment status...`);
-      const checkStart = Date.now();
-      
-      const [hasDomain, hasPayment] = await Promise.race([
-        Promise.all([
-          checkLocationDomain(locationId).catch(e => { console.error('[Status] Domain check error:', e); return status.domainConnected; }),
-          checkPaymentIntegration(locationId).catch(e => { console.error('[Status] Payment check error:', e); return status.paymentIntegrated; })
-        ]),
-        new Promise<[boolean, boolean]>((_, reject) => 
-          setTimeout(() => reject(new Error('API check timeout')), 15000)
-        )
-      ]).catch(error => {
-        console.error('[Status] API checks timed out or failed:', error);
-        return [status.domainConnected, status.paymentIntegrated];
-      });
-      
-      console.log(`[Status] API checks took ${Date.now() - checkStart}ms`);
-      
-      // Track if any status changed
-      let statusChanged = false;
-      const updates: any = {};
-      
-      // Check domain status
-      if (hasDomain !== status.domainConnected) {
-        console.log(`[Status] Domain status changed: ${status.domainConnected} -> ${hasDomain}`);
-        updates.domainConnected = hasDomain;
-        statusChanged = true;
-      }
-      
-      // Check payment integration status
-      if (hasPayment !== status.paymentIntegrated) {
-        console.log(`[Status] Payment integration status changed: ${status.paymentIntegrated} -> ${hasPayment}`);
-        updates.paymentIntegrated = hasPayment;
-        statusChanged = true;
-      }
-      
-      // Update database if any status changed
-      if (statusChanged) {
-        status = await updateOnboardingStatus(locationId, updates);
+      if (validation.valid) {
+        console.log(`[Status] Location ${locationId} verified successfully`);
+        status = await updateOnboardingStatus(locationId, { locationVerified: true });
         await sseBroker.broadcastStatus(locationId);
+      } else {
+        console.log(`[Status] Location ${locationId} validation failed`);
       }
     } catch (error) {
-      console.error('[Status] Error checking API statuses:', error);
-      // Continue with cached status if API check fails
-    }
-  } else {
-    if (skipApiChecks) {
-      console.log('[Status] Skipping API checks (testing mode enabled)');
-    } else {
-      console.log('[Status] Agency not authorized, skipping API checks');
+      console.error('[Status] Error validating location:', error);
+      // Continue with cached status if validation fails
     }
   }
   
+  // All other fields (domain, payment, products) are updated via:
+  // - Webhooks from GHL (preferred)
+  // - Manual testing endpoints (for development)
+  // This keeps the status endpoint fast and reliable
+  
   console.log(`[Status] Total time: ${Date.now() - startTime}ms`);
   console.log(`[Status] Widget visibility: ${status.shouldShowWidget}`);
+  console.log(`[Status] Current progress:`, {
+    locationVerified: status.locationVerified,
+    domainConnected: status.domainConnected,
+    courseCreated: status.courseCreated,
+    paymentIntegrated: status.paymentIntegrated,
+    allTasksCompleted: status.allTasksCompleted
+  });
   
   return res.json(status);
 });
