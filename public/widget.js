@@ -2147,46 +2147,79 @@
           bottom: 24px;
           right: 24px;
           width: auto;
-          max-width: 300px;
-          height: 48px;
-          min-height: 48px;
-          background: linear-gradient(135deg, #FF2F00 0%, #E2FF00 100%);
-          border-radius: 24px;
-          box-shadow: 0 4px 16px rgba(255, 47, 0, 0.3);
+          max-width: 340px;
+          height: auto;
+          min-height: 56px;
+          background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+          border-radius: 12px;
+          border: 1px solid rgba(148, 163, 184, 0.2);
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
           z-index: 99999;
           overflow: hidden;
           cursor: default;
-          transition: all 0.2s;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          backdrop-filter: blur(12px);
         }
         #cc360-onboarding-widget.setup-required:hover {
           transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(255, 47, 0, 0.4);
+          box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+          border-color: rgba(148, 163, 184, 0.3);
         }
         .cc360-setup-required-content {
           display: flex;
           align-items: center;
-          justify-content: center;
-          gap: 10px;
-          padding: 0 20px;
-          height: 48px;
+          gap: 12px;
+          padding: 14px 20px;
           color: white;
+          position: relative;
         }
         .cc360-setup-icon {
-          font-size: 20px;
-          line-height: 1;
+          flex-shrink: 0;
+          width: 28px;
+          height: 28px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+          border-radius: 8px;
+          box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
         }
-        .cc360-setup-text {
-          font-size: 13px;
+        .cc360-setup-icon svg {
+          width: 14px;
+          height: 14px;
+          color: white;
+        }
+        .cc360-setup-content-text {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        .cc360-setup-title {
+          font-size: 14px;
           font-weight: 600;
-          white-space: nowrap;
-          color: #131313;
-          font-family: 'Helvetica Now', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+          color: #f1f5f9;
+          line-height: 1.4;
+          letter-spacing: -0.01em;
+        }
+        .cc360-setup-subtitle {
+          font-size: 12px;
+          font-weight: 400;
+          color: #94a3b8;
+          line-height: 1.3;
         }
       </style>
       <div class="cc360-setup-required-content">
-        <div class="cc360-setup-icon">🔒</div>
-        <div class="cc360-setup-text">Setup Required: Contact Admin</div>
+        <div class="cc360-setup-icon">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2C9.243 2 7 4.243 7 7v3H6c-1.103 0-2 .897-2 2v8c0 1.103.897 2 2 2h12c1.103 0 2-.897 2-2v-8c0-1.103-.897-2-2-2h-1V7c0-2.757-2.243-5-5-5zm3 8H9V7c0-1.654 1.346-3 3-3s3 1.346 3 3v3z" fill="currentColor"/>
+          </svg>
+        </div>
+        <div class="cc360-setup-content-text">
+          <div class="cc360-setup-title">Setup Required</div>
+          <div class="cc360-setup-subtitle">Contact Admin to Enable</div>
+        </div>
       </div>
     `;
   }
