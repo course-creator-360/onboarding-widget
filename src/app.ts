@@ -5,7 +5,7 @@ import cookieParser from 'cookie-parser';
 import path from 'path';
 import oauthRouter from './oauth';
 import webhookRouter from './webhooks';
-import { getOnboardingStatus, setDismissed, updateOnboardingStatus, getInstallation, hasAgencyAuthorization, getAgencyInstallation, deleteInstallation, OnboardingStatus, toggleOnboardingField } from './db';
+import { getOnboardingStatus, setDismissed, updateOnboardingStatus, getInstallation, hasAgencyAuthorization, getAgencyInstallation, deleteInstallation, OnboardingStatus, toggleOnboardingField, upsertInstallation } from './db';
 import { sseBroker } from './sse';
 import { checkLocationDomain, checkLocationProducts, checkPaymentIntegration, validateToken, getAuthToken } from './ghl-api';
 import { validateLocationId, getSDKClient, getAgencyLocations } from './ghl-sdk';
@@ -78,6 +78,55 @@ app.post('/api/migrate', async (_req, res) => {
     return res.status(500).json({ 
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+});
+
+// Manual token storage endpoint
+app.post('/api/store-token', async (req, res) => {
+  // Simple security check - require a secret
+  const secret = req.headers['x-store-token-secret'] as string;
+  if (secret !== process.env.STORE_TOKEN_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const { 
+      locationId, 
+      companyId, 
+      accessToken, 
+      refreshToken, 
+      expiresIn, 
+      scope 
+    } = req.body;
+
+    if (!locationId || !accessToken) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const installation = await upsertInstallation({
+      locationId,
+      accountId: companyId,
+      accessToken,
+      refreshToken,
+      expiresAt: Date.now() + (expiresIn * 1000),
+      scope,
+      tokenType: 'location'
+    });
+
+    return res.json({ 
+      success: true,
+      installation: {
+        locationId: installation.locationId,
+        accountId: installation.accountId,
+        tokenType: installation.tokenType
+      }
+    });
+  } catch (error) {
+    console.error('Error storing token:', error);
+    return res.status(500).json({ 
+      error: 'Failed to store token',
+      details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });
