@@ -429,7 +429,14 @@ router.get('/callback', async (req, res) => {
     console.log('[OAuth Callback] Token response status:', tokenResp.status);
     
     const tokenJson = (await tokenResp.json()) as any;
-    console.log('[OAuth Callback] Token response:', JSON.stringify(tokenJson, null, 2));
+    
+    // Log token response with sensitive fields redacted
+    const redactedToken = {
+      ...tokenJson,
+      access_token: tokenJson.access_token ? `${tokenJson.access_token.substring(0, 10)}...` : undefined,
+      refresh_token: tokenJson.refresh_token ? `${tokenJson.refresh_token.substring(0, 10)}...` : undefined
+    };
+    console.log('[OAuth Callback] Token response (redacted):', JSON.stringify(redactedToken, null, 2));
     
     // Check if token exchange failed
     if (!tokenResp.ok || tokenJson.error) {
@@ -441,16 +448,43 @@ router.get('/callback', async (req, res) => {
       console.error('[OAuth Callback] No access token in response');
       throw new Error('No access token received');
     }
-    const locationId = context.locationId || tokenJson?.locationId || tokenJson?.location_id || 'unknown';
+    
+    // Determine token type and extract IDs properly
     const tokenType = context.tokenType || 'location';
+    
+    // Extract companyId from OAuth response (multiple field names possible)
+    const companyId = tokenJson?.companyId ?? tokenJson?.company_id ?? tokenJson?.userId ?? tokenJson?.user_id;
+    
+    // For agency tokens, use agency:{companyId} pattern for unique storage
+    // For location tokens, use the actual locationId
+    let locationId: string;
+    let accountId: string | undefined;
+    
+    if (tokenType === 'agency') {
+      // Agency token: store with agency:{companyId} pattern
+      if (!companyId) {
+        console.error('[OAuth Callback] No companyId found in agency OAuth response');
+        throw new Error('Agency OAuth response missing companyId');
+      }
+      locationId = `agency:${companyId}`;
+      accountId = companyId;
+      console.log('[OAuth Callback] Agency token - using locationId pattern:', locationId);
+    } else {
+      // Location token: use locationId from context or response
+      locationId = context.locationId || tokenJson?.locationId || tokenJson?.location_id || 'unknown';
+      accountId = companyId; // Still store companyId if available
+      console.log('[OAuth Callback] Location token - locationId:', locationId);
+    }
 
     console.log('[OAuth Callback] Storing installation...');
-    console.log('[OAuth Callback] Location ID:', locationId);
-    console.log('[OAuth Callback] Token Type:', tokenType);
+    console.log('[OAuth Callback] - Location ID:', locationId);
+    console.log('[OAuth Callback] - Account ID (companyId):', accountId);
+    console.log('[OAuth Callback] - Token Type:', tokenType);
+    console.log('[OAuth Callback] - Scope:', tokenJson.scope);
 
     await upsertInstallation({
       locationId,
-      accountId: tokenJson?.accountId ?? tokenJson?.account_id,
+      accountId,
       accessToken: tokenJson.access_token,
       refreshToken: tokenJson.refresh_token,
       expiresAt: tokenJson.expires_in ? Date.now() + tokenJson.expires_in * 1000 : undefined,

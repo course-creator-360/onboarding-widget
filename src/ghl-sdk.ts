@@ -1,12 +1,13 @@
 import HighLevel from '@gohighlevel/api-client';
-import { getAgencyInstallation, getInstallation, getAgencyInstallationByAccountId, getAllAgencyInstallations } from './db';
+import { getAgencyInstallation, getInstallation, getAgencyInstallationByAccountId, getAllAgencyInstallations, parseAgencyLocationId } from './db';
 
 // Cache location-to-company mapping
 const locationCompanyCache = new Map<string, string>();
 
 /**
- * Initialize HighLevel SDK client with agency OAuth token
- * Automatically handles token refresh
+ * Initialize HighLevel SDK client with proper OAuth token
+ * Automatically selects the right token (location-specific or agency)
+ * Supports multi-agency deployments
  */
 export async function getSDKClient(locationId: string): Promise<HighLevel> {
   const clientId = process.env.GHL_CLIENT_ID;
@@ -16,19 +17,40 @@ export async function getSDKClient(locationId: string): Promise<HighLevel> {
     throw new Error('GHL_CLIENT_ID and GHL_CLIENT_SECRET must be set');
   }
   
+  console.log(`[GHL SDK] Getting SDK client for locationId: ${locationId}`);
+  
+  // Check if this is an agency pattern (agency:{companyId})
+  const agencyCompanyId = parseAgencyLocationId(locationId);
+  if (agencyCompanyId) {
+    console.log(`[GHL SDK] Detected agency pattern, companyId: ${agencyCompanyId}`);
+    const installation = await getAgencyInstallationByAccountId(agencyCompanyId);
+    if (installation?.accessToken) {
+      console.log(`[GHL SDK] Using agency token for company: ${agencyCompanyId}`);
+      return new HighLevel({
+        clientId,
+        clientSecret,
+        agencyAccessToken: installation.accessToken
+      });
+    }
+  }
+  
   // First, try location-specific token
   let installation = await getInstallation(locationId);
   
   // If no location-specific token, try to find the correct agency token
   if (!installation?.accessToken) {
+    console.log(`[GHL SDK] No location-specific token, looking up agency token for location: ${locationId}`);
+    
     // Try to get company ID from cache or fetch it
     const companyId = await getLocationCompanyId(locationId);
     if (companyId) {
+      console.log(`[GHL SDK] Found companyId: ${companyId}, fetching agency token`);
       installation = await getAgencyInstallationByAccountId(companyId);
     }
     
-    // Fallback: Try any agency token
+    // Fallback: Try any agency token (backward compatibility for single-agency deployments)
     if (!installation?.accessToken) {
+      console.log(`[GHL SDK] No specific agency token found, trying fallback agency token`);
       installation = await getAgencyInstallation();
     }
   }
@@ -45,8 +67,10 @@ export async function getSDKClient(locationId: string): Promise<HighLevel> {
   };
   
   if (installation.tokenType === 'agency') {
+    console.log(`[GHL SDK] Using agency token (accountId: ${installation.accountId})`);
     config.agencyAccessToken = installation.accessToken;
   } else {
+    console.log(`[GHL SDK] Using location token (locationId: ${installation.locationId})`);
     config.locationAccessToken = installation.accessToken;
   }
   
@@ -57,19 +81,25 @@ export async function getSDKClient(locationId: string): Promise<HighLevel> {
 
 /**
  * Fetch location details to determine which company/agency owns it
+ * Uses SDK to query location information from any available agency token
  */
 async function getLocationCompanyId(locationId: string): Promise<string | null> {
   // Check cache first
   if (locationCompanyCache.has(locationId)) {
+    console.log(`[GHL SDK] Using cached companyId for location ${locationId}`);
     return locationCompanyCache.get(locationId)!;
   }
   
-  // Get any available agency token for the lookup
+  console.log(`[GHL SDK] Looking up companyId for location: ${locationId}`);
+  
+  // Get all available agency tokens for the lookup
   const agencies = await getAllAgencyInstallations();
   if (agencies.length === 0) {
     console.log('[GHL SDK] No agency installations available for location lookup');
     return null;
   }
+  
+  console.log(`[GHL SDK] Found ${agencies.length} agency installation(s) to try`);
   
   // Try each agency token until we successfully fetch location details
   for (const agency of agencies) {
@@ -79,27 +109,34 @@ async function getLocationCompanyId(locationId: string): Promise<string | null> 
       
       if (!clientId || !clientSecret) continue;
       
+      console.log(`[GHL SDK] Trying agency token for accountId: ${agency.accountId}`);
+      
       const ghl = new HighLevel({ 
         clientId, 
         clientSecret,
         agencyAccessToken: agency.accessToken
       });
       
-      const location = await ghl.locations.getLocation({ locationId });
+      const response = await ghl.locations.getLocation({ locationId });
       
-      if (location?.location?.companyId) {
+      if (response?.location?.companyId) {
+        const companyId = response.location.companyId;
         // Cache the result
-        locationCompanyCache.set(locationId, location.location.companyId);
-        console.log(`[GHL SDK] Location ${locationId} belongs to company ${location.location.companyId}`);
-        return location.location.companyId;
+        locationCompanyCache.set(locationId, companyId);
+        console.log(`[GHL SDK] Location ${locationId} belongs to company ${companyId}`);
+        return companyId;
+      } else {
+        console.log(`[GHL SDK] No companyId in response from agency ${agency.accountId}`);
       }
-    } catch (error) {
-      console.error(`[GHL SDK] Error fetching location details with agency ${agency.accountId}:`, error);
+    } catch (error: any) {
+      // Log error but continue to next agency
+      const errorMsg = error?.message || String(error);
+      console.log(`[GHL SDK] Agency ${agency.accountId} cannot access location ${locationId}: ${errorMsg}`);
       continue;
     }
   }
   
-  console.log(`[GHL SDK] Could not determine company ID for location ${locationId}`);
+  console.log(`[GHL SDK] Could not determine company ID for location ${locationId} with any available agency token`);
   return null;
 }
 

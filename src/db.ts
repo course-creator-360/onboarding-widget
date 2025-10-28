@@ -289,6 +289,17 @@ export async function findInstallationByAccountId(accountId: string): Promise<In
 }
 
 /**
+ * Parse agency locationId pattern (agency:{companyId}) to extract companyId
+ * Returns companyId if valid agency pattern, null otherwise
+ */
+export function parseAgencyLocationId(locationId: string): string | null {
+  if (locationId.startsWith('agency:')) {
+    return locationId.substring(7); // Remove 'agency:' prefix
+  }
+  return null;
+}
+
+/**
  * Get agency-level installation (first one found - for backward compatibility)
  * Note: Use getAgencyInstallationByAccountId() for multi-agency support
  */
