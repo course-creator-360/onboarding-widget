@@ -28,6 +28,7 @@ model Installation {
 model Onboarding {
   id                String   @id @default(cuid())
   locationId        String   @unique @map("location_id")
+  locationVerified  Boolean  @default(false) @map("location_verified")
   domainConnected   Boolean  @default(false) @map("domain_connected")
   courseCreated     Boolean  @default(false) @map("course_created")
   productAttached   Boolean  @default(false) @map("product_attached")

@@ -8,6 +8,7 @@ const prisma = new PrismaClient({
 // Export types
 export type OnboardingStatus = {
   locationId: string;
+  locationVerified: boolean;
   domainConnected: boolean;
   courseCreated: boolean;
   paymentIntegrated: boolean;
@@ -73,6 +74,7 @@ export async function ensureOnboardingRow(locationId: string): Promise<void> {
     update: {},
     create: {
       locationId,
+      locationVerified: false,
       domainConnected: false,
       courseCreated: false,
       paymentIntegrated: false,
@@ -107,6 +109,7 @@ export async function getOnboardingStatus(locationId: string): Promise<Onboardin
 
   return {
     locationId: row.locationId,
+    locationVerified: row.locationVerified,
     domainConnected: row.domainConnected,
     courseCreated: row.courseCreated,
     paymentIntegrated: row.paymentIntegrated,
@@ -131,6 +134,7 @@ export async function updateOnboardingStatus(
 
   // Filter out undefined values to only update fields that are explicitly provided
   const data: Record<string, any> = {};
+  if (updates.locationVerified !== undefined) data.locationVerified = updates.locationVerified;
   if (updates.domainConnected !== undefined) data.domainConnected = updates.domainConnected;
   if (updates.courseCreated !== undefined) data.courseCreated = updates.courseCreated;
   if (updates.paymentIntegrated !== undefined) data.paymentIntegrated = updates.paymentIntegrated;
@@ -160,7 +164,7 @@ export async function setDismissed(locationId: string, dismissed: boolean): Prom
  */
 export async function toggleOnboardingField(
   locationId: string,
-  field: 'domainConnected' | 'courseCreated' | 'paymentIntegrated' | 'dismissed'
+  field: 'locationVerified' | 'domainConnected' | 'courseCreated' | 'paymentIntegrated' | 'dismissed'
 ): Promise<OnboardingStatus> {
   await ensureOnboardingRow(locationId);
 

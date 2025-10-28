@@ -146,6 +146,19 @@ app.get('/api/status', async (req, res) => {
   
   if (isAuthorized && !skipApiChecks) {
     try {
+      // Verify locationId via GHL SDK if not yet verified
+      if (!status.locationVerified) {
+        console.log(`[Status] Location not yet verified, validating ${locationId} via GHL SDK...`);
+        const validation = await validateLocationId(locationId);
+        if (validation.valid) {
+          console.log(`[Status] Location ${locationId} verified successfully`);
+          status = await updateOnboardingStatus(locationId, { locationVerified: true });
+          await sseBroker.broadcastStatus(locationId);
+        } else {
+          console.log(`[Status] Location ${locationId} validation failed`);
+        }
+      }
+      
       // Check domain and payment statuses via API (products use webhooks)
       const [hasDomain, hasPayment] = await Promise.all([
         checkLocationDomain(locationId),
@@ -542,7 +555,7 @@ app.post('/api/onboarding/toggle', async (req, res) => {
   if (!field) return res.status(400).json({ error: 'field is required' });
   
   // Validate field name
-  const validFields = ['domainConnected', 'courseCreated', 'paymentIntegrated', 'dismissed'];
+  const validFields = ['locationVerified', 'domainConnected', 'courseCreated', 'paymentIntegrated', 'dismissed'];
   if (!validFields.includes(field)) {
     return res.status(400).json({ error: 'Invalid field name' });
   }
@@ -550,7 +563,7 @@ app.post('/api/onboarding/toggle', async (req, res) => {
   // Atomically toggle the field - always gets fresh data from DB
   const status = await toggleOnboardingField(
     locationId, 
-    field as 'domainConnected' | 'courseCreated' | 'paymentIntegrated' | 'dismissed'
+    field as 'locationVerified' | 'domainConnected' | 'courseCreated' | 'paymentIntegrated' | 'dismissed'
   );
   
   await sseBroker.broadcastStatus(locationId);

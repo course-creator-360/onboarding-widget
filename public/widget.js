@@ -628,9 +628,9 @@
     const items = [
       {
         key: 'accountCreated',
-        title: 'Create your Account',
+        title: 'Sign in to your Account',
         url: '#',
-        completed: true,
+        completed: status.locationVerified,
         isStatic: true
       },
       {

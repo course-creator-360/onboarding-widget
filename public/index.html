@@ -254,6 +254,7 @@
     </div>
     
     <div class="controls">
+      <button onclick="toggleStep('locationVerified')">Toggle Location Verified</button>
       <button onclick="toggleStep('paymentIntegrated')">Toggle Payment</button>
       <button onclick="toggleStep('courseCreated')">Toggle Course</button>
       <button onclick="toggleStep('domainConnected')">Toggle Domain</button>
@@ -612,6 +613,7 @@
           body: JSON.stringify({
             locationId: LOCATION_ID,
             updates: {
+              locationVerified: false,
               domainConnected: false,
               courseCreated: false,
               paymentIntegrated: false,
