@@ -82,17 +82,13 @@ app.post('/api/migrate', async (_req, res) => {
   }
 });
 
-// Manual token storage endpoint
+// Manual token storage endpoint (for emergency token recovery only)
 app.post('/api/store-token', async (req, res) => {
-  // Simple security check - require a secret
+  // Require secret for security
   const secret = req.headers['x-store-token-secret'] as string;
-  if (secret && secret !== process.env.STORE_TOKEN_SECRET) {
-    return res.status(401).json({ error: 'Unauthorized - wrong secret' });
+  if (!secret || secret !== process.env.STORE_TOKEN_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
   }
-  
-  // Temporarily allow without secret for initial setup
-  console.log('[Store Token] Secret provided:', !!secret);
-  console.log('[Store Token] ENV secret exists:', !!process.env.STORE_TOKEN_SECRET);
 
   try {
     const { 
