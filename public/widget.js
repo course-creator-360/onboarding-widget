@@ -1142,13 +1142,24 @@
       // Use forceSkipApiChecks if provided, otherwise use the widget's setting
       const shouldSkip = forceSkipApiChecks !== undefined ? forceSkipApiChecks : skipApiChecks;
       const skipParam = shouldSkip ? '&skipApiChecks=true' : '';
-      const response = await fetch(`${apiBase}/api/status?locationId=${locationId}${skipParam}`);
-      if (!response.ok) throw new Error('Failed to fetch status');
+      const url = `${apiBase}/api/status?locationId=${locationId}${skipParam}`;
+      console.log('[CC360 Widget] Fetching status from:', url);
+      
+      const response = await fetch(url);
+      console.log('[CC360 Widget] Status response status:', response.status, response.ok);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[CC360 Widget] Status fetch failed:', response.status, errorText);
+        throw new Error(`Failed to fetch status: ${response.status} ${errorText}`);
+      }
+      
       currentStatus = await response.json();
-      console.log('[CC360 Widget] Status:', currentStatus);
+      console.log('[CC360 Widget] Status received:', currentStatus);
       
       // Check if widget should be shown (based on age and completion)
       shouldShowWidget = currentStatus.shouldShowWidget !== false;
+      console.log('[CC360 Widget] shouldShowWidget evaluated to:', shouldShowWidget);
       
       if (!shouldShowWidget) {
         console.log('[CC360 Widget] Widget should not be shown (30+ days old or all tasks completed)');
@@ -1163,9 +1174,12 @@
       // Note: We no longer use the 'dismissed' field since dismiss now means minimize
       // Widget is controlled by localStorage (minimized state) instead
       
+      console.log('[CC360 Widget] fetchStatus returning true');
       return true;
     } catch (error) {
-      console.error('[CC360 Widget] Error fetching status:', error);
+      console.error('[CC360 Widget] ❌ Error fetching status:', error);
+      console.error('[CC360 Widget] Error message:', error.message);
+      console.error('[CC360 Widget] Error stack:', error.stack);
       return false;
     }
   }
@@ -2091,41 +2105,60 @@
   async function initializeChecklist() {
     console.log('[CC360 Widget] Initializing checklist...');
     
-    const shouldShow = await fetchStatus();
-    if (!shouldShow || !currentStatus || !shouldShowWidget) {
-      console.log('[CC360 Widget] Not showing widget - eligibility check failed');
-      return;
-    }
+    try {
+      console.log('[CC360 Widget] Fetching status from API...');
+      const shouldShow = await fetchStatus();
+      console.log('[CC360 Widget] fetchStatus returned:', shouldShow);
+      console.log('[CC360 Widget] currentStatus:', currentStatus);
+      console.log('[CC360 Widget] shouldShowWidget:', shouldShowWidget);
+      
+      if (!shouldShow || !currentStatus || !shouldShowWidget) {
+        console.log('[CC360 Widget] Not showing widget - eligibility check failed');
+        console.log('[CC360 Widget] shouldShow:', shouldShow, 'currentStatus:', !!currentStatus, 'shouldShowWidget:', shouldShowWidget);
+        return;
+      }
 
-    // Create widget if not exists
-    if (!widgetElement) {
-      widgetElement = createWidget();
-      document.body.appendChild(widgetElement);
-    } else {
-      // Replace content with checklist
-      const existingWidget = widgetElement;
-      widgetElement = createWidget();
-      existingWidget.replaceWith(widgetElement);
+      console.log('[CC360 Widget] Creating widget element...');
+      // Create widget if not exists
+      if (!widgetElement) {
+        widgetElement = createWidget();
+        document.body.appendChild(widgetElement);
+        console.log('[CC360 Widget] Widget element created and appended to body');
+      } else {
+        // Replace content with checklist
+        const existingWidget = widgetElement;
+        widgetElement = createWidget();
+        existingWidget.replaceWith(widgetElement);
+        console.log('[CC360 Widget] Widget element replaced');
+      }
+      
+      console.log('[CC360 Widget] Rendering checklist...');
+      // Render initial checklist
+      renderChecklist(currentStatus);
+      
+      console.log('[CC360 Widget] Setting up drag and resize...');
+      // Setup drag and resize functionality
+      setupDragAndResize();
+      
+      // Default to expanded state (no longer respect dismissed from database)
+      // Widget always defaults to expanded on page load
+      isMinimized = false;
+      if (widgetElement) {
+        widgetElement.classList.remove('minimized');
+      }
+      
+      // Safety check after initialization to ensure widget is visible
+      setTimeout(() => forceWidgetIntoView(), 150);
+      
+      // Start polling for status updates (serverless-friendly)
+      console.log('[CC360 Widget] Starting status polling...');
+      startStatusPolling();
+      
+      console.log('[CC360 Widget] ✅ Checklist initialized successfully');
+    } catch (error) {
+      console.error('[CC360 Widget] ❌ Error initializing checklist:', error);
+      console.error('[CC360 Widget] Error stack:', error.stack);
     }
-    
-    // Render initial checklist
-    renderChecklist(currentStatus);
-    
-    // Setup drag and resize functionality
-    setupDragAndResize();
-    
-    // Default to expanded state (no longer respect dismissed from database)
-    // Widget always defaults to expanded on page load
-    isMinimized = false;
-    if (widgetElement) {
-      widgetElement.classList.remove('minimized');
-    }
-    
-    // Safety check after initialization to ensure widget is visible
-    setTimeout(() => forceWidgetIntoView(), 150);
-    
-    // Start polling for status updates (serverless-friendly)
-    startStatusPolling();
   }
 
   // Show not authorized message (minimized widget)
