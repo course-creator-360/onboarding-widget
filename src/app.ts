@@ -135,67 +135,73 @@ app.get('/api/status', async (req, res) => {
   const locationId = (req.query.locationId as string) || '';
   if (!locationId) return res.status(400).json({ error: 'locationId is required' });
   
-  // Check if API checks should be skipped (for testing)
   const skipApiChecks = req.query.skipApiChecks === 'true';
-  
   const startTime = Date.now();
   console.log(`[Status] Starting status check for ${locationId}`);
   
-  // Get status from database
-  let status = await getOnboardingStatus(locationId);
-  console.log(`[Status] Got status from DB in ${Date.now() - startTime}ms`);
-  
-  // Verify location via GHL SDK if not yet verified (first time only)
-  const isAuthorized = await hasAgencyAuthorization();
-  console.log(`[Status] Agency authorized: ${isAuthorized}, skipApiChecks: ${skipApiChecks}`);
-  
-  if (isAuthorized && !skipApiChecks && !status.locationVerified) {
-    console.log(`[Status] ⚠️  First-time location - will validate via GHL SDK: ${locationId}`);
-    
-    // DO NOT AWAIT - Run validation in background to avoid blocking response
-    // Return current status immediately and let validation complete async
-    Promise.race([
-      validateLocationId(locationId),
-      new Promise<{ valid: boolean; location?: any; companyId?: string }>((_, reject) => 
-        setTimeout(() => reject(new Error('GHL SDK timeout')), 5000)
-      )
-    ])
-    .then(async (validation) => {
-      if (validation.valid) {
-        const locationName = 'location' in validation ? validation.location?.name : locationId;
-        console.log(`[Status] ✅ Location verified via GHL SDK: ${locationName || locationId}`);
-      } else {
-        console.log(`[Status] ⚠️  Location validation failed`);
+  // CRITICAL: Wrap entire endpoint in 3-second timeout to prevent Vercel 504
+  // If DB is slow (cold start), return minimal response immediately
+  try {
+    const statusPromise = (async () => {
+      // Get status from database
+      let status = await getOnboardingStatus(locationId);
+      console.log(`[Status] Got status from DB in ${Date.now() - startTime}ms`);
+      
+      // Check agency authorization
+      const isAuthorized = await hasAgencyAuthorization();
+      console.log(`[Status] Agency authorized: ${isAuthorized}`);
+      
+      // Background validation for first-time locations (non-blocking)
+      if (isAuthorized && !skipApiChecks && !status.locationVerified) {
+        console.log(`[Status] First-time location - background validation starting`);
+        Promise.race([
+          validateLocationId(locationId),
+          new Promise<{ valid: boolean; location?: any; companyId?: string }>((_, reject) => 
+            setTimeout(() => reject(new Error('GHL SDK timeout')), 5000)
+          )
+        ])
+        .then(async (validation) => {
+          const locationName = 'location' in validation ? validation.location?.name : locationId;
+          console.log(`[Status] ✅ Verified: ${locationName || locationId}`);
+          await updateOnboardingStatus(locationId, { locationVerified: true });
+          await sseBroker.broadcastStatus(locationId);
+        })
+        .catch(async (error) => {
+          console.error('[Status] Validation error:', error.message);
+          await updateOnboardingStatus(locationId, { locationVerified: true });
+        });
       }
-      // Mark as verified in database
-      await updateOnboardingStatus(locationId, { locationVerified: true });
-      await sseBroker.broadcastStatus(locationId);
-    })
-    .catch(async (error) => {
-      console.error('[Status] ❌ Error validating location:', error);
-      // Mark as verified anyway to avoid repeated slow calls
-      await updateOnboardingStatus(locationId, { locationVerified: true });
-    });
+      
+      console.log(`[Status] Returning in ${Date.now() - startTime}ms`);
+      return status;
+    })();
     
-    console.log(`[Status] Returning immediately (validation running in background)`);
+    // Race against 3-second timeout
+    const timeoutPromise = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error('Status endpoint timeout')), 3000)
+    );
+    
+    const status = await Promise.race([statusPromise, timeoutPromise]);
+    return res.json(status);
+    
+  } catch (error) {
+    const elapsed = Date.now() - startTime;
+    console.error(`[Status] ❌ Timeout or error after ${elapsed}ms:`, error);
+    
+    // Return minimal default status to unblock widget
+    return res.json({
+      locationId,
+      locationVerified: false,
+      domainConnected: false,
+      courseCreated: false,
+      paymentIntegrated: false,
+      dismissed: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      shouldShowWidget: true,
+      allTasksCompleted: false,
+    });
   }
-  
-  // All other fields (domain, payment, products) are updated via:
-  // - Webhooks from GHL (preferred)
-  // - Manual testing endpoints (for development)
-  // This keeps the status endpoint fast and reliable
-  
-  console.log(`[Status] Total time: ${Date.now() - startTime}ms`);
-  console.log(`[Status] Widget visibility: ${status.shouldShowWidget}`);
-  console.log(`[Status] Current progress:`, {
-    locationVerified: status.locationVerified,
-    domainConnected: status.domainConnected,
-    courseCreated: status.courseCreated,
-    paymentIntegrated: status.paymentIntegrated,
-    allTasksCompleted: status.allTasksCompleted
-  });
-  
-  return res.json(status);
 });
 
 app.get('/api/location-context', async (req, res) => {
