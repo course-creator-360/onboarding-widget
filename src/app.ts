@@ -146,30 +146,22 @@ app.get('/api/status', async (req, res) => {
       // Get status from database
       let status = await getOnboardingStatus(locationId);
       console.log(`[Status] Got status from DB in ${Date.now() - startTime}ms`);
+      console.log(`[Status] Current locationVerified value: ${status.locationVerified}`);
       
-      // Check agency authorization
+      // Auto-verify location if agency is authorized
       const isAuthorized = await hasAgencyAuthorization();
       console.log(`[Status] Agency authorized: ${isAuthorized}`);
       
-      // Background validation for first-time locations (non-blocking)
-      if (isAuthorized && !skipApiChecks && !status.locationVerified) {
-        console.log(`[Status] First-time location - background validation starting`);
-        Promise.race([
-          validateLocationId(locationId),
-          new Promise<{ valid: boolean; location?: any; companyId?: string }>((_, reject) => 
-            setTimeout(() => reject(new Error('GHL SDK timeout')), 5000)
-          )
-        ])
-        .then(async (validation) => {
-          const locationName = 'location' in validation ? validation.location?.name : locationId;
-          console.log(`[Status] ✅ Verified: ${locationName || locationId}`);
-          await updateOnboardingStatus(locationId, { locationVerified: true });
-          await sseBroker.broadcastStatus(locationId);
-        })
-        .catch(async (error) => {
-          console.error('[Status] Validation error:', error.message);
-          await updateOnboardingStatus(locationId, { locationVerified: true });
-        });
+      // ALWAYS mark location as verified if agency is authorized
+      // This ensures the "Sign in to your Account" checkbox is checked
+      // even if database state somehow gets out of sync
+      if (isAuthorized && !status.locationVerified) {
+        console.log(`[Status] Agency authorized - auto-verifying location: ${locationId}`);
+        status = await updateOnboardingStatus(locationId, { locationVerified: true });
+        await sseBroker.broadcastStatus(locationId);
+        console.log(`[Status] Location verified and updated in database`);
+      } else if (isAuthorized) {
+        console.log(`[Status] Location already verified (no update needed)`);
       }
       
       console.log(`[Status] Returning in ${Date.now() - startTime}ms`);
@@ -188,10 +180,21 @@ app.get('/api/status', async (req, res) => {
     const elapsed = Date.now() - startTime;
     console.error(`[Status] ❌ Timeout or error after ${elapsed}ms:`, error);
     
+    // Check if agency is authorized even in error case
+    // This ensures locationVerified is true for authorized agencies even on timeout
+    let locationVerified = false;
+    try {
+      const isAuthorized = await hasAgencyAuthorization();
+      locationVerified = isAuthorized;
+      console.log(`[Status] Fallback: Agency authorized=${isAuthorized}, setting locationVerified=${locationVerified}`);
+    } catch (authError) {
+      console.error(`[Status] Failed to check agency authorization in fallback:`, authError);
+    }
+    
     // Return minimal default status to unblock widget
     return res.json({
       locationId,
-      locationVerified: false,
+      locationVerified,
       domainConnected: false,
       courseCreated: false,
       paymentIntegrated: false,
@@ -251,108 +254,108 @@ app.get('/api/installation/check', async (req, res) => {
   const locationId = (req.query.locationId as string) || '';
   if (!locationId) return res.status(400).json({ error: 'locationId is required' });
   
-  // Check if agency is authorized (takes precedence)
-  const hasAgency = await hasAgencyAuthorization();
-  if (hasAgency) {
-    // Agency authorization exists - attempt to get a valid token (will auto-refresh if needed)
-    const token = await getAuthToken(locationId);
-    
-    if (!token) {
-      console.log('[Installation Check] Failed to get valid token for location:', locationId);
-      return res.json({
-        installed: false,
-        hasToken: false,
-        tokenType: 'agency',
-        error: 'Your authorization has expired. Please contact your agency administrator to reauthorize this app.'
-      });
-    }
-    
-    // Token is valid - register/update sub-account tracking
-    console.log('[Installation Check] Valid token obtained for location:', locationId);
-    
-    // Get agency installation to extract accountId
-    const agencyInstallation = await getAgencyInstallation();
-    
-    // Try to fetch location details for better tracking
-    try {
-      const locations = await getAgencyLocations();
-      const location = locations.find(loc => loc.id === locationId);
+  const startTime = Date.now();
+  console.log(`[Installation Check] Checking for location: ${locationId}`);
+  
+  try {
+    // Wrap in 2-second timeout to prevent widget hanging
+    const checkPromise = (async () => {
+      // Check if agency is authorized (takes precedence)
+      const hasAgency = await hasAgencyAuthorization();
+      console.log(`[Installation Check] Has agency: ${hasAgency} (${Date.now() - startTime}ms)`);
       
-      if (location && agencyInstallation?.accountId) {
-        // Check if this is a new sub-account or existing one
-        const existingSubAccount = await getSubAccount(locationId);
-        const isNewSubAccount = !existingSubAccount;
+      if (hasAgency) {
+        // Agency authorization exists - get token
+        const token = await getAuthToken(locationId);
+        console.log(`[Installation Check] Token obtained: ${!!token} (${Date.now() - startTime}ms)`);
         
-        // Register or update the sub-account
-        const subAccount = await registerSubAccount({
-          locationId: locationId,
-          accountId: agencyInstallation.accountId,
-          locationName: location.name,
-          companyId: location.companyId,
-          metadata: {
-            email: location.email,
-            phone: location.phone,
-            website: location.website,
-            timezone: location.timezone,
-          }
-        });
-        
-        if (isNewSubAccount) {
-          console.log(`[Installation Check] ✨ NEW SUB-ACCOUNT DETECTED ✨`);
-          console.log(`[Installation Check] Location: ${location.name} (${locationId})`);
-          console.log(`[Installation Check] Agency: ${agencyInstallation.accountId}`);
-          console.log(`[Installation Check] Company: ${location.companyId}`);
-          console.log(`[Installation Check] This sub-account is now tracked under the agency`);
-        } else {
-          console.log(`[Installation Check] Existing sub-account updated: ${locationId}`);
-          console.log(`[Installation Check] Last accessed updated for: ${location.name}`);
+        if (!token) {
+          return {
+            installed: false,
+            hasToken: false,
+            tokenType: 'agency' as const,
+            error: 'Your authorization has expired. Please contact your agency administrator to reauthorize this app.'
+          };
         }
-      } else if (!agencyInstallation?.accountId) {
-        console.warn('[Installation Check] Agency installation exists but accountId is missing');
+        
+        // Token is valid - sync sub-account in background (non-blocking)
+        console.log('[Installation Check] Token valid, returning immediately');
+        getAgencyInstallation()
+          .then(async (agencyInstallation) => {
+            if (!agencyInstallation?.accountId) return;
+            const locations = await getAgencyLocations();
+            const location = locations.find(loc => loc.id === locationId);
+            if (location) {
+              const isNew = !(await getSubAccount(locationId));
+              await registerSubAccount({
+                locationId,
+                accountId: agencyInstallation.accountId,
+                locationName: location.name,
+                companyId: location.companyId,
+                metadata: { email: location.email, phone: location.phone, website: location.website, timezone: location.timezone }
+              });
+              console.log(`[Installation Check] ${isNew ? '✨ NEW' : 'Updated'} sub-account: ${location.name}`);
+            }
+          })
+          .catch(err => console.error('[Installation Check] Background sync error:', err));
+        
+        return {
+          installed: true,
+          hasToken: true,
+          tokenType: 'agency' as const
+        };
       }
-    } catch (error) {
-      console.error('[Installation Check] Failed to register sub-account:', error);
-      // Don't fail the installation check if sub-account registration fails
-    }
-    
-    return res.json({
-      installed: true,
-      hasToken: true,
-      tokenType: 'agency'
-    });
-  }
-  
-  // Fall back to per-location check
-  const installation = await getInstallation(locationId);
-  if (installation) {
-    // Attempt to get a valid token (will auto-refresh if needed)
-    const token = await getAuthToken(locationId);
-    
-    if (!token) {
-      console.log('[Installation Check] Failed to get valid token for location:', locationId);
-      return res.json({
+      
+      // Fall back to per-location check
+      const installation = await getInstallation(locationId);
+      if (installation) {
+        const token = await getAuthToken(locationId);
+        
+        if (!token) {
+          return {
+            installed: false,
+            hasToken: false,
+            tokenType: 'location' as const,
+            error: 'Your authorization has expired. Please reauthorize this app.'
+          };
+        }
+        
+        return {
+          installed: true,
+          hasToken: true,
+          tokenType: (installation?.tokenType || 'location') as 'agency' | 'location'
+        };
+      }
+      
+      return {
         installed: false,
         hasToken: false,
-        tokenType: 'location',
-        error: 'Your authorization has expired. Please reauthorize this app.'
-      });
-    }
+        tokenType: 'location' as const,
+        error: 'Agency administrator needs to authorize this app. Please contact your agency admin.'
+      };
+    })();
     
-    // Token is valid (either existing or refreshed)
-    console.log('[Installation Check] Valid token obtained for location:', locationId);
+    // Race against 2-second timeout
+    const timeoutPromise = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error('Installation check timeout')), 2000)
+    );
+    
+    const result = await Promise.race([checkPromise, timeoutPromise]);
+    console.log(`[Installation Check] Completed in ${Date.now() - startTime}ms`);
+    return res.json(result);
+    
+  } catch (error) {
+    const elapsed = Date.now() - startTime;
+    console.error(`[Installation Check] ❌ Timeout after ${elapsed}ms:`, error);
+    
+    // Return "not authorized" on timeout to avoid breaking widget
     return res.json({
-      installed: true,
-      hasToken: true,
-      tokenType: installation?.tokenType || 'location'
+      installed: false,
+      hasToken: false,
+      tokenType: 'agency' as const,
+      error: 'Request timeout. Please refresh the page.'
     });
   }
-  
-  return res.json({
-    installed: false,
-    hasToken: false,
-    tokenType: 'location',
-    error: 'Agency administrator needs to authorize this app. Please contact your agency admin.'
-  });
 });
 
 // Removed duplicate - see line 450 for the active /api/location/validate endpoint
@@ -413,67 +416,91 @@ app.get('/api/location/validate', async (req, res) => {
     return res.status(400).json({ error: 'locationId is required' });
   }
   
+  const startTime = Date.now();
+  console.log('[Location Validation] Checking locationId:', locationId);
+  
   try {
-    console.log('[Location Validation] Checking locationId:', locationId);
-    
-    // Check if we have agency authorization
-    const isAuthorized = await hasAgencyAuthorization();
-    
-    if (!isAuthorized) {
-      console.log('[Location Validation] No agency authorization');
-      return res.json({
-        valid: false,
-        location: null,
-        error: 'Agency not authorized'
-      });
-    }
-    
-    // Check if location exists in our agency locations list
-    try {
-      const locations = await getAgencyLocations();
-      const foundLocation = locations.find(loc => loc.id === locationId);
+    // Wrap in 2-second timeout
+    const validatePromise = (async () => {
+      // Check if we have agency authorization
+      const isAuthorized = await hasAgencyAuthorization();
+      console.log(`[Location Validation] Authorized: ${isAuthorized} (${Date.now() - startTime}ms)`);
       
-      if (foundLocation) {
-        console.log('[Location Validation] Location found:', foundLocation.name);
-        return res.json({
-          valid: true,
-          location: {
-            id: foundLocation.id,
-            name: foundLocation.name,
-            companyId: foundLocation.companyId
-          },
-          locationName: foundLocation.name
-        });
-      } else {
-        console.log('[Location Validation] Location not found in agency');
-        return res.json({
+      if (!isAuthorized) {
+        return {
           valid: false,
           location: null,
-          error: 'Location not found in agency locations'
-        });
+          error: 'Agency not authorized'
+        };
       }
-    } catch (error) {
-      console.error('[Location Validation] Error fetching agency locations:', error);
-      // If we can't fetch locations, assume valid (graceful degradation)
-      console.log('[Location Validation] Assuming valid (graceful degradation)');
-      return res.json({
-        valid: true,
-        location: {
-          id: locationId,
-          name: locationId,
-          companyId: undefined
-        },
-        locationName: locationId,
-        warning: 'Could not verify - assumed valid'
-      });
-    }
+      
+      // Fetch locations from GHL SDK with timeout
+      try {
+        const locations = await Promise.race([
+          getAgencyLocations(),
+          new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error('GHL SDK timeout')), 1500)
+          )
+        ]);
+        
+        const foundLocation = locations.find(loc => loc.id === locationId);
+        
+        if (foundLocation) {
+          console.log(`[Location Validation] Found: ${foundLocation.name} (${Date.now() - startTime}ms)`);
+          return {
+            valid: true,
+            location: {
+              id: foundLocation.id,
+              name: foundLocation.name,
+              companyId: foundLocation.companyId
+            },
+            locationName: foundLocation.name
+          };
+        } else {
+          return {
+            valid: false,
+            location: null,
+            error: 'Location not found in agency locations'
+          };
+        }
+      } catch (error) {
+        console.error('[Location Validation] GHL SDK error:', error);
+        // Assume valid on error (graceful degradation)
+        return {
+          valid: true,
+          location: {
+            id: locationId,
+            name: locationId,
+            companyId: undefined
+          },
+          locationName: locationId,
+          warning: 'Could not verify - assumed valid'
+        };
+      }
+    })();
+    
+    // Race against 2-second total timeout
+    const timeoutPromise = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error('Validation timeout')), 2000)
+    );
+    
+    const result = await Promise.race([validatePromise, timeoutPromise]);
+    return res.json(result);
+    
   } catch (error) {
-    console.error('[Location Validation] Error:', error);
-    return res.status(500).json({ 
-      valid: false,
-      location: null,
-      error: 'Failed to validate location',
-      message: error instanceof Error ? error.message : 'Unknown error'
+    const elapsed = Date.now() - startTime;
+    console.error(`[Location Validation] ❌ Timeout after ${elapsed}ms`);
+    
+    // Return valid on timeout (graceful degradation)
+    return res.json({
+      valid: true,
+      location: {
+        id: locationId,
+        name: locationId,
+        companyId: undefined
+      },
+      locationName: locationId,
+      warning: 'Timeout - assumed valid'
     });
   }
 });
