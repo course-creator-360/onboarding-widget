@@ -28,3 +28,5 @@ CREATE INDEX "sub_accounts_first_accessed_at_idx" ON "sub_accounts"("first_acces
 -- CreateIndex
 CREATE INDEX "sub_accounts_is_active_idx" ON "sub_accounts"("is_active");
 
+
+

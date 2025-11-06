@@ -276,3 +276,5 @@ npx prisma migrate deploy
 - The system uses soft deletes (isActive flag) to preserve historical data
 - All tracking happens server-side with no client-side configuration needed
 
+
+
