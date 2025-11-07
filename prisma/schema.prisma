@@ -5,12 +5,12 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("POSTGRES_URL")
 }
 
 model Installation {
   id           String   @id @default(cuid())
   locationId   String   @unique @map("location_id")
+  userId       String   @map("user_id")
   accountId    String?  @map("account_id")
   accessToken  String   @map("access_token")
   refreshToken String?  @map("refresh_token")
@@ -20,6 +20,9 @@ model Installation {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
   @@index([accountId])
   @@index([tokenType])
   @@map("installations")
@@ -97,4 +100,19 @@ model AgencyLocation {
   @@index([companyId])
   @@index([lastSyncedAt])
   @@map("agency_locations")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  
+  installations Installation[]
+  
+  @@index([username])
+  @@index([email])
+  @@map("users")
 }

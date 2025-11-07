@@ -24,6 +24,25 @@ export function getBaseUrl(): string {
 }
 
 /**
+ * Get the frontend URL (for OAuth redirects after success)
+ * Separate from backend API URL to support split deployments
+ */
+export function getFrontendUrl(): string {
+  // Explicit override
+  if (process.env.FRONTEND_URL) {
+    return process.env.FRONTEND_URL;
+  }
+  
+  // In production (Vercel), frontend and backend are on same domain
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  
+  // Local development: frontend on port 3000
+  return 'http://localhost:3000';
+}
+
+/**
  * Get the OAuth redirect URI
  */
 export function getRedirectUri(): string {

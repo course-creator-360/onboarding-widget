@@ -76,7 +76,9 @@
   async function fetchConfig() {
     try {
       console.log('[CC360 Widget] 🔧 Fetching config from:', `${apiBase}/api/config`);
-      const response = await fetch(`${apiBase}/api/config`);
+      const response = await fetch(`${apiBase}/api/config`, {
+        credentials: 'include' // Include cookies for authentication
+      });
       if (response.ok) {
         const config = await response.json();
         console.log('[CC360 Widget] ✅ Config received:', config);
@@ -1098,7 +1100,9 @@
     try {
       // First, validate that the locationId exists in the agency's location list
       console.log('[CC360 Widget] Validating locationId with agency...');
-      const validationResponse = await fetch(`${apiBase}/api/location/validate?locationId=${locationId}`);
+      const validationResponse = await fetch(`${apiBase}/api/location/validate?locationId=${locationId}`, {
+        credentials: 'include' // Include cookies for authentication
+      });
       const validationData = await validationResponse.json();
       
       if (!validationData.valid) {
@@ -1110,7 +1114,9 @@
       console.log('[CC360 Widget] Location validated successfully:', validationData.locationName || locationId);
       
       // Now check installation and authorization
-      const response = await fetch(`${apiBase}/api/installation/check?locationId=${locationId}`);
+      const response = await fetch(`${apiBase}/api/installation/check?locationId=${locationId}`, {
+        credentials: 'include' // Include cookies for authentication
+      });
       if (!response.ok) throw new Error('Failed to check installation');
       const data = await response.json();
       console.log('[CC360 Widget] Installation check:', data);
@@ -1145,7 +1151,9 @@
       const url = `${apiBase}/api/status?locationId=${locationId}${skipParam}`;
       console.log('[CC360 Widget] Fetching status from:', url);
       
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        credentials: 'include' // Include cookies for authentication
+      });
       console.log('[CC360 Widget] Status response status:', response.status, response.ok);
       
       if (!response.ok) {
@@ -2048,6 +2056,7 @@
       try {
         await fetch(`${apiBase}/api/dismiss`, {
           method: 'POST',
+          credentials: 'include', // Include cookies for authentication
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ locationId })
         });
@@ -2287,7 +2296,9 @@
     try {
       // Fetch location context from backend
       console.log('[Userpilot] 📡 Fetching location context from:', `${apiBase}/api/location-context?locationId=${locationId}`);
-      const response = await fetch(`${apiBase}/api/location-context?locationId=${locationId}`);
+      const response = await fetch(`${apiBase}/api/location-context?locationId=${locationId}`, {
+        credentials: 'include' // Include cookies for authentication
+      });
       console.log('[Userpilot] Context API response status:', response.status);
       
       if (!response.ok) {

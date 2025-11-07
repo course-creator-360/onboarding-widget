@@ -24,6 +24,7 @@ services:
       - ./public:/app/public
       - ./prisma:/app/prisma
       - ./package.json:/app/package.json
+      - ./package-lock.json:/app/package-lock.json
       - ./tsconfig.json:/app/tsconfig.json
     environment:
       - NODE_ENV=development
@@ -32,7 +33,7 @@ services:
       - POSTGRES_URL=postgresql://user:password@postgres:5432/onboarding?schema=public
     env_file:
       - .env
-    command: sh -c "npx prisma migrate deploy && npm run dev"
+    command: sh -c "npx prisma generate && npx prisma migrate deploy && npm run dev:backend"
     restart: unless-stopped
     depends_on:
       postgres:
@@ -40,6 +41,25 @@ services:
     dns:
       - 8.8.8.8
       - 8.8.4.4
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend/app:/app/app
+      - ./frontend/lib:/app/lib
+      - ./frontend/public:/app/public
+      - ./frontend/middleware.ts:/app/middleware.ts
+      - ./frontend/.env.local:/app/.env.local
+    env_file:
+      - ./frontend/.env.local
+    command: npm run dev -- --hostname 0.0.0.0
+    restart: unless-stopped
+    depends_on:
+      - widget
 
 volumes:
   postgres_data:

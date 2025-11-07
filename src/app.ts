@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import path from 'path';
 import oauthRouter from './oauth';
 import webhookRouter from './webhooks';
+import authRouter, { requireAuth } from './auth';
 import { getOnboardingStatus, setDismissed, updateOnboardingStatus, getInstallation, hasAgencyAuthorization, getAgencyInstallation, deleteInstallation, OnboardingStatus, toggleOnboardingField, upsertInstallation, registerSubAccount, getSubAccount, getSubAccountsByAgency, getAllSubAccounts, getSubAccountStats, deactivateSubAccount, getAgencyForLocation, isSubAccountUnderAgency } from './db';
 import { sseBroker } from './sse';
 import { checkLocationProducts, getAuthToken } from './ghl-api'; // Legacy - only used for manual testing
@@ -13,19 +14,20 @@ import { getBaseUrl, getEnvironment, getGhlAppBaseUrl } from './config';
 
 const app = express();
 
-// CORS configuration - allow all origins in development, restrict in production if needed
+// CORS configuration - allow frontend and all origins in development
 const corsOptions = {
   origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
     // Allow requests with no origin (mobile apps, curl, etc)
     if (!origin) return callback(null, true);
     
-    // Allow all origins for now (can restrict later)
+    // Allow localhost:3000 (Next.js frontend) and all other origins
     // Vercel preview URLs are unpredictable, so we allow all
     callback(null, true);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['Set-Cookie']
 };
 
 app.use(cors(corsOptions));
@@ -33,6 +35,7 @@ app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser()); // Required for OAuth state management in serverless
 
 // Mount routers under /api for serverless compatibility
+app.use('/api/auth', authRouter);
 app.use('/api/oauth', oauthRouter);
 app.use('/api/webhooks', webhookRouter);
 
@@ -360,7 +363,8 @@ app.get('/api/installation/check', async (req, res) => {
 
 // Removed duplicate - see line 450 for the active /api/location/validate endpoint
 
-app.get('/api/agency/status', async (req, res) => {
+app.get('/api/agency/status', requireAuth, async (req: any, res) => {
+  const userId = req.user.id;
   const hasAgency = await hasAgencyAuthorization();
   const agencyInstallation = await getAgencyInstallation();
   
@@ -375,8 +379,9 @@ app.get('/api/agency/status', async (req, res) => {
 });
 
 // Get all locations from the agency (for demo page)
-app.get('/api/agency/locations', async (req, res) => {
+app.get('/api/agency/locations', requireAuth, async (req: any, res) => {
   try {
+    const userId = req.user.id;
     const hasAgency = await hasAgencyAuthorization();
     if (!hasAgency) {
       return res.status(401).json({ 
@@ -833,6 +838,11 @@ app.get('/api/events', async (req, res) => {
 app.use('/public', express.static(path.join(process.cwd(), 'public')));
 app.get('/widget.js', (_req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'widget.js'));
+});
+
+// Serve widget preview page (for dashboard iframe)
+app.get('/preview', (_req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'preview.html'));
 });
 
 // Serve demo page at root

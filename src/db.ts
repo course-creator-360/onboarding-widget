@@ -21,6 +21,7 @@ export type OnboardingStatus = {
 
 export type Installation = {
   locationId: string;
+  userId: string;
   accountId?: string;
   accessToken: string;
   refreshToken?: string;
@@ -227,6 +228,7 @@ export async function upsertInstallation(
   const result = await prisma.installation.upsert({
     where: { locationId: data.locationId },
     update: {
+      userId: data.userId,
       accountId: data.accountId ?? null,
       accessToken: data.accessToken,
       refreshToken: data.refreshToken ?? null,
@@ -236,6 +238,7 @@ export async function upsertInstallation(
     },
     create: {
       locationId: data.locationId,
+      userId: data.userId,
       accountId: data.accountId ?? null,
       accessToken: data.accessToken,
       refreshToken: data.refreshToken ?? null,
@@ -247,6 +250,7 @@ export async function upsertInstallation(
 
   return {
     locationId: result.locationId,
+    userId: result.userId,
     accountId: result.accountId ?? undefined,
     accessToken: result.accessToken,
     refreshToken: result.refreshToken ?? undefined,
@@ -270,6 +274,7 @@ export async function getInstallation(locationId: string): Promise<Installation 
 
   return {
     locationId: result.locationId,
+    userId: result.userId,
     accountId: result.accountId ?? undefined,
     accessToken: result.accessToken,
     refreshToken: result.refreshToken ?? undefined,
@@ -293,6 +298,7 @@ export async function findInstallationByAccountId(accountId: string): Promise<In
 
   return {
     locationId: result.locationId,
+    userId: result.userId,
     accountId: result.accountId ?? undefined,
     accessToken: result.accessToken,
     refreshToken: result.refreshToken ?? undefined,
@@ -328,6 +334,7 @@ export async function getAgencyInstallation(): Promise<Installation | undefined>
 
   return {
     locationId: result.locationId,
+    userId: result.userId,
     accountId: result.accountId ?? undefined,
     accessToken: result.accessToken,
     refreshToken: result.refreshToken ?? undefined,
@@ -355,6 +362,7 @@ export async function getAgencyInstallationByAccountId(accountId: string): Promi
 
   return {
     locationId: result.locationId,
+    userId: result.userId,
     accountId: result.accountId ?? undefined,
     accessToken: result.accessToken,
     refreshToken: result.refreshToken ?? undefined,
@@ -603,6 +611,7 @@ export async function getSubAccountStats(accountId: string): Promise<{
 
 // Export Prisma client for direct usage if needed
 export default prisma;
+export { prisma };
 
 // Graceful shutdown
 process.on('beforeExit', async () => {

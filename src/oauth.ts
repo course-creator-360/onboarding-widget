@@ -1,7 +1,8 @@
 import express from 'express';
 import crypto from 'crypto';
 import { upsertInstallation } from './db';
-import { getRedirectUri, getBaseUrl } from './config';
+import { getRedirectUri, getBaseUrl, getFrontendUrl } from './config';
+import { verifyToken } from './auth';
 
 const router = express.Router();
 
@@ -384,7 +385,7 @@ router.get('/callback', async (req, res) => {
             <h1>Invalid OAuth State</h1>
             <p>The OAuth session has expired or is invalid.</p>
             <p>This can happen if you waited too long to complete the authorization.</p>
-            <button onclick="window.location.href='${getBaseUrl()}'">Try Again</button>
+            <button onclick="window.location.href='${getFrontendUrl()}/dashboard'">Go to Dashboard</button>
           </div>
         </body>
       </html>
@@ -402,6 +403,76 @@ router.get('/callback', async (req, res) => {
   
   // Clear the cookie after use
   res.clearCookie(cookieName);
+
+  // Verify JWT authentication (required for agency OAuth)
+  const token = req.cookies?.auth_token;
+  if (!token && context.tokenType === 'agency') {
+    console.error('[OAuth Callback] No JWT token found for agency OAuth');
+    return res.status(401).send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Authentication Required</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              height: 100vh;
+              margin: 0;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: white;
+              text-align: center;
+              padding: 20px;
+            }
+            .container {
+              max-width: 500px;
+            }
+            h1 {
+              margin: 0 0 16px 0;
+              font-size: 24px;
+            }
+            p {
+              margin: 0 0 24px 0;
+              opacity: 0.9;
+              line-height: 1.5;
+            }
+            a {
+              display: inline-block;
+              background: white;
+              color: #667eea;
+              padding: 12px 24px;
+              border-radius: 5px;
+              text-decoration: none;
+              font-weight: 600;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>🔐 Authentication Required</h1>
+            <p>
+              Please login to your account first, then setup OAuth.
+            </p>
+            <a href="${getFrontendUrl()}/login">Go to Login</a>
+          </div>
+        </body>
+      </html>
+    `);
+  }
+
+  let userId: string | null = null;
+  if (token) {
+    const payload = verifyToken(token);
+    if (!payload) {
+      console.error('[OAuth Callback] Invalid JWT token');
+      return res.status(401).send('Invalid session. Please login again.');
+    }
+    userId = payload.userId;
+    console.log('[OAuth Callback] Authenticated user:', userId);
+  }
 
   const clientId = process.env.GHL_CLIENT_ID;
   const clientSecret = process.env.GHL_CLIENT_SECRET;
@@ -477,12 +548,19 @@ router.get('/callback', async (req, res) => {
     }
 
     console.log('[OAuth Callback] Storing installation...');
+    console.log('[OAuth Callback] - User ID:', userId);
     console.log('[OAuth Callback] - Location ID:', locationId);
     console.log('[OAuth Callback] - Account ID (companyId):', accountId);
     console.log('[OAuth Callback] - Token Type:', tokenType);
     console.log('[OAuth Callback] - Scope:', tokenJson.scope);
 
+    // Require userId for agency tokens
+    if (tokenType === 'agency' && !userId) {
+      throw new Error('userId required for agency OAuth');
+    }
+
     await upsertInstallation({
+      userId: userId!,
       locationId,
       accountId,
       accessToken: tokenJson.access_token,
@@ -495,8 +573,9 @@ router.get('/callback', async (req, res) => {
     console.log('[OAuth Callback] Installation stored successfully');
     
     // Determine redirect based on environment
-    const baseUrl = getBaseUrl();
-    const returnUrl = process.env.OAUTH_SUCCESS_REDIRECT || `${baseUrl}/`;
+    const frontendUrl = getFrontendUrl();
+    // Redirect to dashboard for Next.js frontend
+    const returnUrl = process.env.OAUTH_SUCCESS_REDIRECT || `${frontendUrl}/dashboard`;
     
     // For same-window flow, redirect back with success parameter
     if (!req.headers.referer?.includes('popup')) {
@@ -640,7 +719,7 @@ router.get('/callback', async (req, res) => {
             <div class="error-details">
               <strong>Error:</strong> ${errorMessage}
             </div>
-            <button onclick="window.location.href='${getBaseUrl()}'">Try Again</button>
+            <button onclick="window.location.href='${getFrontendUrl()}/dashboard'">Go to Dashboard</button>
             <p style="font-size: 12px; color: #666; margin-top: 20px;">
               Check Vercel logs for detailed error information.
             </p>

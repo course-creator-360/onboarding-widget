@@ -2,11 +2,20 @@
 
 A persistent onboarding checklist widget for CourseCreator360 sub-accounts. Tracks 4 onboarding steps with real-time updates via webhooks and automatic status polling.
 
+## ⚠️ **NEW: Multi-User Authentication System**
+
+The widget now includes a **multi-user authentication system** with JWT tokens and a Next.js dashboard. Each user can register, login, and connect their own GHL agency.
+
+**📖 See [SETUP.md](./SETUP.md) for complete setup instructions for the new authentication system.**
+
 ## Features
 
+- ✅ **Multi-User Authentication**: JWT-based auth with user registration and login
+- ✅ **Next.js Dashboard**: Modern dashboard UI with left navigation
+- ✅ **User-Agency Linking**: Each user connects their own GHL agency via OAuth
 - ✅ **4-Step Onboarding Checklist**: Domain, Course, Product, Payment
 - ✅ **Real-time Updates**: Automatic status polling for live updates (serverless-optimized)
-- ✅ **Agency-Level OAuth**: One authorization for all sub-accounts
+- ✅ **Agency-Level OAuth**: One authorization per user for all their sub-accounts
 - ✅ **Sub-Account Tracking**: Automatically tracks newly created sub-accounts under the agency
 - ✅ **Prisma + PostgreSQL**: Cloud-ready database with type-safe ORM
 - ✅ **Vercel Ready**: Auto-detects environment, deploys seamlessly

@@ -1,14 +1,17 @@
-.PHONY: help setup start stop restart logs clean build test status agency-setup
+.PHONY: help setup start stop restart logs clean build test status agency-setup migrate start-backend start-frontend
 
 # Default target
 help:
 	@echo "CC360 Onboarding Widget - Available Commands:"
 	@echo ""
 	@echo "  make setup          - Initial setup (copy env template)"
-	@echo "  make start          - Start the development server"
-	@echo "  make stop           - Stop the server"
+	@echo "  make start          - Start backend & frontend servers"
+	@echo "  make start-backend  - Start backend only (Docker)"
+	@echo "  make start-frontend - Start frontend only"
+	@echo "  make stop           - Stop all servers"
 	@echo "  make restart        - Restart the server"
 	@echo "  make logs           - View server logs"
+	@echo "  make migrate        - Run database migrations"
 	@echo "  make clean          - Clean database and containers"
 	@echo "  make build          - Rebuild containers"
 	@echo "  make test           - Test API endpoints"
@@ -32,21 +35,42 @@ setup:
 	@echo "1. Edit .env file with your GHL OAuth credentials"
 	@echo "2. Run 'make start' to start the server"
 
-# Start server
+# Start server (backend + frontend)
 start:
-	@echo "Starting development server..."
+	@echo "Starting backend and frontend servers..."
+	@if [ ! -f "frontend/.env.local" ]; then \
+		echo "NEXT_PUBLIC_API_BASE=http://localhost:4002" > frontend/.env.local; \
+		echo "✓ Created frontend/.env.local"; \
+	fi
 	docker-compose up -d
 	@echo ""
-	@echo "✓ Server starting at http://localhost:4002"
+	@echo "✓ Servers starting:"
+	@echo "  - Backend:  http://localhost:4002"
+	@echo "  - Frontend: http://localhost:3000"
+	@echo ""
+	@echo "Run 'make logs' to view logs"
+	@echo "Open http://localhost:3000 to access the dashboard"
+
+# Start backend only (Docker)
+start-backend:
+	@echo "Starting backend server..."
+	docker-compose up -d
+	@echo ""
+	@echo "✓ Backend starting at http://localhost:4002"
 	@echo ""
 	@echo "Run 'make logs' to view server output"
-	@echo "Run 'make open' to open demo page"
 
-# Stop server
+# Start frontend only
+start-frontend:
+	@echo "Starting frontend server..."
+	cd frontend && npm run dev
+
+# Stop all servers
 stop:
-	@echo "Stopping server..."
+	@echo "Stopping all servers..."
 	docker-compose down
-	@echo "✓ Server stopped"
+	@-pkill -f "next dev" 2>/dev/null || true
+	@echo "✓ All servers stopped"
 
 # Restart server
 restart:
@@ -58,7 +82,23 @@ restart:
 
 # View logs
 logs:
+	@echo "Viewing logs (Ctrl+C to exit)..."
+	@echo "Use 'docker-compose logs -f widget' for backend only"
+	@echo "Use 'docker-compose logs -f frontend' for frontend only"
+	@echo ""
 	docker-compose logs -f
+
+# Run database migrations
+migrate:
+	@echo "Running database migrations..."
+	docker compose exec widget npx prisma migrate dev --name add_user_authentication
+	@echo "✓ Migration complete"
+
+# Reset database and run migrations
+migrate-reset:
+	@echo "⚠ Resetting database (all data will be lost)..."
+	docker compose exec -T widget npx prisma migrate reset --force
+	@echo "✓ Database reset and migrations complete"
 
 # Clean everything (database + containers)
 clean:
@@ -74,9 +114,11 @@ clean:
 
 # Rebuild containers
 build:
-	@echo "Rebuilding containers..."
+	@echo "Rebuilding all containers..."
 	docker-compose build --no-cache
 	@echo "✓ Build complete"
+	@echo ""
+	@echo "Run 'make start' to start the servers"
 
 # Test API endpoints
 test:

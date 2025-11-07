@@ -1,41 +1,11 @@
 {
-  "version": 2,
-  "buildCommand": "npm run vercel-build",
-  "installCommand": "npm install && npx prisma generate",
-  "functions": {
-    "api/index.ts": {
-      "runtime": "@vercel/node@4.0.0",
-      "maxDuration": 60
-    },
-    "api/migrate.ts": {
-      "runtime": "@vercel/node@4.0.0",
-      "maxDuration": 60
+  "buildCommand": "cd frontend && npm run build",
+  "outputDirectory": "frontend/.next",
+  "framework": "nextjs",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
     }
-  },
-  "routes": [
-    {
-      "src": "/api/migrate",
-      "dest": "/api/migrate.ts"
-    },
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/index.ts"
-    },
-    {
-      "src": "/oauth/(.*)",
-      "dest": "/api/index.ts"
-    },
-    {
-      "src": "/install",
-      "dest": "/api/index.ts"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/api/index.ts"
-    }
-  ],
-  "env": {
-    "NODE_ENV": "production"
-  }
+  ]
 }
-
