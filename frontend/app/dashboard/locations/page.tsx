@@ -49,6 +49,7 @@ export default function LocationsPage() {
     script.src = `${apiBase}/widget.js`;
     script.setAttribute('data-location', locationId);
     script.setAttribute('data-api', apiBase);
+    script.setAttribute('data-preview-mode', 'true'); // Enable preview mode with mock buttons
     
     document.body.appendChild(script);
     console.log('[CC360] Widget loaded for location:', locationId);
@@ -165,6 +166,41 @@ export default function LocationsPage() {
                     </a>
                   )}
                 </div>
+                
+                {/* Mock Controls - Only show when this location is being previewed */}
+                {selectedLocationId === loc.id && previewEnabled && (
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-lg">🎭</span>
+                        <span className="text-xs font-bold text-amber-800 uppercase">Preview Controls</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => (window as any).cc360Widget?.toggleMockTask('paymentIntegrated')}
+                          className="px-3 py-1.5 text-xs font-medium border border-gray-300 rounded bg-white hover:bg-gray-50 transition-colors"
+                        >
+                          Connect Payments
+                        </button>
+                        <button
+                          onClick={() => (window as any).cc360Widget?.toggleMockTask('courseCreated')}
+                          className="px-3 py-1.5 text-xs font-medium border border-gray-300 rounded bg-white hover:bg-gray-50 transition-colors"
+                        >
+                          Create Course
+                        </button>
+                        <button
+                          onClick={() => (window as any).cc360Widget?.toggleMockTask('domainConnected')}
+                          className="px-3 py-1.5 text-xs font-medium border border-gray-300 rounded bg-white hover:bg-gray-50 transition-colors"
+                        >
+                          Connect Domain
+                        </button>
+                      </div>
+                      <p className="text-xs text-amber-700 mt-2">
+                        Click buttons to toggle task completion in the widget
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

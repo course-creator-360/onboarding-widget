@@ -3,14 +3,52 @@
 
   // Get configuration from script tag
   const currentScript = document.currentScript || document.querySelector('script[src*="widget.js"]');
-  const apiBase = currentScript?.getAttribute('data-api') || 'http://localhost:4002';
+  // Try to intelligently determine API base:
+  // 1. Use data-api attribute if provided (highest priority)
+  // 2. Use the origin of the widget.js script URL (for production)
+  // 3. Fall back to localhost for local development
+  const scriptSrc = currentScript?.src || '';
+  const scriptOrigin = scriptSrc ? new URL(scriptSrc).origin : '';
+  const apiBase = currentScript?.getAttribute('data-api') || scriptOrigin || window.location.origin;
   const skipApiChecks = currentScript?.getAttribute('data-skip-api-checks') === 'true';
+  const previewMode = currentScript?.getAttribute('data-preview-mode') === 'true';
+  
+  console.log('[CC360 Widget] API Base URL:', apiBase);
 
-  // Location ID will be auto-detected from GHL UserContext
-  let locationId = null;
+  // Location ID can be set via data-location attribute (for preview/testing) or auto-detected from GHL UserContext
+  let locationId = currentScript?.getAttribute('data-location') || null;
+  
+  if (locationId) {
+    console.log('[CC360 Widget] Location ID provided via data-location:', locationId);
+  }
   
   if (skipApiChecks) {
     console.log('[CC360 Widget] ⚠️ API checks disabled - manual toggles will persist');
+  }
+  
+  if (previewMode) {
+    console.log('[CC360 Widget] 🎭 Preview mode enabled - mock buttons will be shown');
+  }
+
+  // Mock state for preview mode
+  let mockStatus = {
+    locationVerified: true,
+    paymentIntegrated: false,
+    courseCreated: false,
+    domainConnected: false,
+    shouldShowWidget: true
+  };
+
+  // Toggle mock task status (for preview mode)
+  function toggleMockTask(taskKey) {
+    if (!previewMode) return;
+    
+    mockStatus[taskKey] = !mockStatus[taskKey];
+    console.log('[CC360 Widget] 🎭 Mock task toggled:', taskKey, '=', mockStatus[taskKey]);
+    
+    // Update the UI
+    currentStatus = { ...mockStatus };
+    renderChecklist(currentStatus);
   }
 
   // Auto-detect location ID from GHL user context
@@ -1144,6 +1182,14 @@
       return false;
     }
     
+    // In preview mode, use mock status instead of fetching from API
+    if (previewMode) {
+      console.log('[CC360 Widget] 🎭 Preview mode - using mock status');
+      currentStatus = { ...mockStatus };
+      shouldShowWidget = true;
+      return true;
+    }
+    
     try {
       // Use forceSkipApiChecks if provided, otherwise use the widget's setting
       const shouldSkip = forceSkipApiChecks !== undefined ? forceSkipApiChecks : skipApiChecks;
@@ -1198,6 +1244,12 @@
   function startStatusPolling() {
     if (!locationId) {
       console.warn('[CC360 Widget] Cannot poll status without location ID');
+      return;
+    }
+    
+    // Don't poll in preview mode - use mock data only
+    if (previewMode) {
+      console.log('[CC360 Widget] 🎭 Preview mode - status polling disabled');
       return;
     }
     
@@ -2394,17 +2446,28 @@
       localStorage.removeItem('cc360_widget_minimized');
     } catch (e) {}
     
-    // Auto-detect location ID from GHL UserContext
-    const detectedLocationId = await detectLocationFromContext();
-    if (detectedLocationId) {
-      locationId = detectedLocationId;
-      console.log('[CC360 Widget] Using auto-detected location ID:', locationId);
+    // Auto-detect location ID from GHL UserContext (only if not already provided via data-location)
+    if (!locationId) {
+      const detectedLocationId = await detectLocationFromContext();
+      if (detectedLocationId) {
+        locationId = detectedLocationId;
+        console.log('[CC360 Widget] Using auto-detected location ID:', locationId);
+      } else {
+        console.warn('[CC360 Widget] Could not auto-detect location ID from GHL UserContext');
+      }
     } else {
-      console.warn('[CC360 Widget] Could not auto-detect location ID from GHL UserContext');
+      console.log('[CC360 Widget] Using location ID from data-location attribute:', locationId);
     }
     
     // Fetch configuration from backend
     await fetchConfig();
+    
+    // In preview mode, skip authorization checks and show checklist directly
+    if (previewMode) {
+      console.log('[CC360 Widget] 🎭 Preview mode - skipping authorization checks');
+      await initializeChecklist();
+      return;
+    }
     
     // Check if authorized (agency or location)
     const installed = await checkInstallation();
@@ -2433,6 +2496,7 @@
     showDismissDialog: showDismissDialog,
     dismissPermanently: dismissWidgetPermanently,
     forceIntoView: forceWidgetIntoView,
+    toggleMockTask: toggleMockTask,
     resetPosition: function() {
       localStorage.removeItem('cc360_widget_position');
       const widget = document.getElementById('cc360-onboarding-widget');
