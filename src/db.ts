@@ -1,9 +1,27 @@
 import { PrismaClient } from '@prisma/client';
 
-// Initialize Prisma Client
-const prisma = new PrismaClient({
+// Prisma Client singleton for serverless environments
+// Prevents connection pool exhaustion in Vercel/serverless
+declare global {
+  // eslint-disable-next-line no-var
+  var prisma: PrismaClient | undefined;
+}
+
+// Initialize Prisma Client with serverless-optimized settings
+const prisma = global.prisma || new PrismaClient({
   log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+  // Optimize for serverless - shorter timeouts and fewer connections
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL || process.env.POSTGRES_PRISMA_URL,
+    },
+  },
 });
+
+// Reuse Prisma Client in development (hot reload)
+if (process.env.NODE_ENV !== 'production') {
+  global.prisma = prisma;
+}
 
 // Export types
 export type OnboardingStatus = {

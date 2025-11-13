@@ -4,15 +4,35 @@ Copy these exact values to **Vercel Dashboard → Your Project → Settings → 
 
 ## Required - Database
 
-If using Vercel Postgres, these are auto-injected:
-- ✅ `DATABASE_URL` - Auto-set by Vercel
-- ✅ `POSTGRES_URL` - Auto-set by Vercel
+### Using Vercel Postgres (Recommended)
 
-If using external database:
+When you create a Vercel Postgres database and connect it to your project, Vercel auto-injects:
+- ✅ `POSTGRES_PRISMA_URL` - **Pooled connection** (use this for queries)
+- ✅ `POSTGRES_URL` - Direct connection (for migrations)
+- ✅ `DATABASE_URL` - Usually points to POSTGRES_PRISMA_URL
+
+**IMPORTANT:** Make sure `DATABASE_URL` uses the pooled connection (`POSTGRES_PRISMA_URL`). 
+In Vercel Dashboard → Storage → Your Database → `.env.local` tab, verify:
+
+```bash
+DATABASE_URL="${POSTGRES_PRISMA_URL}"
 ```
-DATABASE_URL=postgresql://user:password@host:5432/dbname?schema=public
+
+If `DATABASE_URL` is not set, Prisma will automatically use `POSTGRES_PRISMA_URL` from our code.
+
+### Using External Database
+
+If using external PostgreSQL, add connection pooling parameters to prevent timeouts:
+
+```
+DATABASE_URL=postgresql://user:password@host:5432/dbname?schema=public&connection_limit=5&pool_timeout=10&connect_timeout=10
 POSTGRES_URL=postgresql://user:password@host:5432/dbname?schema=public
 ```
+
+**Connection Pooling Params:**
+- `connection_limit=5` - Max connections per serverless function
+- `pool_timeout=10` - Timeout for acquiring connection (seconds)
+- `connect_timeout=10` - TCP connection timeout (seconds)
 
 ## Required - GoHighLevel OAuth
 

@@ -16,49 +16,77 @@
   // Auto-detect location ID from GHL user context
   async function detectLocationFromContext() {
     try {
-      // Check for GHL global context objects (primary method)
-      if (typeof window._GHL_CONTEXT !== 'undefined' && window._GHL_CONTEXT?.locationId) {
-        console.log('[CC360 Widget] Detected location ID from _GHL_CONTEXT:', window._GHL_CONTEXT.locationId);
-        return window._GHL_CONTEXT.locationId;
+      // Try immediate detection first (for URL-based detection)
+      const immediateResult = tryDetectLocation();
+      if (immediateResult) {
+        return immediateResult;
       }
 
-      // Check for location in URL (when embedded in GHL dashboard)
-      const urlMatch = window.location.pathname.match(/\/location\/([^\/]+)/) || 
-                       window.location.search.match(/locationId=([^&]+)/);
-      if (urlMatch && urlMatch[1]) {
-        console.log('[CC360 Widget] Detected location ID from URL:', urlMatch[1]);
-        return urlMatch[1];
-      }
-
-      // Check if running in GHL iframe context
-      try {
-        if (window.parent && window.parent !== window) {
-          // Try to get location from parent window URL
-          const parentUrl = window.parent.location.href;
-          const parentMatch = parentUrl.match(/\/location\/([^\/]+)/) ||
-                            parentUrl.match(/locationId=([^&]+)/);
-          if (parentMatch && parentMatch[1]) {
-            console.log('[CC360 Widget] Detected location ID from parent URL:', parentMatch[1]);
-            return parentMatch[1];
-          }
-          
-          // Try to get location from parent window's GHL context
-          if (window.parent._GHL_CONTEXT?.locationId) {
-            console.log('[CC360 Widget] Detected location ID from parent _GHL_CONTEXT:', window.parent._GHL_CONTEXT.locationId);
-            return window.parent._GHL_CONTEXT.locationId;
-          }
+      // If immediate detection failed, retry with polling for GHL context
+      // This handles cases where _GHL_CONTEXT loads asynchronously
+      console.log('[CC360 Widget] GHL context not immediately available, polling...');
+      
+      const maxRetries = 30; // 30 attempts
+      const retryDelay = 100; // 100ms between attempts = 3 seconds total
+      
+      for (let i = 0; i < maxRetries; i++) {
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+        
+        const result = tryDetectLocation();
+        if (result) {
+          console.log(`[CC360 Widget] Location ID detected after ${(i + 1) * retryDelay}ms`);
+          return result;
         }
-      } catch (e) {
-        // Cross-origin access blocked - this is expected in some scenarios
-        console.log('[CC360 Widget] Cannot access parent context (cross-origin)');
       }
 
-      console.warn('[CC360 Widget] Could not detect location ID from GHL context');
+      console.warn('[CC360 Widget] Could not detect location ID from GHL context after polling');
       return null;
     } catch (error) {
       console.error('[CC360 Widget] Error detecting location from context:', error);
       return null;
     }
+  }
+
+  // Helper function to try detecting location ID (synchronous check)
+  function tryDetectLocation() {
+    // Check for GHL global context objects (primary method)
+    if (typeof window._GHL_CONTEXT !== 'undefined' && window._GHL_CONTEXT?.locationId) {
+      console.log('[CC360 Widget] Detected location ID from _GHL_CONTEXT:', window._GHL_CONTEXT.locationId);
+      return window._GHL_CONTEXT.locationId;
+    }
+
+    // Check for location in URL (when embedded in GHL dashboard)
+    const urlMatch = window.location.pathname.match(/\/location\/([^\/]+)/) || 
+                     window.location.search.match(/locationId=([^&]+)/);
+    if (urlMatch && urlMatch[1]) {
+      console.log('[CC360 Widget] Detected location ID from URL:', urlMatch[1]);
+      return urlMatch[1];
+    }
+
+    // Check if running in GHL iframe context
+    try {
+      if (window.parent && window.parent !== window) {
+        // Try to get location from parent window URL
+        const parentUrl = window.parent.location.href;
+        const parentMatch = parentUrl.match(/\/location\/([^\/]+)/) ||
+                          parentUrl.match(/locationId=([^&]+)/);
+        if (parentMatch && parentMatch[1]) {
+          console.log('[CC360 Widget] Detected location ID from parent URL:', parentMatch[1]);
+          return parentMatch[1];
+        }
+        
+        // Try to get location from parent window's GHL context
+        if (window.parent._GHL_CONTEXT?.locationId) {
+          console.log('[CC360 Widget] Detected location ID from parent _GHL_CONTEXT:', window.parent._GHL_CONTEXT.locationId);
+          return window.parent._GHL_CONTEXT.locationId;
+        }
+      }
+    } catch (e) {
+      // Cross-origin access blocked - this is expected in some scenarios
+      console.log('[CC360 Widget] Cannot access parent context (cross-origin)');
+    }
+
+    return null;
   }
 
   console.log('[CC360 Widget] Initializing with auto-detection from GHL UserContext...');

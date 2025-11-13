@@ -667,12 +667,15 @@
     function setupAgency() {
       // Option 1: Use same window (no popup)
       if (confirm('You will be redirected to GoHighLevel for authorization. Continue?')) {
-        // Save current URL to return after OAuth
-        sessionStorage.setItem('oauth_return_url', window.location.href);
+        // Save current URL to return after OAuth (backup in sessionStorage)
+        const returnUrl = window.location.href;
+        sessionStorage.setItem('oauth_return_url', returnUrl);
         sessionStorage.setItem('oauth_type', 'agency');
         
-        // Redirect same window to OAuth
-        window.location.href = `${API_BASE}/api/oauth/agency/install`;
+        // Redirect same window to OAuth with returnUrl parameter
+        const oauthUrl = `${API_BASE}/api/oauth/agency/install?returnUrl=${encodeURIComponent(returnUrl)}`;
+        console.log('[Setup Agency] Redirecting to:', oauthUrl);
+        window.location.href = oauthUrl;
       }
     }
     

@@ -10,7 +10,8 @@ const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax' as const,
-  maxAge: 600000 // 10 minutes
+  maxAge: 600000, // 10 minutes
+  path: '/' // Ensure cookie is available across all routes
 };
 
 const DEFAULT_AUTHORIZE_URL = process.env.GHL_AUTHORIZE_URL || 'https://marketplace.gohighlevel.com/oauth/authorize';
@@ -110,11 +111,21 @@ router.get('/agency/install', (req, res) => {
   }
 
   const companyId = req.query.companyId as string | undefined;
+  const returnUrl = req.query.returnUrl as string | undefined;
   const state = crypto.randomBytes(16).toString('hex');
   
   // Store state in cookie (works in serverless, unlike in-memory Map)
-  const stateData = { locationId: companyId || 'agency', tokenType: 'agency' };
-  res.cookie(`oauth_state_${state}`, JSON.stringify(stateData), COOKIE_OPTIONS);
+  const stateData = { 
+    locationId: companyId || 'agency', 
+    tokenType: 'agency',
+    returnUrl: returnUrl || req.headers.referer // Preserve where user came from
+  };
+  const cookieName = `oauth_state_${state}`;
+  res.cookie(cookieName, JSON.stringify(stateData), COOKIE_OPTIONS);
+  
+  console.log('[Agency OAuth] Setting state cookie:', cookieName);
+  console.log('[Agency OAuth] Cookie options:', COOKIE_OPTIONS);
+  console.log('[Agency OAuth] State data:', stateData);
   
   // Extract version_id from client_id (part before the hyphen)
   const versionId = clientId.split('-')[0];
@@ -313,11 +324,21 @@ router.get('/install', (req, res) => {
   }
   
   // Real OAuth flow
+  const returnUrl = req.query.returnUrl as string | undefined;
   const state = crypto.randomBytes(16).toString('hex');
   
   // Store state in cookie (works in serverless, unlike in-memory Map)
-  const stateData = { locationId };
-  res.cookie(`oauth_state_${state}`, JSON.stringify(stateData), COOKIE_OPTIONS);
+  const stateData = { 
+    locationId,
+    tokenType: 'location',
+    returnUrl: returnUrl || req.headers.referer // Preserve where user came from
+  };
+  const cookieName = `oauth_state_${state}`;
+  res.cookie(cookieName, JSON.stringify(stateData), COOKIE_OPTIONS);
+  
+  console.log('[Location OAuth] Setting state cookie:', cookieName);
+  console.log('[Location OAuth] Cookie options:', COOKIE_OPTIONS);
+  console.log('[Location OAuth] State data:', stateData);
   
   const authorizeUrl = new URL(DEFAULT_AUTHORIZE_URL);
   authorizeUrl.searchParams.set('response_type', 'code');
@@ -344,6 +365,12 @@ router.get('/callback', async (req, res) => {
   
   if (!stateCookie) {
     console.error('[OAuth Callback] State cookie not found');
+    console.error('[OAuth Callback] This can happen if:');
+    console.error('  1. Cookies are disabled in browser');
+    console.error('  2. Too much time passed between starting OAuth and callback (>10 min)');
+    console.error('  3. Cookie domain mismatch (check REDIRECT_URI matches server URL)');
+    console.error('  4. Browser cleared cookies during redirect');
+    
     return res.status(400).send(`
       <!DOCTYPE html>
       <html>
@@ -361,10 +388,19 @@ router.get('/callback', async (req, res) => {
               background: #f8f9fa;
               text-align: center;
             }
-            .container { padding: 40px; }
+            .container { padding: 40px; max-width: 500px; }
             .error { font-size: 64px; margin-bottom: 20px; color: #dc3545; }
             h1 { margin: 0 0 10px 0; color: #333; }
-            p { color: #666; margin: 10px 0; }
+            p { color: #666; margin: 10px 0; line-height: 1.5; }
+            .details {
+              background: #f1f3f5;
+              padding: 12px;
+              border-radius: 6px;
+              margin: 20px 0;
+              font-size: 13px;
+              text-align: left;
+              color: #495057;
+            }
             button {
               background: #667eea;
               color: white;
@@ -383,7 +419,14 @@ router.get('/callback', async (req, res) => {
             <div class="error">⚠️</div>
             <h1>Invalid OAuth State</h1>
             <p>The OAuth session has expired or is invalid.</p>
-            <p>This can happen if you waited too long to complete the authorization.</p>
+            <div class="details">
+              <strong>Possible causes:</strong><br>
+              • Authorization took longer than 10 minutes<br>
+              • Cookies are disabled in your browser<br>
+              • Browser cleared session data during redirect<br>
+              • URL/domain mismatch in OAuth configuration
+            </div>
+            <p><strong>Solution:</strong> Try authorizing again. Make sure cookies are enabled and complete the process quickly.</p>
             <button onclick="window.location.href='${getBaseUrl()}'">Try Again</button>
           </div>
         </body>
@@ -400,8 +443,8 @@ router.get('/callback', async (req, res) => {
     return res.status(400).send('Invalid state cookie format');
   }
   
-  // Clear the cookie after use
-  res.clearCookie(cookieName);
+  // Clear the cookie after use (must use same path as when it was set)
+  res.clearCookie(cookieName, { path: '/' });
 
   const clientId = process.env.GHL_CLIENT_ID;
   const clientSecret = process.env.GHL_CLIENT_SECRET;
@@ -496,16 +539,43 @@ router.get('/callback', async (req, res) => {
     
     // Determine redirect based on environment
     const baseUrl = getBaseUrl();
-    const returnUrl = process.env.OAUTH_SUCCESS_REDIRECT || `${baseUrl}/`;
+    console.log('[OAuth Callback] Base URL:', baseUrl);
+    console.log('[OAuth Callback] Context returnUrl:', context.returnUrl);
     
-    // For same-window flow, redirect back with success parameter
-    if (!req.headers.referer?.includes('popup')) {
-      // Same window redirect
-      const redirectUrl = `${returnUrl}?oauth_success=true&oauth_type=${tokenType}`;
+    // Check if this was initiated from a popup or same-window flow
+    const isPopup = req.query.popup === 'true';
+    console.log('[OAuth Callback] Is popup flow:', isPopup);
+    
+    // For same-window flow (default), redirect back to main page
+    if (!isPopup) {
+      // Use returnUrl from state (where user came from), or default to base URL
+      let returnUrl = context.returnUrl || process.env.OAUTH_SUCCESS_REDIRECT || `${baseUrl}/`;
+      
+      // Security: Sanitize returnUrl to prevent open redirect
+      // Only allow same-origin or explicitly configured URLs
+      try {
+        const returnUrlObj = new URL(returnUrl);
+        const baseUrlObj = new URL(baseUrl);
+        
+        // If returnUrl is different origin, use base URL instead (security)
+        if (returnUrlObj.origin !== baseUrlObj.origin) {
+          console.log('[OAuth Callback] ⚠️ Return URL origin mismatch, using base URL');
+          console.log('[OAuth Callback] Return URL origin:', returnUrlObj.origin);
+          console.log('[OAuth Callback] Base URL origin:', baseUrlObj.origin);
+          returnUrl = `${baseUrl}/`;
+        }
+      } catch (err) {
+        // Invalid URL, use base URL
+        console.log('[OAuth Callback] ⚠️ Invalid return URL, using base URL');
+        returnUrl = `${baseUrl}/`;
+      }
+      
+      const redirectUrl = `${returnUrl}${returnUrl.includes('?') ? '&' : '?'}oauth_success=true&oauth_type=${tokenType}`;
+      console.log('[OAuth Callback] ✅ Redirecting to:', redirectUrl);
       return res.redirect(redirectUrl);
     }
     
-    // For popup flow, show success page
+    // For popup flow, show success page with auto-close
     const successMessage = tokenType === 'agency' 
       ? 'Agency Authorization Successful!' 
       : 'Authorization Successful!';
