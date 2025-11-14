@@ -1,5 +1,5 @@
 import HighLevel from '@gohighlevel/api-client';
-import { getAgencyInstallation, getInstallation, getAgencyInstallationByAccountId, getAllAgencyInstallations, parseAgencyLocationId } from './db';
+import { getAgencyInstallation, getInstallation, getAgencyInstallationByAccountId, parseAgencyLocationId, getSubAccount, registerSubAccount } from './db';
 
 // Cache location-to-company mapping
 const locationCompanyCache = new Map<string, string>();
@@ -81,10 +81,11 @@ export async function getSDKClient(locationId: string): Promise<HighLevel> {
 
 /**
  * Fetch location details to determine which company/agency owns it
- * Uses SDK to query location information from any available agency token
+ * Uses the single agency's token to look up the location
+ * OPTIMIZED: Checks SubAccount table first, then uses agency token
  */
 async function getLocationCompanyId(locationId: string): Promise<string | null> {
-  // Check cache first
+  // Check in-memory cache first
   if (locationCompanyCache.has(locationId)) {
     console.log(`[GHL SDK] Using cached companyId for location ${locationId}`);
     return locationCompanyCache.get(locationId)!;
@@ -92,94 +93,141 @@ async function getLocationCompanyId(locationId: string): Promise<string | null> 
   
   console.log(`[GHL SDK] Looking up companyId for location: ${locationId}`);
   
-  // Get all available agency tokens for the lookup
-  const agencies = await getAllAgencyInstallations();
-  if (agencies.length === 0) {
-    console.log('[GHL SDK] No agency installations available for location lookup');
+  // OPTIMIZATION: Check SubAccount table for persisted mapping (fast database lookup)
+  const subAccount = await getSubAccount(locationId);
+  if (subAccount?.companyId) {
+    console.log(`[GHL SDK] Found companyId in SubAccount table: ${subAccount.companyId} (fast path)`);
+    locationCompanyCache.set(locationId, subAccount.companyId);
+    return subAccount.companyId;
+  }
+  
+  console.log(`[GHL SDK] No SubAccount mapping found, looking up with agency token`);
+  
+  // Get the agency installation (single-agency mode)
+  const agency = await getAgencyInstallation();
+  if (!agency?.accessToken) {
+    console.log('[GHL SDK] No agency installation available');
     return null;
   }
   
-  console.log(`[GHL SDK] Found ${agencies.length} agency installation(s) to try`);
+  const clientId = process.env.GHL_CLIENT_ID;
+  const clientSecret = process.env.GHL_CLIENT_SECRET;
   
-  // Try each agency token until we successfully fetch location details
-  for (const agency of agencies) {
+  if (!clientId || !clientSecret) {
+    console.log('[GHL SDK] Missing OAuth credentials');
+    return null;
+  }
+  
+  try {
+    console.log(`[GHL SDK] Using agency token for accountId: ${agency.accountId}`);
+    
+    const ghl = new HighLevel({ 
+      clientId, 
+      clientSecret,
+      agencyAccessToken: agency.accessToken
+    });
+    
+    const response = await ghl.locations.getLocation({ locationId });
+    
+    if (response?.location?.companyId) {
+      const companyId = response.location.companyId;
+      const locationName = response.location.name;
+      
+      // Cache the result in memory
+      locationCompanyCache.set(locationId, companyId);
+      
+      // Persist to SubAccount table for future fast lookups
+      console.log(`[GHL SDK] Location ${locationId} belongs to company ${companyId}, persisting mapping`);
+      await registerSubAccount({
+        locationId,
+        accountId: agency.accountId || companyId,
+        locationName,
+        companyId,
+      });
+      
+      return companyId;
+    } else {
+      console.log(`[GHL SDK] No companyId in response`);
+      return null;
+    }
+  } catch (error: any) {
+    const errorMsg = error?.message || String(error);
+    console.log(`[GHL SDK] Agency cannot access location ${locationId}: ${errorMsg}`);
+    return null;
+  }
+}
+
+/**
+ * Search for a specific location by ID using direct lookup
+ * More efficient than fetching all locations when looking for one
+ * Uses getLocation API which directly fetches by ID
+ * OPTIMIZED: Uses single agency token (single-agency mode)
+ */
+export async function searchLocationById(locationId: string): Promise<any | null> {
+  try {
+    console.log(`[GHL SDK] Searching for location by ID: ${locationId}`);
+    
+    const clientId = process.env.GHL_CLIENT_ID;
+    const clientSecret = process.env.GHL_CLIENT_SECRET;
+    
+    if (!clientId || !clientSecret) {
+      console.error('[GHL SDK] Missing GHL_CLIENT_ID or GHL_CLIENT_SECRET');
+      return null;
+    }
+    
+    // OPTIMIZATION: Check SubAccount table for cached location data
+    const subAccount = await getSubAccount(locationId);
+    if (subAccount) {
+      console.log(`[GHL SDK] Found location in SubAccount table (cached), fetching fresh data`);
+    }
+    
+    // Get the agency installation (single-agency mode)
+    const agency = await getAgencyInstallation();
+    if (!agency?.accessToken) {
+      console.error('[GHL SDK] No agency installation available');
+      return null;
+    }
+    
     try {
-      const clientId = process.env.GHL_CLIENT_ID;
-      const clientSecret = process.env.GHL_CLIENT_SECRET;
+      console.log(`[GHL SDK] Using agency token for accountId: ${agency.accountId}`);
       
-      if (!clientId || !clientSecret) continue;
-      
-      console.log(`[GHL SDK] Trying agency token for accountId: ${agency.accountId}`);
-      
-      const ghl = new HighLevel({ 
-        clientId, 
+      const ghl = new HighLevel({
+        clientId,
         clientSecret,
         agencyAccessToken: agency.accessToken
       });
       
       const response = await ghl.locations.getLocation({ locationId });
       
-      if (response?.location?.companyId) {
-        const companyId = response.location.companyId;
-        // Cache the result
-        locationCompanyCache.set(locationId, companyId);
-        console.log(`[GHL SDK] Location ${locationId} belongs to company ${companyId}`);
-        return companyId;
-      } else {
-        console.log(`[GHL SDK] No companyId in response from agency ${agency.accountId}`);
+      if (response?.location && response.location.id === locationId) {
+        console.log(`[GHL SDK] Found location: ${response.location.name}`);
+        
+        // Cache the company mapping in memory
+        if (response.location.companyId) {
+          locationCompanyCache.set(locationId, response.location.companyId);
+        }
+        
+        // Persist to SubAccount table for future fast lookups
+        const accountId = agency.accountId || response.location.companyId;
+        if (accountId) {
+          await registerSubAccount({
+            locationId,
+            accountId,
+            locationName: response.location.name,
+            companyId: response.location.companyId,
+          });
+        }
+        
+        return response.location;
       }
+      
+      console.log(`[GHL SDK] Location ${locationId} not found or not accessible`);
+      return null;
     } catch (error: any) {
-      // Log error but continue to next agency
       const errorMsg = error?.message || String(error);
-      console.log(`[GHL SDK] Agency ${agency.accountId} cannot access location ${locationId}: ${errorMsg}`);
-      continue;
+      console.log(`[GHL SDK] Agency cannot access location ${locationId}: ${errorMsg}`);
+      return null;
     }
-  }
-  
-  console.log(`[GHL SDK] Could not determine company ID for location ${locationId} with any available agency token`);
-  return null;
-}
-
-/**
- * Search for a specific location by ID using the search API
- * More efficient than fetching all locations when looking for one
- */
-export async function searchLocationById(locationId: string, companyId?: string): Promise<any | null> {
-  try {
-    const clientId = process.env.GHL_CLIENT_ID;
-    const clientSecret = process.env.GHL_CLIENT_SECRET;
-    
-    if (!clientId || !clientSecret) {
-      throw new Error('GHL_CLIENT_ID and GHL_CLIENT_SECRET must be set');
-    }
-    
-    // Get agency installation
-    let installation;
-    if (companyId) {
-      installation = await getAgencyInstallationByAccountId(companyId);
-    } else {
-      installation = await getAgencyInstallation();
-    }
-    
-    if (!installation?.accessToken) {
-      throw new Error('No agency OAuth token available');
-    }
-    
-    const ghl = new HighLevel({ 
-      clientId, 
-      clientSecret,
-      agencyAccessToken: installation.accessToken
-    });
-    
-    // Search for specific location by ID - much more efficient than listing all
-    const response = await ghl.locations.searchLocations({
-      companyId: installation.accountId,
-      locationId: locationId, // Filter by specific location ID
-      limit: '1' // Only need one result
-    });
-    
-    const locations = response.locations || [];
-    return locations.length > 0 ? locations[0] : null;
   } catch (error) {
     console.error('[GHL SDK] Error searching for location by ID:', error);
     return null;
@@ -275,7 +323,7 @@ export async function getAgencyLocations(companyId?: string, options?: {
 /**
  * Validate that a locationId belongs to the agency
  * Returns location details if valid, null otherwise
- * Uses direct ID lookup - no need to fetch all locations
+ * Uses direct ID lookup - most efficient, no need to fetch all locations
  */
 export async function validateLocationId(locationId: string): Promise<{
   valid: boolean;
@@ -283,49 +331,20 @@ export async function validateLocationId(locationId: string): Promise<{
   companyId?: string;
 }> {
   try {
-    // Primary method: Direct lookup by ID (most efficient)
-    const ghl = await getSDKClient(locationId);
-    const response = await ghl.locations.getLocation({ locationId });
+    // Use searchLocationById which does direct lookup with proper error handling
+    const location = await searchLocationById(locationId);
     
-    if (response?.location && response.location.id === locationId) {
-      // Cache the company mapping
-      if (response.location.companyId) {
-        locationCompanyCache.set(locationId, response.location.companyId);
-      }
-      
+    if (location) {
       return {
         valid: true,
-        location: response.location,
-        companyId: response.location.companyId
+        location: location,
+        companyId: location.companyId
       };
     }
     
     return { valid: false };
   } catch (error) {
     console.error('[GHL SDK] Error validating locationId:', error);
-    
-    // Fallback: Try searching by ID in the agency's locations
-    // This uses the search API with location filter (efficient, no need to fetch all)
-    try {
-      console.log('[GHL SDK] Trying fallback: search by location ID');
-      const foundLocation = await searchLocationById(locationId);
-      
-      if (foundLocation) {
-        // Cache the company mapping
-        if (foundLocation.companyId) {
-          locationCompanyCache.set(locationId, foundLocation.companyId);
-        }
-        
-        return {
-          valid: true,
-          location: foundLocation,
-          companyId: foundLocation.companyId
-        };
-      }
-    } catch (fallbackError) {
-      console.error('[GHL SDK] Fallback search validation also failed:', fallbackError);
-    }
-    
     return { valid: false };
   }
 }

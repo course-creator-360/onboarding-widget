@@ -249,7 +249,7 @@ app.get('/api/location-context', async (req, res) => {
   try {
     console.log(`[Location Context] Fetching context for location: ${locationId}`);
     
-    // Search for specific location by ID (efficient - no need to fetch all)
+    // Search for specific location by ID using the agency token
     const location = await searchLocationById(locationId);
     
     if (!location) {
