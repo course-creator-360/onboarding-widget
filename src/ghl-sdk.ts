@@ -141,9 +141,10 @@ async function getLocationCompanyId(locationId: string): Promise<string | null> 
 }
 
 /**
- * Fetch all locations for an agency
+ * Search for a specific location by ID using the search API
+ * More efficient than fetching all locations when looking for one
  */
-export async function getAgencyLocations(companyId?: string): Promise<any[]> {
+export async function searchLocationById(locationId: string, companyId?: string): Promise<any | null> {
   try {
     const clientId = process.env.GHL_CLIENT_ID;
     const clientSecret = process.env.GHL_CLIENT_SECRET;
@@ -170,13 +171,101 @@ export async function getAgencyLocations(companyId?: string): Promise<any[]> {
       agencyAccessToken: installation.accessToken
     });
     
-    // Fetch all locations using the SDK
+    // Search for specific location by ID - much more efficient than listing all
     const response = await ghl.locations.searchLocations({
       companyId: installation.accountId,
-      limit: '100' // API expects string
+      locationId: locationId, // Filter by specific location ID
+      limit: '1' // Only need one result
     });
     
-    return response.locations || [];
+    const locations = response.locations || [];
+    return locations.length > 0 ? locations[0] : null;
+  } catch (error) {
+    console.error('[GHL SDK] Error searching for location by ID:', error);
+    return null;
+  }
+}
+
+/**
+ * Fetch all locations for an agency with pagination support
+ * Note: Only use this when you actually need ALL locations (e.g., admin panel)
+ * For single location lookups, use searchLocationById() or getLocation() instead
+ */
+export async function getAgencyLocations(companyId?: string, options?: { 
+  limit?: number; 
+  paginate?: boolean 
+}): Promise<any[]> {
+  try {
+    const clientId = process.env.GHL_CLIENT_ID;
+    const clientSecret = process.env.GHL_CLIENT_SECRET;
+    
+    if (!clientId || !clientSecret) {
+      throw new Error('GHL_CLIENT_ID and GHL_CLIENT_SECRET must be set');
+    }
+    
+    // Get agency installation
+    let installation;
+    if (companyId) {
+      installation = await getAgencyInstallationByAccountId(companyId);
+    } else {
+      installation = await getAgencyInstallation();
+    }
+    
+    if (!installation?.accessToken) {
+      throw new Error('No agency OAuth token available');
+    }
+    
+    const ghl = new HighLevel({ 
+      clientId, 
+      clientSecret,
+      agencyAccessToken: installation.accessToken
+    });
+    
+    const paginate = options?.paginate !== false; // Default to true
+    const pageSize = options?.limit || 100;
+    
+    if (!paginate) {
+      // Single page fetch (legacy behavior)
+      const response = await ghl.locations.searchLocations({
+        companyId: installation.accountId,
+        limit: pageSize.toString()
+      });
+      return response.locations || [];
+    }
+    
+    // Paginated fetch - get ALL locations
+    let allLocations: any[] = [];
+    let skip = 0;
+    let hasMore = true;
+    
+    console.log(`[GHL SDK] Fetching all locations for company ${installation.accountId} with pagination...`);
+    
+    while (hasMore) {
+      const response = await ghl.locations.searchLocations({
+        companyId: installation.accountId,
+        limit: pageSize.toString(),
+        skip: skip.toString()
+      });
+      
+      const locations = response.locations || [];
+      allLocations = allLocations.concat(locations);
+      
+      console.log(`[GHL SDK] Fetched ${locations.length} locations (total: ${allLocations.length}, skip: ${skip})`);
+      
+      // Continue if we got a full page (indicating there might be more)
+      hasMore = locations.length === pageSize;
+      skip += pageSize;
+      
+      // Safety limit to prevent infinite loops
+      if (skip > 10000) {
+        console.warn('[GHL SDK] Reached safety limit of 10000 locations, stopping pagination');
+        break;
+      }
+    }
+    
+    console.log(`[GHL SDK] Total locations fetched: ${allLocations.length}`);
+    return allLocations;
+    
   } catch (error) {
     console.error('[GHL SDK] Error fetching agency locations:', error);
     return [];
@@ -186,6 +275,7 @@ export async function getAgencyLocations(companyId?: string): Promise<any[]> {
 /**
  * Validate that a locationId belongs to the agency
  * Returns location details if valid, null otherwise
+ * Uses direct ID lookup - no need to fetch all locations
  */
 export async function validateLocationId(locationId: string): Promise<{
   valid: boolean;
@@ -193,7 +283,7 @@ export async function validateLocationId(locationId: string): Promise<{
   companyId?: string;
 }> {
   try {
-    // Try to get location details using SDK
+    // Primary method: Direct lookup by ID (most efficient)
     const ghl = await getSDKClient(locationId);
     const response = await ghl.locations.getLocation({ locationId });
     
@@ -214,10 +304,11 @@ export async function validateLocationId(locationId: string): Promise<{
   } catch (error) {
     console.error('[GHL SDK] Error validating locationId:', error);
     
-    // Try fallback: fetch all locations and check
+    // Fallback: Try searching by ID in the agency's locations
+    // This uses the search API with location filter (efficient, no need to fetch all)
     try {
-      const locations = await getAgencyLocations();
-      const foundLocation = locations.find(loc => loc.id === locationId);
+      console.log('[GHL SDK] Trying fallback: search by location ID');
+      const foundLocation = await searchLocationById(locationId);
       
       if (foundLocation) {
         // Cache the company mapping
@@ -232,7 +323,7 @@ export async function validateLocationId(locationId: string): Promise<{
         };
       }
     } catch (fallbackError) {
-      console.error('[GHL SDK] Fallback validation also failed:', fallbackError);
+      console.error('[GHL SDK] Fallback search validation also failed:', fallbackError);
     }
     
     return { valid: false };

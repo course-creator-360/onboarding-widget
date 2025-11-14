@@ -8,7 +8,7 @@ import webhookRouter from './webhooks';
 import { getOnboardingStatus, setDismissed, updateOnboardingStatus, getInstallation, hasAgencyAuthorization, getAgencyInstallation, deleteInstallation, OnboardingStatus, toggleOnboardingField, upsertInstallation, registerSubAccount, getSubAccount, getSubAccountsByAgency, getAllSubAccounts, getSubAccountStats, deactivateSubAccount, getAgencyForLocation, isSubAccountUnderAgency } from './db';
 import { sseBroker } from './sse';
 import { checkLocationProducts, getAuthToken } from './ghl-api'; // Legacy - only used for manual testing
-import { getSDKClient, getAgencyLocations, validateLocationId } from './ghl-sdk';
+import { getSDKClient, getAgencyLocations, validateLocationId, searchLocationById } from './ghl-sdk';
 import { getBaseUrl, getEnvironment, getGhlAppBaseUrl } from './config';
 
 const app = express();
@@ -249,9 +249,8 @@ app.get('/api/location-context', async (req, res) => {
   try {
     console.log(`[Location Context] Fetching context for location: ${locationId}`);
     
-    // Get location from agency locations list (using GHL SDK)
-    const locations = await getAgencyLocations();
-    const location = locations.find(loc => loc.id === locationId);
+    // Search for specific location by ID (efficient - no need to fetch all)
+    const location = await searchLocationById(locationId);
     
     if (!location) {
       console.error(`[Location Context] Location not found: ${locationId}`);
@@ -318,8 +317,8 @@ app.get('/api/installation/check', async (req, res) => {
         getAgencyInstallation()
           .then(async (agencyInstallation) => {
             if (!agencyInstallation?.accountId) return;
-            const locations = await getAgencyLocations();
-            const location = locations.find(loc => loc.id === locationId);
+            // Search for specific location (efficient - no need to fetch all)
+            const location = await searchLocationById(locationId);
             if (location) {
               const isNew = !(await getSubAccount(locationId));
               await registerSubAccount({
@@ -469,16 +468,14 @@ app.get('/api/location/validate', async (req, res) => {
         };
       }
       
-      // Fetch locations from GHL SDK with timeout
+      // Search for specific location with timeout (efficient - no need to fetch all)
       try {
-        const locations = await Promise.race([
-          getAgencyLocations(),
+        const foundLocation = await Promise.race([
+          searchLocationById(locationId),
           new Promise<never>((_, reject) => 
             setTimeout(() => reject(new Error('GHL SDK timeout')), 1500)
           )
         ]);
-        
-        const foundLocation = locations.find(loc => loc.id === locationId);
         
         if (foundLocation) {
           console.log(`[Location Validation] Found: ${foundLocation.name} (${Date.now() - startTime}ms)`);
