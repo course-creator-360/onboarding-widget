@@ -99,6 +99,8 @@
   let hasShownCompletionDialog = false; // Track if we've shown the completion dialog
   let ghlAppBaseUrl = 'https://app.gohighlevel.com'; // Default, will be fetched from backend
   let userpilotToken = null; // Will be fetched from backend
+  let widgetLocationFilter = null; // Location filter (optional) - fetched from backend
+  let widgetLocationFilterValid = true; // Whether the filter is valid (if set)
 
   // Fetch configuration from backend
   async function fetchConfig() {
@@ -119,6 +121,23 @@
           console.log('[CC360 Widget] ✅ Userpilot token received from backend');
         } else {
           console.log('[CC360 Widget] ⚠️ No Userpilot token in config');
+        }
+        
+        if (config.widgetLocationFilter) {
+          widgetLocationFilter = config.widgetLocationFilter;
+          widgetLocationFilterValid = config.widgetLocationFilterValid !== false; // Default to true if not provided
+          
+          if (widgetLocationFilterValid) {
+            console.log('[CC360 Widget] 🎯 Widget location filter enabled:', widgetLocationFilter);
+          } else {
+            console.error('[CC360 Widget] ❌ Widget location filter is INVALID:', widgetLocationFilter);
+            console.error('[CC360 Widget] ❌ This location was not found in your agency or validation failed');
+            console.error('[CC360 Widget] ❌ Widget will NOT show anywhere until WIDGET_LOCATION_ID_FILTER is fixed');
+          }
+        } else {
+          console.error('[CC360 Widget] ❌ WIDGET_LOCATION_ID_FILTER is NOT configured');
+          console.error('[CC360 Widget] ❌ This environment variable is REQUIRED for the widget to function');
+          console.error('[CC360 Widget] ❌ Widget will NOT show anywhere until WIDGET_LOCATION_ID_FILTER is set');
         }
       }
     } catch (error) {
@@ -2423,12 +2442,46 @@
     // Fetch configuration from backend
     await fetchConfig();
     
+    // CRITICAL: Filter is REQUIRED - if not set, stop initialization
+    if (!widgetLocationFilter) {
+      console.error('[CC360 Widget] 💥 CRITICAL ERROR: WIDGET_LOCATION_ID_FILTER is NOT SET');
+      console.error('[CC360 Widget] 💥 This environment variable is REQUIRED');
+      console.error('[CC360 Widget] 💥 Widget initialization STOPPED - nothing will show');
+      console.error('[CC360 Widget] 💥 Set WIDGET_LOCATION_ID_FILTER in your environment to continue');
+      return; // Stop initialization completely - filter is required
+    }
+    
+    // CRITICAL: If filter is set but invalid, stop initialization completely
+    if (!widgetLocationFilterValid) {
+      console.error('[CC360 Widget] 💥 CRITICAL ERROR: Location filter is invalid');
+      console.error('[CC360 Widget] 💥 WIDGET_LOCATION_ID_FILTER is set but location not found in agency');
+      console.error('[CC360 Widget] 💥 Widget initialization STOPPED - nothing will show');
+      console.error('[CC360 Widget] 💥 Fix the environment variable to a valid location ID');
+      return; // Stop initialization completely - invalid filter
+    }
+    
+    // Check if location matches filter
+    if (locationId !== widgetLocationFilter) {
+      console.log('[CC360 Widget] 🚫 Location filter active - widget will not show');
+      console.log('[CC360 Widget] Current location:', locationId);
+      console.log('[CC360 Widget] Allowed location:', widgetLocationFilter);
+      console.log('[CC360 Widget] Widget initialization stopped (location mismatch)');
+      return; // Stop initialization - don't show widget
+    }
+    
+    console.log('[CC360 Widget] ✅ Location filter check passed - proceeding with initialization');
+    
     // Check if authorized (agency or location)
     const installed = await checkInstallation();
     
     if (!installed) {
-      // Not authorized or token expired - show message
+      // Not authorized - don't show anything when filter is active
       console.log('[CC360 Widget] Not authorized or token expired');
+      if (widgetLocationFilter) {
+        console.log('[CC360 Widget] Location filter active - hiding widget completely (no "Setup Required" message)');
+        return; // Don't show anything, including "Setup Required"
+      }
+      // Show "Setup Required" only if no filter is set (showing for all locations)
       const errorMessage = window.cc360WidgetError || null;
       showNotAuthorized(errorMessage);
     } else {

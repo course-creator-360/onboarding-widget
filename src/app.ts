@@ -42,17 +42,52 @@ app.use('/install', oauthRouter);
 
 app.get('/api/healthz', (_req, res) => res.json({ ok: true }));
 
-app.get('/api/config', (_req, res) => {
+app.get('/api/config', async (_req, res) => {
   // Get Userpilot token based on environment
   const userpilotToken = process.env.NODE_ENV === 'production' 
     ? process.env.USERPILOT_TOKEN 
     : (process.env.USERPILOT_STAGE_TOKEN || process.env.USERPILOT_TOKEN);
   
+  const filterLocationId = process.env.WIDGET_LOCATION_ID_FILTER || null;
+  let filterValid = true; // Assume valid if not set
+  
+  // CRITICAL: Filter is now REQUIRED
+  if (!filterLocationId) {
+    console.error('[Config] ❌ WIDGET_LOCATION_ID_FILTER is NOT SET');
+    console.error('[Config] ❌ This environment variable is REQUIRED for the widget to function');
+    console.error('[Config] ❌ Widget will NOT show anywhere until this is configured');
+    console.error('[Config] 💡 Add WIDGET_LOCATION_ID_FILTER=<your_location_id> to your .env file or Vercel environment variables');
+    filterValid = false; // Mark as invalid so widget won't show
+  }
+  
+  // STRICT validation: if filter is set, it MUST be valid
+  if (filterLocationId) {
+    try {
+      const validation = await validateLocationId(filterLocationId);
+      if (!validation.valid) {
+        filterValid = false;
+        console.error(`[Config] ❌ WIDGET_LOCATION_ID_FILTER is set to "${filterLocationId}" but this location was NOT FOUND in your agency.`);
+        console.error('[Config] ❌ Widget will NOT show anywhere until this is fixed.');
+        console.error('[Config] Please verify the locationId is correct and belongs to your authorized agency.');
+      } else {
+        filterValid = true;
+        console.log(`[Config] ✅ Widget filter validated: ${validation.location?.name || filterLocationId} (${filterLocationId})`);
+      }
+    } catch (error) {
+      filterValid = false;
+      console.error(`[Config] ❌ Failed to validate WIDGET_LOCATION_ID_FILTER: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('[Config] ❌ Widget will NOT show anywhere until this is fixed.');
+      console.error('[Config] Possible reasons: Agency not authorized, API error, or invalid location ID.');
+    }
+  }
+  
   return res.json({
     apiBase: getBaseUrl(),
     environment: getEnvironment(),
     ghlAppBaseUrl: getGhlAppBaseUrl(),
-    userpilotToken: userpilotToken || null  // Expose for client-side SDK
+    userpilotToken: userpilotToken || null,  // Expose for client-side SDK
+    widgetLocationFilter: filterLocationId,  // Location filter (optional)
+    widgetLocationFilterValid: filterValid  // Whether the filter is valid (if set)
   });
 });
 
