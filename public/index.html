@@ -194,23 +194,21 @@
     <div class="info-box">
       <strong>Widget Configuration:</strong>
       <div style="margin-top: 12px;">
-        <div id="locationSelector" style="background: linear-gradient(135deg, rgba(14, 50, 94, 0.05) 0%, rgba(4, 117, 255, 0.05) 100%); border: 2px solid #0475FF; padding: 16px; border-radius: 10px; margin-bottom: 12px; display: none; box-shadow: 0 2px 8px rgba(4, 117, 255, 0.1);">
-          <strong style="color: #0E325E; display: block; margin-bottom: 10px; font-size: 15px;">🎯 Select a Location:</strong>
-          <select id="locationDropdown" style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e5e7eb; font-size: 14px; margin-bottom: 10px; outline: none; transition: border-color 0.2s;">
-            <option value="">Loading locations...</option>
-          </select>
+        <div id="locationSelector" style="background: linear-gradient(135deg, rgba(14, 50, 94, 0.05) 0%, rgba(4, 117, 255, 0.05) 100%); border: 2px solid #0475FF; padding: 16px; border-radius: 10px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(4, 117, 255, 0.1);">
+          <strong style="color: #0E325E; display: block; margin-bottom: 10px; font-size: 15px;">🎯 Enter Location ID:</strong>
+          <input 
+            type="text" 
+            id="locationInput" 
+            placeholder="e.g., kgREXsjAvhag6Qn8Yjqn" 
+            style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e5e7eb; font-size: 14px; margin-bottom: 10px; outline: none; transition: border-color 0.2s; box-sizing: border-box; font-family: 'Monaco', 'Courier New', monospace;"
+            onfocus="this.style.borderColor='#0475FF'"
+            onblur="this.style.borderColor='#e5e7eb'"
+          />
           <button onclick="selectLocation()" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #0E325E 0%, #0475FF 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; box-shadow: 0 2px 8px rgba(4, 117, 255, 0.2); transition: all 0.2s;">
-            Load Selected Location
+            Load Location
           </button>
-        </div>
-        <div id="locationWarning" style="background: linear-gradient(135deg, rgba(255, 47, 0, 0.08) 0%, rgba(226, 255, 0, 0.08) 100%); border: 2px solid #FF2F00; padding: 14px; border-radius: 10px; margin-bottom: 12px; display: none; box-shadow: 0 2px 8px rgba(255, 47, 0, 0.1);">
-          <strong style="color: #c41e00; display: block; margin-bottom: 8px; font-size: 15px;">⚠️ Setup Required:</strong>
-          <p style="margin: 0; font-size: 13px; color: #6c4a00; line-height: 1.5;">
-            <strong style="color: #c41e00;">Please click "🔑 Setup Agency OAuth" below</strong> to authorize the widget and load your locations automatically.
-            <br><br>
-            <strong>Alternative:</strong> For manual testing, you can add <code style="background: rgba(255,255,255,0.6); color: #0475FF; padding: 3px 8px; border-radius: 4px;">?locationId=YOUR_LOCATION_ID</code> to the URL.
-            <br>
-            Example: <code style="background: rgba(255,255,255,0.6); color: #0475FF; padding: 3px 8px; border-radius: 4px;">?locationId=L851uHvru1ipOe8DIwNS</code>
+          <p style="margin: 10px 0 0 0; font-size: 12px; color: #6c757d; line-height: 1.4;">
+            💡 Find your location ID in the GHL dashboard URL: <code style="font-size: 11px;">https://app.gohighlevel.com/v2/location/<strong style="color: #0475FF;">YOUR_LOCATION_ID</strong>/dashboard</code>
           </p>
         </div>
         <p style="margin: 0; font-size: 13px; color: #6c757d;">
@@ -274,7 +272,6 @@
       <ul>
         <li><code>GET /api/status?locationId=...&skipApiChecks=true</code> - Get current checklist status (skipApiChecks prevents real API overwrites)</li>
         <li><code>GET /api/events?locationId=...</code> - SSE stream for real-time updates</li>
-        <li><code>GET /api/agency/locations</code> - Get all locations from agency (requires OAuth)</li>
         <li><code>GET /api/location/validate?locationId=...</code> - Validate if locationId exists in agency</li>
         <li><code>GET /api/onboarding/:locationId/check-products</code> - Check if products exist (polling)</li>
         <li><code>POST /api/dismiss</code> - Dismiss the widget</li>
@@ -311,7 +308,6 @@
   <script>
     let LOCATION_ID = null;
     let API_BASE = window.location.origin; // Use current origin by default
-    let availableLocations = [];
 
     // Detect location ID from URL (for demo/testing)
     function detectLocationFromUrl() {
@@ -364,62 +360,27 @@
       }
     }
 
-    // Load available locations from the agency
-    async function loadAgencyLocations() {
-      try {
-        const response = await fetch(`${API_BASE}/api/agency/locations`);
-        
-        if (!response.ok) {
-          if (response.status === 401) {
-            // Not authorized yet - show manual mode
-            document.getElementById('locationWarning').style.display = 'block';
-            return;
-          }
-          throw new Error('Failed to fetch locations');
-        }
-        
-        const data = await response.json();
-        availableLocations = data.locations || [];
-        
-        if (availableLocations.length === 0) {
-          document.getElementById('locationWarning').style.display = 'block';
-          return;
-        }
-        
-        // Populate dropdown
-        const dropdown = document.getElementById('locationDropdown');
-        dropdown.innerHTML = '<option value="">-- Select a location --</option>';
-        
-        availableLocations.forEach(loc => {
-          const option = document.createElement('option');
-          option.value = loc.id;
-          option.textContent = `${loc.name} (${loc.id})`;
-          dropdown.appendChild(option);
-        });
-        
-        // Show the selector
-        document.getElementById('locationSelector').style.display = 'block';
-        
-        console.log(`Loaded ${availableLocations.length} locations from agency`);
-        
-      } catch (error) {
-        console.error('Error loading locations:', error);
-        document.getElementById('locationWarning').style.display = 'block';
-      }
-    }
+    // No longer fetching all locations - user enters location ID manually
+    // This is more efficient and scalable for agencies with many locations
 
     // Handle location selection
     function selectLocation() {
-      const dropdown = document.getElementById('locationDropdown');
-      const selectedId = dropdown.value;
+      const input = document.getElementById('locationInput');
+      const locationId = input.value.trim();
       
-      if (!selectedId) {
-        alert('Please select a location from the dropdown');
+      if (!locationId) {
+        alert('Please enter a location ID');
         return;
       }
       
-      // Update URL with selected location
-      const newUrl = `${window.location.pathname}?locationId=${selectedId}`;
+      // Basic validation - just check it's not too short
+      if (locationId.length < 10) {
+        alert('Location ID seems too short. Please check the ID and try again.');
+        return;
+      }
+      
+      // Update URL with entered location
+      const newUrl = `${window.location.pathname}?locationId=${locationId}`;
       window.location.href = newUrl;
     }
     
@@ -471,9 +432,6 @@
       
       // Check agency OAuth status and update button
       await updateAgencyButtonStatus();
-      
-      // Load available locations from agency
-      await loadAgencyLocations();
       
       // Auto-load widget - it will auto-detect location ID from URL
       const script = document.createElement('script');
@@ -704,9 +662,6 @@
         // Update button status
         await updateAgencyButtonStatus();
         
-        // Reload locations from agency
-        await loadAgencyLocations();
-        
         // Reload widget to show checklist (will auto-detect location)
         const existingWidget = document.getElementById('cc360-onboarding-widget');
         if (existingWidget) existingWidget.remove();
@@ -763,10 +718,10 @@
           console.log('[ClearAuth] Updating button status...');
           await updateAgencyButtonStatus();
           
-          // Hide location dropdown and show warning
-          console.log('[ClearAuth] Updating location selector visibility...');
-          document.getElementById('locationSelector').style.display = 'none';
-          document.getElementById('locationWarning').style.display = 'block';
+          // Clear current location input
+          console.log('[ClearAuth] Clearing location input...');
+          const locationInput = document.getElementById('locationInput');
+          if (locationInput) locationInput.value = '';
           
           // Clear current location
           LOCATION_ID = null;

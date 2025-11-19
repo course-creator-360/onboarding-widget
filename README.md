@@ -12,6 +12,8 @@ A persistent onboarding checklist widget for CourseCreator360 sub-accounts. Trac
 - ✅ **Vercel Ready**: Auto-detects environment, deploys seamlessly
 - ✅ **Draggable & Resizable**: User-friendly widget positioning
 - ✅ **Automatic Token Refresh**: No re-authorization needed
+- ✅ **Location Filtering**: Optional filter to show widget for specific locations only
+- ✅ **Userpilot Integration**: Server-side and client-side analytics tracking
 
 ---
 
@@ -33,7 +35,9 @@ A persistent onboarding checklist widget for CourseCreator360 sub-accounts. Trac
 - [API Documentation](#api-documentation)
 - [Sub-Account Tracking](#sub-account-tracking)
 - [Widget Features](#widget-features)
+- [Location Filtering](#location-filtering)
 - [Webhooks](#webhooks)
+- [Architecture & Performance](#architecture--performance)
 - [Troubleshooting](#troubleshooting)
 - [Development](#development)
 
@@ -193,6 +197,32 @@ This is a **ONE-TIME setup** that allows the widget to work for ALL sub-accounts
    - Success message appears
    - Click "Check Agency Status" → Should show "✓ Authorized"
 
+#### OAuth Callback Redirect
+
+The OAuth callback automatically redirects back to the original page after authorization:
+
+- **Return URL Preservation**: The system stores where you came from and redirects back
+- **Security Validation**: Prevents open redirect attacks by validating return URLs
+- **Query Parameters**: Preserves URL parameters (like `locationId`) during redirect
+- **Console Logs**: Clear logging for debugging redirect issues
+
+**Flow:**
+```
+User clicks "Setup Agency OAuth"
+  ↓
+index.html → /api/oauth/agency/install?returnUrl=https://...
+  ↓
+Store returnUrl in state cookie
+  ↓
+Redirects to GHL OAuth
+  ↓
+GHL redirects to /api/oauth/callback?code=...&state=...
+  ↓
+Retrieve returnUrl from state cookie
+  ↓
+✅ Redirect to: returnUrl?oauth_success=true&oauth_type=agency
+```
+
 ### 4. Widget Deployment
 
 #### Add to GHL Custom Values
@@ -256,9 +286,18 @@ Vercel automatically injects these environment variables:
 
 Set in Vercel → Settings → Environment Variables:
 ```bash
-DATABASE_URL=postgresql://user:password@host:5432/dbname?schema=public
+DATABASE_URL=postgresql://user:password@host:5432/dbname?schema=public&connection_limit=5&pool_timeout=10&connect_timeout=10
 POSTGRES_URL=postgresql://user:password@host:5432/dbname?schema=public
 ```
+
+**Connection Pooling for Serverless:**
+
+For external databases, add connection pooling parameters to prevent timeouts:
+- `connection_limit=5` - Max connections per serverless function
+- `pool_timeout=10` - Timeout for acquiring connection (seconds)
+- `connect_timeout=10` - TCP connection timeout (seconds)
+
+The app uses a Prisma Client singleton pattern to reuse connections across serverless invocations and prevent connection pool exhaustion.
 
 #### Step 2: Set Required Environment Variables
 
@@ -327,7 +366,7 @@ Set these in Vercel Dashboard (Settings → Environment Variables):
 
 ```bash
 # Required - Database (if using external DB, not needed for Vercel Postgres)
-DATABASE_URL=postgresql://user:password@host:5432/dbname?schema=public
+DATABASE_URL=postgresql://user:password@host:5432/dbname?schema=public&connection_limit=5&pool_timeout=10&connect_timeout=10
 POSTGRES_URL=postgresql://user:password@host:5432/dbname?schema=public
 
 # Required - GoHighLevel OAuth
@@ -340,6 +379,9 @@ VERCEL_MIGRATE_SECRET=your_secure_random_secret
 # Optional (auto-detected from VERCEL_URL)
 # APP_BASE_URL=https://your-custom-domain.com
 # GHL_REDIRECT_URI=https://your-app.vercel.app/oauth/callback
+
+# Optional - Widget Location Filter (show widget for specific location only)
+WIDGET_LOCATION_ID_FILTER=loc_abc123xyz
 
 # Testing
 GHL_SUBACCOUNT_TEST_LOCATION_ID=your_test_location
@@ -420,6 +462,23 @@ model Onboarding {
   updatedAt          DateTime @updatedAt
 }
 
+model SubAccount {
+  id              String   @id @default(cuid())
+  locationId      String   @unique @map("location_id")
+  accountId       String   @map("account_id")      // Links to agency
+  locationName    String?  @map("location_name")
+  companyId       String?  @map("company_id")
+  firstAccessedAt DateTime @default(now()) @map("first_accessed_at")
+  lastAccessedAt  DateTime @updatedAt @map("last_accessed_at")
+  isActive        Boolean  @default(true) @map("is_active")
+  metadata        Json?
+
+  @@index([accountId])
+  @@index([companyId])
+  @@index([firstAccessedAt])
+  @@index([isActive])
+}
+
 model EventLog {
   id         String   @id @default(cuid())
   locationId String?
@@ -488,7 +547,6 @@ npm run db:studio
 ### Authorization Endpoints
 
 - `GET /api/agency/status` - Check if agency is authorized
-- `GET /api/agency/locations` - Get all locations from agency (requires OAuth)
 - `GET /api/location/validate?locationId=...` - Validate if locationId exists in agency
 - `GET /api/installation/check?locationId=...` - Check auth status
 - `GET /api/oauth/agency/install` - Agency-level OAuth setup
@@ -514,7 +572,7 @@ npm run db:studio
 ### Utility Endpoints
 
 - `GET /api/healthz` - Health check
-- `GET /api/config` - Configuration info
+- `GET /api/config` - Configuration info (includes widget location filter, Userpilot token, etc.)
 
 ---
 
@@ -555,7 +613,153 @@ const data = await stats.json();
 console.log(`New sub-accounts this week: ${data.stats.lastWeek}`);
 ```
 
-📖 **Full Documentation**: See [SUB_ACCOUNT_TRACKING.md](./SUB_ACCOUNT_TRACKING.md) for complete API reference and examples.
+### How It Works
+
+**Flow Diagram:**
+```
+┌─────────────────────────────────────────┐
+│ 1. Sub-Account User Logs Into GHL      │
+└────────────┬────────────────────────────┘
+             ↓
+┌─────────────────────────────────────────┐
+│ 2. Widget Loads via Custom JavaScript  │
+└────────────┬────────────────────────────┘
+             ↓
+┌─────────────────────────────────────────┐
+│ 3. Widget Calls Installation Check     │
+│    GET /api/installation/check          │
+└────────────┬────────────────────────────┘
+             ↓
+┌─────────────────────────────────────────┐
+│ 4. Server Checks Agency Authorization  │
+└────────────┬────────────────────────────┘
+             ↓
+┌─────────────────────────────────────────┐
+│ 5. Server Validates LocationId         │
+│    (via GHL SDK)                        │
+└────────────┬────────────────────────────┘
+             ↓
+┌─────────────────────────────────────────┐
+│ 6. Check if Sub-Account Exists         │
+│    (New or Existing?)                   │
+└────────────┬────────────────────────────┘
+             ↓
+┌─────────────────────────────────────────┐
+│ 7. Register/Update Sub-Account         │
+│    - Store location details             │
+│    - Link to agency via accountId       │
+│    - Track timestamps                   │
+│    - Store metadata                     │
+└────────────┬────────────────────────────┘
+             ↓
+┌─────────────────────────────────────────┐
+│ 8. Widget Loads Successfully            │
+│    Sub-Account is Now Tracked!          │
+└─────────────────────────────────────────┘
+```
+
+**Data Captured for Each Sub-Account:**
+```typescript
+{
+  id: "cuid_abc123",                    // Unique identifier
+  locationId: "loc_abc123",             // GHL location ID
+  accountId: "agency_xyz789",           // Parent agency ID
+  locationName: "Client Business",      // Business name
+  companyId: "comp_456",               // GHL company ID
+  firstAccessedAt: 1706400000000,      // First widget access
+  lastAccessedAt: 1706500000000,       // Most recent access
+  isActive: true,                      // Active status
+  metadata: {                          // Additional details
+    email: "client@business.com",
+    phone: "+1234567890",
+    website: "https://clientbusiness.com",
+    timezone: "America/New_York"
+  }
+}
+```
+
+### API Endpoints
+
+#### Get All Sub-Accounts for an Agency
+
+```bash
+GET /api/sub-accounts?accountId=agency_xyz789
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "count": 15,
+  "subAccounts": [
+    {
+      "id": "cuid_abc123",
+      "locationId": "loc_abc123",
+      "accountId": "agency_xyz789",
+      "locationName": "Client Business",
+      "companyId": "comp_456",
+      "firstAccessedAt": 1706400000000,
+      "lastAccessedAt": 1706500000000,
+      "isActive": true,
+      "metadata": { ... }
+    }
+  ]
+}
+```
+
+#### Get Specific Sub-Account Details
+
+```bash
+GET /api/sub-accounts/:locationId
+```
+
+#### Verify Sub-Account Agency Relationship
+
+```bash
+GET /api/sub-accounts/verify/:locationId
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "isUnderAgency": true,
+  "locationId": "loc_abc123",
+  "agencyAccountId": "agency_xyz789",
+  "isActive": true,
+  "locationName": "Client Business",
+  "firstAccessedAt": 1706400000000,
+  "lastAccessedAt": 1706500000000,
+  "agencyAuthorized": true
+}
+```
+
+#### Get Agency Statistics
+
+```bash
+GET /api/sub-accounts/stats/:accountId
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "accountId": "agency_xyz789",
+  "stats": {
+    "total": 15,
+    "active": 14,
+    "inactive": 1,
+    "lastWeek": 3,
+    "lastMonth": 8
+  }
+}
+```
+
+#### Deactivate a Sub-Account
+
+```bash
+POST /api/sub-accounts/:locationId/deactivate
+```
 
 ---
 
@@ -623,6 +827,120 @@ The app automatically refreshes OAuth tokens without requiring re-authorization.
 
 ---
 
+## Location Filtering
+
+The widget can be configured to only display for a specific location ID using the `WIDGET_LOCATION_ID_FILTER` environment variable.
+
+### Use Cases
+
+- Test the widget with a single location before rolling out to all locations
+- Restrict the widget to specific sub-accounts
+- Create a pilot program with select locations
+- Limit widget visibility for compliance or business reasons
+
+### Configuration
+
+#### Step 1: Find Your Location ID
+
+You can find the location ID in several ways:
+
+1. **From the GHL Dashboard URL:**
+   ```
+   https://app.gohighlevel.com/v2/location/loc_abc123xyz/dashboard
+                                          └─────┬──────┘
+                                           Location ID
+   ```
+
+2. **From Browser Console:**
+   Open the GHL dashboard and check the console logs:
+   ```
+   [CC360 Widget] Using auto-detected location ID: loc_abc123xyz
+   ```
+
+#### Step 2: Set the Environment Variable
+
+**Local Development (.env):**
+```bash
+WIDGET_LOCATION_ID_FILTER=loc_abc123xyz
+```
+
+**Vercel (Production/Staging):**
+1. Go to your Vercel project dashboard
+2. Navigate to **Settings** → **Environment Variables**
+3. Add a new variable:
+   - **Name:** `WIDGET_LOCATION_ID_FILTER`
+   - **Value:** `loc_abc123xyz` (your specific location ID)
+   - **Environment:** Choose `Production`, `Preview`, or `Development` as needed
+4. Click **Save**
+5. **Redeploy** your application for the changes to take effect
+
+#### Step 3: Verify Configuration
+
+After deploying with the filter enabled, the widget will:
+
+1. **Show only for the specified location:**
+   - When a user from the matching location opens the app, they'll see the widget
+   - Console logs will show: `✅ Location filter check passed`
+
+2. **Hide for all other locations:**
+   - When a user from a different location opens the app, the widget won't appear
+   - Console logs will show: `🚫 Location filter active - widget will not show`
+
+### Disabling the Filter
+
+To show the widget for **all authorized locations** again:
+
+1. **Remove or comment out** the environment variable:
+   ```bash
+   # WIDGET_LOCATION_ID_FILTER=loc_abc123xyz
+   ```
+
+2. Or **set it to an empty value**:
+   ```bash
+   WIDGET_LOCATION_ID_FILTER=
+   ```
+
+3. Redeploy your application
+
+### Console Logging
+
+**When Filter is Active and Location Matches:**
+```
+[CC360 Widget] 🔧 Fetching config from: https://your-app.com/api/config
+[CC360 Widget] ✅ Config received: { widgetLocationFilter: "loc_abc123xyz", ... }
+[CC360 Widget] 🎯 Widget location filter enabled: loc_abc123xyz
+[CC360 Widget] Using auto-detected location ID: loc_abc123xyz
+[CC360 Widget] ✅ Location filter check passed - proceeding with initialization
+```
+
+**When Filter is Active but Location Doesn't Match:**
+```
+[CC360 Widget] 🔧 Fetching config from: https://your-app.com/api/config
+[CC360 Widget] ✅ Config received: { widgetLocationFilter: "loc_abc123xyz", ... }
+[CC360 Widget] 🎯 Widget location filter enabled: loc_abc123xyz
+[CC360 Widget] Using auto-detected location ID: loc_def456uvw
+[CC360 Widget] 🚫 Location filter active - widget will not show
+[CC360 Widget] Current location: loc_def456uvw
+[CC360 Widget] Allowed location: loc_abc123xyz
+[CC360 Widget] Widget initialization stopped (location mismatch)
+```
+
+**When No Filter is Set (Default Behavior):**
+```
+[CC360 Widget] 🔧 Fetching config from: https://your-app.com/api/config
+[CC360 Widget] ✅ Config received: { widgetLocationFilter: null, ... }
+[CC360 Widget] 🌍 No location filter - widget will show for all authorized locations
+```
+
+### Security Notes
+
+- The filter is enforced **client-side** during widget initialization
+- If someone bypasses the client-side check, the backend API still requires proper authorization
+- The location ID is **public information** visible in GHL URLs and is not considered sensitive
+- The filter is meant for **business logic**, not security - backend API authorization is your security layer
+
+---
+
 ## Webhooks
 
 ### Required Webhook Configuration
@@ -662,6 +980,107 @@ curl -X POST http://localhost:4002/api/webhooks/ghl \
 
 # Check if it updated
 curl "http://localhost:4002/api/status?locationId=test_location_123"
+```
+
+---
+
+## Architecture & Performance
+
+### Location Validation Architecture
+
+**MYTH**: "The widget fetches all 100+ locations every time to check if a location is valid."
+
+**REALITY**: The widget uses **direct location ID lookups** via GHL's API. It NEVER fetches all locations for validation.
+
+#### How It Actually Works
+
+**Widget Initialization (Efficient ✅):**
+
+When a location loads the widget:
+```
+User opens GHL dashboard → Widget detects locationId → Direct API lookup
+```
+
+**Code Flow:**
+```typescript
+// 1. Widget detects location from URL/context
+const locationId = detectLocationFromContext();
+
+// 2. Makes a SINGLE API call to check this specific location
+GET /api/installation/check?locationId=loc_abc123
+
+// 3. Backend validates with direct lookup (NOT fetching all locations)
+const validation = await validateLocationId(locationId);
+  → calls searchLocationById(locationId)  // Direct GHL API call
+  → GHL returns: 200 OK (valid) or 404 Not Found (invalid)
+```
+
+**API Calls Made**: **1 call** to GHL API for that specific location ID
+
+**Location Validation (Efficient ✅):**
+
+The `validateLocationId()` function uses direct lookup:
+- Makes a GET request to GHL API: `GET /locations/{locationId}`
+- GHL instantly returns whether the location exists and belongs to your agency
+- No iteration, no fetching lists, just a single lookup
+
+**Sub-Account Registration (Efficient ✅):**
+
+When a new sub-account is detected:
+- After validation succeeds, register in our database
+- Database Writes: 1 upsert to `sub_accounts` table
+- API Calls: 0 (already validated above)
+
+#### Performance Comparison
+
+| Operation | Old (Bad) Approach | New (Good) Approach |
+|-----------|-------------------|---------------------|
+| Validate 1 location | Fetch 1000 locations → Find match | Direct lookup: 1 API call |
+| Widget init | Fetch all → Check if location in list | Direct lookup: 1 API call |
+| Check 100 different locations | Fetch 1000 × 100 times | 100 direct lookups |
+| API calls for validation | 1000+ locations/request | 1 location/request |
+
+#### Best Practices
+
+**✅ DO Use These Functions:**
+
+For individual location validation:
+- `validateLocationId(locationId)` - Checks if location belongs to agency
+- `searchLocationById(locationId)` - Gets location details
+- `getLocation(locationId)` - Gets location with SDK client
+
+**❌ DON'T Use This Function:**
+
+For location validation:
+- `getAgencyLocations()` - Fetches ALL locations (expensive!)
+
+**📝 When to Use `getAgencyLocations()`:**
+
+ONLY use when you actually need ALL locations:
+- Admin dashboard showing all sub-accounts
+- Bulk operations on all locations
+- Analytics/reporting across all locations
+- Syncing all locations to a cache
+
+**Bottom line**: The widget is efficient and scales well even for agencies with 1000+ locations.
+
+### Serverless Database Connection
+
+The app uses a Prisma Client singleton pattern to optimize for serverless environments:
+
+**Connection Pooling:**
+- Reuses Prisma Client instances across serverless invocations
+- Prevents connection pool exhaustion
+- Handles cold starts efficiently
+
+**For Vercel Postgres:**
+- Use `POSTGRES_PRISMA_URL` (already pooled)
+- Vercel automatically handles connection pooling
+
+**For External Databases:**
+Add connection pool parameters to `DATABASE_URL`:
+```
+?connection_limit=5&pool_timeout=10&connect_timeout=10
 ```
 
 ---
@@ -724,6 +1143,16 @@ make agency-setup  # Run OAuth flow
 
 Or visit `http://localhost:4002` and click "Setup Agency OAuth"
 
+#### OAuth Callback Not Redirecting
+
+**Cause**: Return URL not preserved or invalid
+
+**Solution**:
+1. Check browser console for redirect logs
+2. Verify state cookie contains returnUrl
+3. Check Vercel logs for redirect attempts
+4. Ensure `APP_BASE_URL` is set correctly in production
+
 ### Widget Issues
 
 #### Widget Doesn't Appear
@@ -732,6 +1161,7 @@ Or visit `http://localhost:4002` and click "Setup Agency OAuth"
 1. Custom Values applied to locations
 2. URLs in widget code are correct
 3. JavaScript console for errors (F12)
+4. Location filter is not blocking this location
 
 #### Checklist Not Updating
 
@@ -767,13 +1197,7 @@ Or visit `http://localhost:4002` and click "Setup Agency OAuth"
 **Solution**:
 1. ✅ Code has been updated to use local Prisma binary instead of npx
 2. Set `SKIP_BUILD_MIGRATIONS=true` in Vercel environment variables
-3. Rebuild and redeploy:
-   ```bash
-   npm run build
-   git add -A
-   git commit -m "fix: update for serverless deployment"
-   git push
-   ```
+3. Rebuild and redeploy
 4. After deployment, run migrations via endpoint:
    ```bash
    curl -X POST https://your-app.vercel.app/api/migrate \
@@ -805,6 +1229,16 @@ Or visit `http://localhost:4002` and click "Setup Agency OAuth"
    ```bash
    DATABASE_URL="your_url" npx prisma migrate deploy
    ```
+
+**Error 4**: Database connection timeout in serverless
+
+**Cause**: Connection pool exhaustion or cold start timeout
+
+**Solution**:
+1. Ensure using pooled connection (`POSTGRES_PRISMA_URL` for Vercel Postgres)
+2. Add connection pooling params for external databases
+3. Check Prisma Client singleton pattern is working
+4. Reduce `connection_limit` if needed
 
 **Note**: Migrations are never run automatically in production. Always use the `/api/migrate` endpoint.
 
@@ -914,8 +1348,10 @@ curl "http://localhost:4002/api/status?locationId=test123"
   ☐ POSTGRES_URL (auto-set by Vercel Postgres, or set manually for external DB)
   ☐ GHL_CLIENT_ID
   ☐ GHL_CLIENT_SECRET
+  ☐ VERCEL_MIGRATE_SECRET
+  ☐ SKIP_BUILD_MIGRATIONS=true
 ☐ App deployed to Vercel
-☐ Migrations ran successfully (check Vercel build logs)
+☐ Migrations ran successfully (check Vercel build logs or run via /api/migrate)
 ☐ GHL Marketplace OAuth URI updated to production URL
 ☐ GHL Marketplace webhook URL updated to production URL
 ☐ Agency authorized with production URL
@@ -999,6 +1435,7 @@ The widget builds dashboard URLs dynamically based on `data-location`:
 - **Deployment**: Vercel (serverless)
 - **Frontend**: Vanilla JavaScript (no framework)
 - **Containerization**: Docker + Docker Compose
+- **Analytics**: Userpilot (server-side and client-side)
 
 ---
 
@@ -1010,6 +1447,8 @@ The widget builds dashboard URLs dynamically based on `data-location`:
 - ✅ HTTPS enforced in production
 - ✅ Minimum OAuth scopes requested
 - ✅ Client secrets never exposed to client
+- ✅ Open redirect prevention in OAuth callback
+- ✅ Return URL validation and sanitization
 
 ---
 

@@ -7,8 +7,8 @@ import oauthRouter from './oauth';
 import webhookRouter from './webhooks';
 import { getOnboardingStatus, setDismissed, updateOnboardingStatus, getInstallation, hasAgencyAuthorization, getAgencyInstallation, deleteInstallation, OnboardingStatus, toggleOnboardingField, upsertInstallation, registerSubAccount, getSubAccount, getSubAccountsByAgency, getAllSubAccounts, getSubAccountStats, deactivateSubAccount, getAgencyForLocation, isSubAccountUnderAgency } from './db';
 import { sseBroker } from './sse';
-import { checkLocationProducts, getAuthToken } from './ghl-api'; // Legacy - only used for manual testing
-import { getSDKClient, getAgencyLocations, validateLocationId, searchLocationById } from './ghl-sdk';
+import { checkLocationProducts, getAuthToken } from './ghl-api';
+import { getSDKClient, validateLocationId, searchLocationById } from './ghl-sdk';
 import { getBaseUrl, getEnvironment, getGhlAppBaseUrl } from './config';
 
 const app = express();
@@ -406,41 +406,6 @@ app.get('/api/agency/status', async (req, res) => {
       createdAt: agencyInstallation.createdAt
     } : null
   });
-});
-
-// Get all locations from the agency (for demo page)
-app.get('/api/agency/locations', async (req, res) => {
-  try {
-    const hasAgency = await hasAgencyAuthorization();
-    if (!hasAgency) {
-      return res.status(401).json({ 
-        error: 'Agency not authorized',
-        message: 'Please setup agency OAuth first'
-      });
-    }
-    
-    const locations = await getAgencyLocations();
-    
-    // Format locations for demo page
-    const formattedLocations = locations.map((loc: any) => ({
-      id: loc.id,
-      name: loc.name,
-      companyId: loc.companyId,
-      address: loc.address || null,
-      website: loc.website || null
-    }));
-    
-    return res.json({
-      locations: formattedLocations,
-      count: formattedLocations.length
-    });
-  } catch (error) {
-    console.error('[API] Error fetching agency locations:', error);
-    return res.status(500).json({ 
-      error: 'Failed to fetch locations',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
 });
 
 // Validate a specific locationId
