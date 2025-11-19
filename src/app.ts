@@ -51,6 +51,9 @@ app.get('/api/config', async (_req, res) => {
   const filterLocationId = process.env.WIDGET_LOCATION_ID_FILTER || null;
   let filterValid = true; // Assume valid if not set
   
+  // Feature flags
+  const featureConnectPaymentsEnabled = process.env.FEATURE_CONNECT_PAYMENTS_ENABLED !== 'false'; // Default to true
+  
   // CRITICAL: Filter is now REQUIRED
   if (!filterLocationId) {
     console.error('[Config] ❌ WIDGET_LOCATION_ID_FILTER is NOT SET');
@@ -87,7 +90,10 @@ app.get('/api/config', async (_req, res) => {
     ghlAppBaseUrl: getGhlAppBaseUrl(),
     userpilotToken: userpilotToken || null,  // Expose for client-side SDK
     widgetLocationFilter: filterLocationId,  // Location filter (optional)
-    widgetLocationFilterValid: filterValid  // Whether the filter is valid (if set)
+    widgetLocationFilterValid: filterValid,  // Whether the filter is valid (if set)
+    featureFlags: {
+      connectPaymentsEnabled: featureConnectPaymentsEnabled
+    }
   });
 });
 

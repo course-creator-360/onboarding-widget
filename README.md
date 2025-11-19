@@ -13,6 +13,7 @@ A persistent onboarding checklist widget for CourseCreator360 sub-accounts. Trac
 - ✅ **Draggable & Resizable**: User-friendly widget positioning
 - ✅ **Automatic Token Refresh**: No re-authorization needed
 - ✅ **Location Filtering**: Optional filter to show widget for specific locations only
+- ✅ **Feature Flags**: Enable/disable specific checklist items (e.g., Connect Payments)
 - ✅ **Userpilot Integration**: Server-side and client-side analytics tracking
 
 ---
@@ -36,6 +37,7 @@ A persistent onboarding checklist widget for CourseCreator360 sub-accounts. Trac
 - [Sub-Account Tracking](#sub-account-tracking)
 - [Widget Features](#widget-features)
 - [Location Filtering](#location-filtering)
+- [Feature Flags](#feature-flags)
 - [Webhooks](#webhooks)
 - [Architecture & Performance](#architecture--performance)
 - [Troubleshooting](#troubleshooting)
@@ -382,6 +384,9 @@ VERCEL_MIGRATE_SECRET=your_secure_random_secret
 
 # Optional - Widget Location Filter (show widget for specific location only)
 WIDGET_LOCATION_ID_FILTER=loc_abc123xyz
+
+# Feature Flags - Enable/disable specific checklist items
+FEATURE_CONNECT_PAYMENTS_ENABLED=true    # Show/hide "Connect Payments" checklist item
 
 # Testing
 GHL_SUBACCOUNT_TEST_LOCATION_ID=your_test_location
@@ -938,6 +943,286 @@ To show the widget for **all authorized locations** again:
 - If someone bypasses the client-side check, the backend API still requires proper authorization
 - The location ID is **public information** visible in GHL URLs and is not considered sensitive
 - The filter is meant for **business logic**, not security - backend API authorization is your security layer
+
+---
+
+## Feature Flags
+
+The widget supports feature flags to enable or disable specific checklist items. This allows you to customize the onboarding experience based on your business needs without code changes.
+
+### Available Feature Flags
+
+#### Connect Payments Checklist
+
+Control whether the "Connect Payments" step appears in the onboarding widget.
+
+**Environment Variable:** `FEATURE_CONNECT_PAYMENTS_ENABLED`
+
+**Default:** `true` (enabled)
+
+**Options:**
+- `true` - Show the "Connect Payments" checklist item
+- `false` - Hide the "Connect Payments" checklist item
+
+### Configuration
+
+**Local Development (.env):**
+
+```bash
+# Enable Connect Payments checklist (default)
+FEATURE_CONNECT_PAYMENTS_ENABLED=true
+
+# Disable Connect Payments checklist
+FEATURE_CONNECT_PAYMENTS_ENABLED=false
+```
+
+**Vercel (Production/Staging):**
+
+1. Go to your Vercel project dashboard
+2. Navigate to **Settings** → **Environment Variables**
+3. Add a new variable:
+   - **Name:** `FEATURE_CONNECT_PAYMENTS_ENABLED`
+   - **Value:** `true` or `false`
+   - **Environment:** Choose `Production`, `Preview`, or `Development` as needed
+4. Click **Save**
+5. **Redeploy** your application for the changes to take effect
+
+### How Feature Flags Work
+
+#### Flow
+
+1. **Application Start:**
+   - Environment variable `FEATURE_CONNECT_PAYMENTS_ENABLED` is read
+   - Default is `true` if not set or set to any value other than `"false"`
+
+2. **Widget Initialization:**
+   - Widget calls `/api/config` endpoint
+   - Receives `featureFlags` object in response
+   - Stores flags in widget state
+
+3. **Checklist Rendering:**
+   - All checklist items are defined with optional `featureFlag` property
+   - Items are filtered based on feature flag values
+   - Only enabled items are rendered in the UI
+
+4. **Progress Calculation:**
+   - Progress is calculated based on enabled items only
+   - Example: If Connect Payments is disabled, progress shows "2/3" instead of "2/4"
+
+5. **Completion Detection:**
+   - Completion logic checks only enabled tasks
+   - Widget shows completion dialog when all enabled tasks are done
+
+#### When a Feature Flag is Disabled
+
+1. **The checklist item is hidden** - Users won't see the disabled step in the widget
+2. **Progress calculation adjusts** - The progress bar only counts enabled items (e.g., "2/3" instead of "2/4")
+3. **Completion logic updates** - The widget considers all tasks complete when only enabled items are done
+4. **Real-time updates** - The widget fetches feature flags on initialization
+
+### Example Scenarios
+
+#### Scenario 1: All Items Enabled (Default)
+
+```bash
+FEATURE_CONNECT_PAYMENTS_ENABLED=true
+```
+
+**Result:**
+- Checklist shows: ✓ Sign in, Connect Payments, Create Course, Connect Domain
+- Progress: "0/4" → "4/4"
+- Completion: All 4 tasks must be done
+
+#### Scenario 2: Connect Payments Disabled
+
+```bash
+FEATURE_CONNECT_PAYMENTS_ENABLED=false
+```
+
+**Result:**
+- Checklist shows: ✓ Sign in, Create Course, Connect Domain (no Connect Payments)
+- Progress: "0/3" → "3/3"
+- Completion: Only 3 tasks must be done
+- Console log: `[CC360 Widget] 🚩 Feature flags received: { connectPaymentsEnabled: false }`
+
+### Use Cases
+
+**Disable Connect Payments when:**
+- You want to simplify onboarding for users who don't need payment integration
+- Running a pilot program without payment features
+- Certain sub-accounts don't require payment setup
+- You want to focus on other onboarding steps first
+- A/B testing different onboarding flows
+- Customer-specific customization needs
+
+### Console Logging
+
+**When Feature Flags are Loaded:**
+
+```
+[CC360 Widget] 🔧 Fetching config from: https://your-app.com/api/config
+[CC360 Widget] ✅ Config received: { featureFlags: { connectPaymentsEnabled: false }, ... }
+[CC360 Widget] 🚩 Feature flags received: { connectPaymentsEnabled: false }
+```
+
+### Testing Feature Flags
+
+#### Local Testing
+
+1. Edit `.env` file:
+   ```bash
+   FEATURE_CONNECT_PAYMENTS_ENABLED=false
+   ```
+
+2. Restart the development server:
+   ```bash
+   make restart
+   ```
+
+3. Open the widget in a browser:
+   ```bash
+   make open
+   ```
+
+4. Verify:
+   - "Connect Payments" item is not shown
+   - Progress bar shows "X/3" instead of "X/4"
+   - Console shows: `🚩 Feature flags received: { connectPaymentsEnabled: false }`
+
+#### Production Testing (Vercel)
+
+1. Go to Vercel Dashboard → Settings → Environment Variables
+2. Add: `FEATURE_CONNECT_PAYMENTS_ENABLED` = `false`
+3. Redeploy the application
+4. Verify widget behavior in production
+
+### Implementation Details
+
+#### Backend (`src/app.ts`)
+
+The `/api/config` endpoint returns feature flags:
+
+```typescript
+const featureConnectPaymentsEnabled = process.env.FEATURE_CONNECT_PAYMENTS_ENABLED !== 'false';
+
+return res.json({
+  apiBase: getBaseUrl(),
+  environment: getEnvironment(),
+  ghlAppBaseUrl: getGhlAppBaseUrl(),
+  userpilotToken: userpilotToken || null,
+  widgetLocationFilter: filterLocationId,
+  widgetLocationFilterValid: filterValid,
+  featureFlags: {
+    connectPaymentsEnabled: featureConnectPaymentsEnabled
+  }
+});
+```
+
+#### Frontend (`public/widget.js`)
+
+Checklist items are filtered based on feature flags:
+
+```javascript
+const allItems = [
+  {
+    key: 'accountCreated',
+    title: 'Sign in to your Account',
+    url: '#',
+    completed: status.locationVerified,
+    isStatic: true
+  },
+  {
+    key: 'paymentIntegrated',
+    title: 'Connect Payments',
+    url: 'payments/integrations/',
+    completed: status.paymentIntegrated,
+    featureFlag: 'connectPaymentsEnabled'  // Feature flag property
+  },
+  // ... other items
+];
+
+// Filter items based on feature flags
+const items = allItems.filter(item => {
+  if (!item.featureFlag) return true; // No feature flag = always shown
+  return featureFlags[item.featureFlag] !== false;
+});
+```
+
+### Adding New Feature Flags
+
+To add a new feature flag for other checklist items:
+
+#### Step 1: Add Environment Variable
+
+**File:** `env.template`
+
+```bash
+FEATURE_YOUR_ITEM_ENABLED=true
+```
+
+#### Step 2: Update Backend
+
+**File:** `src/app.ts`
+
+```typescript
+// Parse the feature flag
+const featureYourItemEnabled = process.env.FEATURE_YOUR_ITEM_ENABLED !== 'false';
+
+// Add to response
+return res.json({
+  // ... other properties
+  featureFlags: {
+    connectPaymentsEnabled: featureConnectPaymentsEnabled,
+    yourItemEnabled: featureYourItemEnabled  // Add this
+  }
+});
+```
+
+#### Step 3: Update Frontend
+
+**File:** `public/widget.js`
+
+```javascript
+// Add featureFlag property to the checklist item
+{
+  key: 'yourItem',
+  title: 'Your Item Title',
+  url: 'your/url',
+  completed: status.yourItem,
+  featureFlag: 'yourItemEnabled'  // Add this
+}
+```
+
+#### Step 4: Update Completion Logic (if needed)
+
+**File:** `public/widget.js`
+
+```javascript
+const allCompleted = status.domainConnected && status.courseCreated && 
+  (!featureFlags.connectPaymentsEnabled || status.paymentIntegrated) &&
+  (!featureFlags.yourItemEnabled || status.yourItem);  // Add this
+```
+
+#### Step 5: Update Documentation
+
+Add documentation for the new feature flag in this README section.
+
+### Benefits
+
+1. **Flexibility:** Enable/disable features without code changes
+2. **A/B Testing:** Test different onboarding flows with different audiences
+3. **Gradual Rollout:** Enable features for specific environments (dev/staging/prod)
+4. **Customer Customization:** Tailor widget for different client needs
+5. **Simplified Onboarding:** Focus on most important steps for specific use cases
+
+### Notes
+
+- Feature flags default to `true` (enabled) if not set
+- Setting to any value other than the string `"false"` enables the feature
+- Feature flags are fetched once during widget initialization
+- Changes require page reload or widget reload to take effect
+- Feature flags are client-side configuration; backend still tracks all fields in database
+- No database schema changes needed - flags only control UI display
 
 ---
 

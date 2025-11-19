@@ -101,6 +101,7 @@
   let userpilotToken = null; // Will be fetched from backend
   let widgetLocationFilter = null; // Location filter (optional) - fetched from backend
   let widgetLocationFilterValid = true; // Whether the filter is valid (if set)
+  let featureFlags = { connectPaymentsEnabled: true }; // Feature flags - fetched from backend
 
   // Fetch configuration from backend
   async function fetchConfig() {
@@ -138,6 +139,11 @@
           console.error('[CC360 Widget] ❌ WIDGET_LOCATION_ID_FILTER is NOT configured');
           console.error('[CC360 Widget] ❌ This environment variable is REQUIRED for the widget to function');
           console.error('[CC360 Widget] ❌ Widget will NOT show anywhere until WIDGET_LOCATION_ID_FILTER is set');
+        }
+        
+        if (config.featureFlags) {
+          featureFlags = config.featureFlags;
+          console.log('[CC360 Widget] 🚩 Feature flags received:', featureFlags);
         }
       }
     } catch (error) {
@@ -672,7 +678,7 @@
     const checklistContainer = document.getElementById('cc360-checklist');
     if (!checklistContainer) return;
 
-    const items = [
+    const allItems = [
       {
         key: 'accountCreated',
         title: 'Sign in to your Account',
@@ -684,7 +690,8 @@
         key: 'paymentIntegrated',
         title: 'Connect Payments',
         url: 'payments/integrations/?userpilot=ZXhwZXJpZW5jZTpmQXRoSHhaVDlt',
-        completed: status.paymentIntegrated
+        completed: status.paymentIntegrated,
+        featureFlag: 'connectPaymentsEnabled'
       },
       {
         key: 'courseCreated',
@@ -700,11 +707,19 @@
       }
     ];
 
+    // Filter items based on feature flags
+    const items = allItems.filter(item => {
+      if (!item.featureFlag) return true; // No feature flag = always shown
+      return featureFlags[item.featureFlag] !== false; // Check feature flag value
+    });
+
     const completedCount = items.filter(item => item.completed).length;
     const progressPercent = (completedCount / items.length) * 100;
     
     // Check if all tasks are completed - show completion dialog
-    const allCompleted = status.domainConnected && status.courseCreated && status.paymentIntegrated;
+    // Only check tasks that are enabled via feature flags
+    const allCompleted = status.domainConnected && status.courseCreated && 
+      (!featureFlags.connectPaymentsEnabled || status.paymentIntegrated);
     if (allCompleted && !hasShownCompletionDialog) {
       console.log('[CC360 Widget] All tasks completed! Showing completion dialog...');
       showCompletionDialog();
