@@ -219,6 +219,38 @@
       </div>
     </div>
 
+    <div id="filterInfoBox" class="info-box" style="display: none; background: linear-gradient(135deg, rgba(255, 193, 7, 0.08) 0%, rgba(255, 152, 0, 0.08) 100%); border-left: 4px solid #FF9800;">
+      <strong style="color: #E65100; display: flex; align-items: center; gap: 8px;">
+        🎯 Location Filter Active
+      </strong>
+      <p style="margin: 8px 0 0 0; font-size: 14px; color: #6c757d; line-height: 1.6;">
+        The widget is configured to <strong>only show</strong> for the following location:
+      </p>
+      <div style="background: white; padding: 12px; border-radius: 8px; margin-top: 10px; border: 2px solid #FFE0B2;">
+        <div style="font-family: 'Monaco', 'Courier New', monospace; font-size: 14px; color: #0475FF; font-weight: 600; margin-bottom: 6px;">
+          <span id="filteredLocationId">Loading...</span>
+        </div>
+        <div style="font-size: 12px; color: #868e96;">
+          <strong>Status:</strong> <span id="filterValidationStatus" style="font-weight: 600;">Checking...</span>
+        </div>
+      </div>
+      <p style="margin: 12px 0 0 0; font-size: 12px; color: #6c757d; line-height: 1.5;">
+        💡 The widget will <strong>not appear</strong> for any other locations. To change this, update the <code style="font-size: 11px;">WIDGET_LOCATION_ID_FILTER</code> environment variable or set it to empty to show for all locations.
+      </p>
+    </div>
+
+    <div id="noFilterInfoBox" class="info-box" style="display: none; background: linear-gradient(135deg, rgba(76, 175, 80, 0.08) 0%, rgba(56, 142, 60, 0.08) 100%); border-left: 4px solid #4CAF50;">
+      <strong style="color: #2E7D32; display: flex; align-items: center; gap: 8px;">
+        🌍 No Location Filter
+      </strong>
+      <p style="margin: 8px 0 0 0; font-size: 14px; color: #6c757d; line-height: 1.6;">
+        The widget is configured to show for <strong>all authorized locations</strong> in your agency.
+      </p>
+      <p style="margin: 12px 0 0 0; font-size: 12px; color: #6c757d; line-height: 1.5;">
+        💡 To restrict the widget to a specific location, set the <code style="font-size: 11px;">WIDGET_LOCATION_ID_FILTER</code> environment variable.
+      </p>
+    </div>
+
     <h2>Agency Setup</h2>
     <p>Configure agency-level authorization (one-time setup):</p>
     
@@ -384,6 +416,49 @@
       window.location.href = newUrl;
     }
     
+    // Fetch and display location filter information
+    async function displayLocationFilterInfo() {
+      try {
+        const url = `${API_BASE}/api/config?t=${Date.now()}`;
+        console.log('[FilterInfo] Fetching config from:', url);
+        const response = await fetch(url);
+        const config = await response.json();
+        console.log('[FilterInfo] Config response:', config);
+        
+        const filterInfoBox = document.getElementById('filterInfoBox');
+        const noFilterInfoBox = document.getElementById('noFilterInfoBox');
+        const filteredLocationId = document.getElementById('filteredLocationId');
+        const filterValidationStatus = document.getElementById('filterValidationStatus');
+        
+        if (config.widgetLocationFilter) {
+          // Filter is set
+          filteredLocationId.textContent = config.widgetLocationFilter;
+          
+          if (config.widgetLocationFilterValid) {
+            filterValidationStatus.innerHTML = '<span style="color: #4CAF50;">✓ Valid</span>';
+          } else {
+            filterValidationStatus.innerHTML = '<span style="color: #FF2F00;">✗ Invalid - Location not found in agency</span>';
+          }
+          
+          filterInfoBox.style.display = 'block';
+          noFilterInfoBox.style.display = 'none';
+          
+          console.log('[FilterInfo] Location filter active:', config.widgetLocationFilter);
+        } else {
+          // No filter set
+          filterInfoBox.style.display = 'none';
+          noFilterInfoBox.style.display = 'block';
+          
+          console.log('[FilterInfo] No location filter configured');
+        }
+      } catch (error) {
+        console.error('[FilterInfo] Error fetching config:', error);
+        // Hide both boxes on error
+        document.getElementById('filterInfoBox').style.display = 'none';
+        document.getElementById('noFilterInfoBox').style.display = 'none';
+      }
+    }
+    
     // Update agency button status
     async function updateAgencyButtonStatus() {
       const button = document.getElementById('setupAgencyBtn');
@@ -429,6 +504,9 @@
       
       // Detect location ID from URL
       detectLocationFromUrl();
+      
+      // Display location filter information
+      await displayLocationFilterInfo();
       
       // Check agency OAuth status and update button
       await updateAgencyButtonStatus();
