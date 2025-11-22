@@ -833,6 +833,22 @@ app.get('/api/events', async (req, res) => {
   await sseBroker.broadcastStatus(locationId);
 });
 
+// Redirect middleware - redirect from auto-generated Vercel URLs to custom domain
+app.use((req, res, next) => {
+  const host = req.get('host') || '';
+  const preferredDomain = process.env.PREFERRED_DOMAIN; // e.g., 'onboarding.yourdomain.com'
+  
+  // If PREFERRED_DOMAIN is set and current host doesn't match, redirect
+  if (preferredDomain && !host.includes(preferredDomain)) {
+    const protocol = req.secure || req.get('x-forwarded-proto') === 'https' ? 'https' : 'http';
+    const redirectUrl = `${protocol}://${preferredDomain}${req.originalUrl}`;
+    console.log(`[Redirect] ${host} → ${preferredDomain}`);
+    return res.redirect(301, redirectUrl);
+  }
+  
+  next();
+});
+
 app.use('/public', express.static(path.join(process.cwd(), 'public')));
 app.get('/widget.js', (_req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'widget.js'));
