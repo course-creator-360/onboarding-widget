@@ -8,7 +8,6 @@ import webhookRouter from './webhooks';
 import { getOnboardingStatus, setDismissed, updateOnboardingStatus, getInstallation, hasAgencyAuthorization, getAgencyInstallation, deleteInstallation, OnboardingStatus, toggleOnboardingField, upsertInstallation, registerSubAccount, getSubAccount, getSubAccountsByAgency, getAllSubAccounts, getSubAccountStats, deactivateSubAccount, getAgencyForLocation, isSubAccountUnderAgency } from './db';
 import { sseBroker } from './sse';
 import { checkLocationProducts, getAuthToken } from './ghl-api';
-import { getSDKClient, validateLocationId, searchLocationById } from './ghl-sdk';
 import { getBaseUrl, getEnvironment, getGhlAppBaseUrl } from './config';
 
 const app = express();
@@ -49,38 +48,24 @@ app.get('/api/config', async (_req, res) => {
     : (process.env.USERPILOT_STAGE_TOKEN || process.env.USERPILOT_TOKEN);
   
   const filterLocationId = process.env.WIDGET_LOCATION_ID_FILTER || null;
-  let filterValid = true; // Assume valid if not set
+  const customersApiKey = process.env.CC360_CUSTOMERS_API_KEY;
   
   // Feature flags
   const featureConnectPaymentsEnabled = process.env.FEATURE_CONNECT_PAYMENTS_ENABLED !== 'false'; // Default to true
   
-  // CRITICAL: Filter is now REQUIRED
-  if (!filterLocationId) {
-    console.error('[Config] ❌ WIDGET_LOCATION_ID_FILTER is NOT SET');
-    console.error('[Config] ❌ This environment variable is REQUIRED for the widget to function');
-    console.error('[Config] ❌ Widget will NOT show anywhere until this is configured');
-    console.error('[Config] 💡 Add WIDGET_LOCATION_ID_FILTER=<your_location_id> to your .env file or Vercel environment variables');
-    filterValid = false; // Mark as invalid so widget won't show
-  }
+  // Check if API verification is properly configured
+  const customersApiConfigured = !!customersApiKey;
   
-  // STRICT validation: if filter is set, it MUST be valid
-  if (filterLocationId) {
-    try {
-      const validation = await validateLocationId(filterLocationId);
-      if (!validation.valid) {
-        filterValid = false;
-        console.error(`[Config] ❌ WIDGET_LOCATION_ID_FILTER is set to "${filterLocationId}" but this location was NOT FOUND in your agency.`);
-        console.error('[Config] ❌ Widget will NOT show anywhere until this is fixed.');
-        console.error('[Config] Please verify the locationId is correct and belongs to your authorized agency.');
-      } else {
-        filterValid = true;
-        console.log(`[Config] ✅ Widget filter validated: ${validation.location?.name || filterLocationId} (${filterLocationId})`);
-      }
-    } catch (error) {
-      filterValid = false;
-      console.error(`[Config] ❌ Failed to validate WIDGET_LOCATION_ID_FILTER: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      console.error('[Config] ❌ Widget will NOT show anywhere until this is fixed.');
-      console.error('[Config] Possible reasons: Agency not authorized, API error, or invalid location ID.');
+  if (!customersApiConfigured) {
+    console.error('[Config] ❌ CC360_CUSTOMERS_API_KEY is NOT SET');
+    console.error('[Config] ❌ Widget will NOT show anywhere until this is configured');
+    console.error('[Config] 💡 Add CC360_CUSTOMERS_API_KEY to your .env file or Vercel environment variables');
+  } else {
+    console.log('[Config] ✅ CC360 Customers API is configured');
+    if (filterLocationId) {
+      console.log(`[Config] 🎯 Location filter active: ${filterLocationId} (will pre-filter before API call)`);
+    } else {
+      console.log('[Config] 🌍 No location filter - will verify all locations via API');
     }
   }
   
@@ -89,12 +74,104 @@ app.get('/api/config', async (_req, res) => {
     environment: getEnvironment(),
     ghlAppBaseUrl: getGhlAppBaseUrl(),
     userpilotToken: userpilotToken || null,  // Expose for client-side SDK
-    widgetLocationFilter: filterLocationId,  // Location filter (optional)
-    widgetLocationFilterValid: filterValid,  // Whether the filter is valid (if set)
+    widgetLocationFilter: filterLocationId,  // Optional pre-filter
+    customersApiConfigured: customersApiConfigured,  // Whether API verification is available
     featureFlags: {
       connectPaymentsEnabled: featureConnectPaymentsEnabled
     }
   });
+});
+
+// Verify location authorization via CC360 Customers Admin API
+app.get('/api/location/verify', async (req, res) => {
+  const locationId = (req.query.locationId as string);
+  
+  if (!locationId) {
+    return res.status(400).json({ 
+      authorized: false, 
+      error: 'locationId is required' 
+    });
+  }
+  
+  const apiKey = process.env.CC360_CUSTOMERS_API_KEY;
+  const apiBaseUrl = process.env.CC360_CUSTOMERS_API_BASE_URL || 'https://cc360-customers-admin/api';
+  
+  // If API key is not configured, deny access
+  if (!apiKey) {
+    console.error('[Location Verify] ❌ CC360_CUSTOMERS_API_KEY is not configured');
+    return res.json({ 
+      authorized: false, 
+      error: 'API key not configured' 
+    });
+  }
+  
+  try {
+    console.log(`[Location Verify] Checking authorization for location: ${locationId}`);
+    console.log(`[Location Verify] Calling: ${apiBaseUrl}/customers?locationId=${locationId}`);
+    
+    // Create AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+    
+    const response = await fetch(`${apiBaseUrl}/customers?locationId=${locationId}`, {
+      method: 'GET',
+      headers: {
+        'x-api-key': apiKey,
+        'Content-Type': 'application/json'
+      },
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    
+    // Only 200 responses with customer data mean authorized
+    if (response.ok && response.status === 200) {
+      const customer = await response.json();
+      
+      // Verify we got customer data with matching locationId
+      if (customer && customer.locationId === locationId) {
+        console.log(`[Location Verify] ✅ Location authorized: ${customer.name || locationId}`);
+        return res.json({ 
+          authorized: true, 
+          customer: {
+            id: customer.id,
+            locationId: customer.locationId,
+            name: customer.name,
+            email: customer.email
+          }
+        });
+      } else {
+        console.warn(`[Location Verify] ⚠️ API returned 200 but no matching customer data`);
+        return res.json({ 
+          authorized: false, 
+          error: 'No customer data found' 
+        });
+      }
+    } else {
+      // Any non-200 response means not authorized
+      console.log(`[Location Verify] ❌ Location not authorized (HTTP ${response.status})`);
+      return res.json({ 
+        authorized: false, 
+        error: `Location not found (HTTP ${response.status})` 
+      });
+    }
+  } catch (error: any) {
+    // Handle timeout errors
+    if (error.name === 'AbortError') {
+      console.error('[Location Verify] ❌ API call timeout (>5s)');
+      return res.json({ 
+        authorized: false, 
+        error: 'API timeout' 
+      });
+    }
+    
+    // Handle network and other errors
+    console.error('[Location Verify] ❌ API call failed:', error.message);
+    return res.json({ 
+      authorized: false, 
+      error: 'API call failed' 
+    });
+  }
 });
 
 // Migration endpoint for manual migration runs
@@ -252,36 +329,82 @@ app.get('/api/location-context', async (req, res) => {
   const locationId = (req.query.locationId as string) || '';
   if (!locationId) return res.status(400).json({ error: 'locationId is required' });
   
+  const apiKey = process.env.CC360_CUSTOMERS_API_KEY;
+  const apiBaseUrl = process.env.CC360_CUSTOMERS_API_BASE_URL || 'https://cc360-customers-admin/api';
+  
+  // If API key is not configured, deny access
+  if (!apiKey) {
+    console.error('[Location Context] ❌ CC360_CUSTOMERS_API_KEY is not configured');
+    return res.status(500).json({ 
+      error: 'API key not configured' 
+    });
+  }
+  
   try {
     console.log(`[Location Context] Fetching context for location: ${locationId}`);
+    console.log(`[Location Context] Calling: ${apiBaseUrl}/customers?locationId=${locationId}`);
     
-    // Search for specific location by ID using the agency token
-    const location = await searchLocationById(locationId);
+    // Create AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
     
-    if (!location) {
-      console.error(`[Location Context] Location not found: ${locationId}`);
-      throw new Error('Location not found in agency');
+    const response = await fetch(`${apiBaseUrl}/customers?locationId=${locationId}`, {
+      method: 'GET',
+      headers: {
+        'x-api-key': apiKey,
+        'Content-Type': 'application/json'
+      },
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    
+    // Only 200 responses with customer data are valid
+    if (response.ok && response.status === 200) {
+      const customer = await response.json();
+      
+      // Verify we got customer data with matching locationId
+      if (customer && customer.locationId === locationId) {
+        console.log(`[Location Context] ✅ Successfully fetched context for: ${customer.name || locationId}`);
+        
+        // Return sanitized user context (widget will handle Userpilot identify client-side)
+        return res.json({
+          locationId: customer.locationId,
+          name: customer.name || 'Unknown',
+          email: customer.email || '',
+          phone: customer.phone || '',
+          companyId: customer.companyId || '',
+          address: customer.address || '',
+          city: customer.city || '',
+          state: customer.state || '',
+          country: customer.country || '',
+          website: customer.website || '',
+          timezone: customer.timezone || '',
+        });
+      } else {
+        console.error(`[Location Context] ⚠️ API returned 200 but no matching customer data`);
+        return res.status(404).json({ 
+          error: 'Location not found' 
+        });
+      }
+    } else {
+      // Any non-200 response means not found
+      console.error(`[Location Context] ❌ Location not found (HTTP ${response.status})`);
+      return res.status(404).json({ 
+        error: `Location not found (HTTP ${response.status})` 
+      });
+    }
+  } catch (error: any) {
+    // Handle timeout errors
+    if (error.name === 'AbortError') {
+      console.error('[Location Context] ❌ API call timeout (>5s)');
+      return res.status(504).json({ 
+        error: 'API timeout' 
+      });
     }
     
-    console.log(`[Location Context] Successfully fetched context for: ${location.name}`);
-    console.log(`[Location Context] Company ID: ${location.companyId}`);
-    
-    // Return sanitized user context (widget will handle Userpilot identify client-side)
-    return res.json({
-      locationId: location.id,
-      name: location.name || 'Unknown',
-      email: location.email || '',
-      phone: location.phone || '',
-      companyId: location.companyId || '',
-      address: location.address || '',
-      city: location.city || '',
-      state: location.state || '',
-      country: location.country || '',
-      website: location.website || '',
-      timezone: location.timezone || '',
-    });
-  } catch (error) {
-    console.error('[Location Context] Error fetching location data:', error);
+    // Handle network and other errors
+    console.error('[Location Context] ❌ Error fetching location data:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to fetch location context';
     return res.status(500).json({ 
       error: errorMessage,
@@ -323,18 +446,52 @@ app.get('/api/installation/check', async (req, res) => {
         getAgencyInstallation()
           .then(async (agencyInstallation) => {
             if (!agencyInstallation?.accountId) return;
-            // Search for specific location (efficient - no need to fetch all)
-            const location = await searchLocationById(locationId);
-            if (location) {
-              const isNew = !(await getSubAccount(locationId));
-              await registerSubAccount({
-                locationId,
-                accountId: agencyInstallation.accountId,
-                locationName: location.name,
-                companyId: location.companyId,
-                metadata: { email: location.email, phone: location.phone, website: location.website, timezone: location.timezone }
+            
+            // Fetch location data from cc360-customers-admin API
+            const apiKey = process.env.CC360_CUSTOMERS_API_KEY;
+            const apiBaseUrl = process.env.CC360_CUSTOMERS_API_BASE_URL || 'https://cc360-customers-admin/api';
+            
+            if (!apiKey) {
+              console.warn('[Installation Check] No API key configured, skipping background sync');
+              return;
+            }
+            
+            try {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 3000);
+              
+              const response = await fetch(`${apiBaseUrl}/customers?locationId=${locationId}`, {
+                method: 'GET',
+                headers: {
+                  'x-api-key': apiKey,
+                  'Content-Type': 'application/json'
+                },
+                signal: controller.signal
               });
-              console.log(`[Installation Check] ${isNew ? '✨ NEW' : 'Updated'} sub-account: ${location.name}`);
+              
+              clearTimeout(timeoutId);
+              
+              if (response.ok && response.status === 200) {
+                const customer = await response.json();
+                if (customer && customer.locationId === locationId) {
+                  const isNew = !(await getSubAccount(locationId));
+                  await registerSubAccount({
+                    locationId,
+                    accountId: agencyInstallation.accountId,
+                    locationName: customer.name,
+                    companyId: customer.companyId || '',
+                    metadata: { 
+                      email: customer.email || '', 
+                      phone: customer.phone || '', 
+                      website: customer.website || '', 
+                      timezone: customer.timezone || '' 
+                    }
+                  });
+                  console.log(`[Installation Check] ${isNew ? '✨ NEW' : 'Updated'} sub-account: ${customer.name}`);
+                }
+              }
+            } catch (err) {
+              console.error('[Installation Check] Background sync error:', err);
             }
           })
           .catch(err => console.error('[Installation Check] Background sync error:', err));
@@ -414,96 +571,99 @@ app.get('/api/agency/status', async (req, res) => {
   });
 });
 
-// Validate a specific locationId
+// Validate a specific locationId via cc360-customers-admin API
 app.get('/api/location/validate', async (req, res) => {
   const locationId = (req.query.locationId as string) || '';
   if (!locationId) {
     return res.status(400).json({ error: 'locationId is required' });
   }
   
+  const apiKey = process.env.CC360_CUSTOMERS_API_KEY;
+  const apiBaseUrl = process.env.CC360_CUSTOMERS_API_BASE_URL || 'https://cc360-customers-admin/api';
+  
+  // If API key is not configured, return invalid
+  if (!apiKey) {
+    console.error('[Location Validation] ❌ CC360_CUSTOMERS_API_KEY is not configured');
+    return res.json({ 
+      valid: false,
+      location: null,
+      error: 'API key not configured' 
+    });
+  }
+  
   const startTime = Date.now();
   console.log('[Location Validation] Checking locationId:', locationId);
+  console.log(`[Location Validation] Calling: ${apiBaseUrl}/customers?locationId=${locationId}`);
   
   try {
-    // Wrap in 2-second timeout
-    const validatePromise = (async () => {
-      // Check if we have agency authorization
-      const isAuthorized = await hasAgencyAuthorization();
-      console.log(`[Location Validation] Authorized: ${isAuthorized} (${Date.now() - startTime}ms)`);
+    // Create AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
+    
+    const response = await fetch(`${apiBaseUrl}/customers?locationId=${locationId}`, {
+      method: 'GET',
+      headers: {
+        'x-api-key': apiKey,
+        'Content-Type': 'application/json'
+      },
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    const elapsed = Date.now() - startTime;
+    
+    // Only 200 responses with customer data mean valid
+    if (response.ok && response.status === 200) {
+      const customer = await response.json();
       
-      if (!isAuthorized) {
-        return {
-          valid: false,
-          location: null,
-          error: 'Agency not authorized'
-        };
-      }
-      
-      // Search for specific location with timeout (efficient - no need to fetch all)
-      try {
-        const foundLocation = await Promise.race([
-          searchLocationById(locationId),
-          new Promise<never>((_, reject) => 
-            setTimeout(() => reject(new Error('GHL SDK timeout')), 1500)
-          )
-        ]);
-        
-        if (foundLocation) {
-          console.log(`[Location Validation] Found: ${foundLocation.name} (${Date.now() - startTime}ms)`);
-          return {
-            valid: true,
-            location: {
-              id: foundLocation.id,
-              name: foundLocation.name,
-              companyId: foundLocation.companyId
-            },
-            locationName: foundLocation.name
-          };
-        } else {
-          return {
-            valid: false,
-            location: null,
-            error: 'Location not found in agency locations'
-          };
-        }
-      } catch (error) {
-        console.error('[Location Validation] GHL SDK error:', error);
-        // Assume valid on error (graceful degradation)
-        return {
+      // Verify we got customer data with matching locationId
+      if (customer && customer.locationId === locationId) {
+        console.log(`[Location Validation] ✅ Valid location: ${customer.name || locationId} (${elapsed}ms)`);
+        return res.json({
           valid: true,
           location: {
-            id: locationId,
-            name: locationId,
-            companyId: undefined
+            id: customer.locationId,
+            name: customer.name,
+            companyId: customer.companyId
           },
-          locationName: locationId,
-          warning: 'Could not verify - assumed valid'
-        };
+          locationName: customer.name
+        });
+      } else {
+        console.warn(`[Location Validation] ⚠️ API returned 200 but no matching customer data (${elapsed}ms)`);
+        return res.json({
+          valid: false,
+          location: null,
+          error: 'No customer data found'
+        });
       }
-    })();
-    
-    // Race against 2-second total timeout
-    const timeoutPromise = new Promise<never>((_, reject) => 
-      setTimeout(() => reject(new Error('Validation timeout')), 2000)
-    );
-    
-    const result = await Promise.race([validatePromise, timeoutPromise]);
-    return res.json(result);
-    
-  } catch (error) {
+    } else {
+      // Any non-200 response means not valid
+      console.log(`[Location Validation] ❌ Location not valid (HTTP ${response.status}, ${elapsed}ms)`);
+      return res.json({
+        valid: false,
+        location: null,
+        error: `Location not found (HTTP ${response.status})`
+      });
+    }
+  } catch (error: any) {
     const elapsed = Date.now() - startTime;
-    console.error(`[Location Validation] ❌ Timeout after ${elapsed}ms`);
     
-    // Return valid on timeout (graceful degradation)
+    // Handle timeout errors
+    if (error.name === 'AbortError') {
+      console.error(`[Location Validation] ❌ API call timeout (${elapsed}ms)`);
+      return res.json({
+        valid: false,
+        location: null,
+        error: 'Validation timeout'
+      });
+    }
+    
+    // Handle network and other errors
+    console.error(`[Location Validation] ❌ API call failed (${elapsed}ms):`, error.message);
     return res.json({
-      valid: true,
-      location: {
-        id: locationId,
-        name: locationId,
-        companyId: undefined
-      },
-      locationName: locationId,
-      warning: 'Timeout - assumed valid'
+      valid: false,
+      location: null,
+      error: 'API call failed'
     });
   }
 });
