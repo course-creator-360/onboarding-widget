@@ -133,7 +133,15 @@ export async function getOnboardingStatus(locationId: string): Promise<Onboardin
   }
 
   const createdAt = dateToTimestamp(row.createdAt);
-  const allTasksCompleted = row.domainConnected && row.courseCreated && row.paymentIntegrated;
+  
+  // Calculate allTasksCompleted considering feature flags
+  // If a checklist item is behind a feature flag that's disabled, it should not be required for completion
+  const featureConnectPaymentsEnabled = process.env.FEATURE_CONNECT_PAYMENTS_ENABLED !== 'false';
+  const featureConnectDomainEnabled = process.env.FEATURE_CONNECT_DOMAIN_ENABLED !== 'false';
+  
+  const allTasksCompleted = row.courseCreated && 
+    (featureConnectPaymentsEnabled ? row.paymentIntegrated : true) &&
+    (featureConnectDomainEnabled ? row.domainConnected : true);
   const shouldShowWidget = calculateShouldShowWidget(
     createdAt,
     row.domainConnected,
