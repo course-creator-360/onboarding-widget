@@ -1592,10 +1592,9 @@
       console.log('[CC360 Widget] All tasks completed - dismissing widget permanently');
       await dismissWidgetPermanently();
       
-      // Show booking modal if not cancelled
+      // Show booking modal if not cancelled and booking data exists
       if (currentStatus && !currentStatus.bookingCancelled) {
-        console.log('[CC360 Widget] Showing booking modal after completion');
-        showBookingModal();
+        await checkAndShowBookingModal();
       }
     });
     
@@ -1608,10 +1607,9 @@
         console.log('[CC360 Widget] All tasks completed (overlay click) - dismissing widget permanently');
         await dismissWidgetPermanently();
         
-        // Show booking modal if not cancelled
+        // Show booking modal if not cancelled and booking data exists
         if (currentStatus && !currentStatus.bookingCancelled) {
-          console.log('[CC360 Widget] Showing booking modal after completion');
-          showBookingModal();
+          await checkAndShowBookingModal();
         }
       }
     });
@@ -2182,6 +2180,35 @@
         });
       }
     });
+  }
+
+  // Check if booking data exists - show modal only if NO booking data (user hasn't booked yet)
+  async function checkAndShowBookingModal() {
+    try {
+      console.log('[CC360 Widget] Checking if booking data exists...');
+      const response = await fetch(`${apiBase}/api/booking/check?locationId=${locationId}`);
+      
+      if (!response.ok) {
+        console.error('[CC360 Widget] ❌ Error checking booking data:', response.status);
+        // On error, show the modal (fail open)
+        showBookingModal();
+        return;
+      }
+      
+      const result = await response.json();
+      console.log('[CC360 Widget] Booking check result:', result);
+      
+      if (!result.hasBookingData) {
+        console.log('[CC360 Widget] ✅ No booking data found, showing booking modal');
+        showBookingModal();
+      } else {
+        console.log('[CC360 Widget] ⚠️ Booking data already exists, skipping booking modal');
+      }
+    } catch (error) {
+      console.error('[CC360 Widget] ❌ Error checking booking data:', error);
+      // On error, show the modal (fail open)
+      showBookingModal();
+    }
   }
 
   // Show booking modal after survey completion
@@ -2874,6 +2901,13 @@
         }
       } else {
         console.log('[CC360 Widget] Could not fetch status or widget should not be shown');
+        
+        // Even if widget shouldn't show, check if we should show booking modal
+        // (for users who completed tasks but haven't booked yet)
+        if (currentStatus && currentStatus.allTasksCompleted && !currentStatus.bookingCancelled) {
+          console.log('[CC360 Widget] All tasks completed - checking if booking modal should show');
+          await checkAndShowBookingModal();
+        }
       }
     }
   }
