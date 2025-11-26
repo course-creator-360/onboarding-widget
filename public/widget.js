@@ -1250,9 +1250,125 @@
     }
   }
 
-  // Poll for status updates (serverless-friendly alternative to SSE)
+  // Hybrid approach: SSE for instant updates, polling as fallback
   let pollInterval = null;
+  let eventSource = null;
+  let sseConnected = false;
   
+  // Handle status update from any source (SSE or polling)
+  async function handleStatusUpdate(newStatus) {
+    if (!newStatus) return;
+    
+    currentStatus = newStatus;
+    
+    if (!currentStatus.shouldShowWidget) {
+      console.log('[CC360 Widget] Widget should no longer be shown, removing...');
+      if (widgetElement) {
+        widgetElement.remove();
+        widgetElement = null;
+      }
+      stopStatusUpdates();
+      return;
+    }
+    
+    // Update UI with current status
+    renderChecklist(currentStatus);
+  }
+  
+  // Try to connect via SSE for instant updates
+  function startSSE() {
+    if (!locationId) {
+      console.warn('[CC360 Widget] Cannot start SSE without location ID');
+      return;
+    }
+    
+    // Close existing connection
+    if (eventSource) {
+      eventSource.close();
+    }
+    
+    try {
+      const sseUrl = `${apiBase}/api/events?locationId=${locationId}`;
+      console.log('[CC360 Widget] 🔌 Connecting to SSE:', sseUrl);
+      
+      eventSource = new EventSource(sseUrl);
+      
+      eventSource.onopen = () => {
+        sseConnected = true;
+        console.log('[CC360 Widget] ✅ SSE connected - instant updates enabled');
+        // Reduce polling frequency when SSE is active (keep as backup)
+        if (pollInterval) {
+          clearInterval(pollInterval);
+          // Poll less frequently as backup when SSE is connected
+          pollInterval = setInterval(pollForStatus, 30000);
+          console.log('[CC360 Widget] 📉 Reduced polling to 30s (SSE active)');
+        }
+      };
+      
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('[CC360 Widget] 📨 SSE update received:', data);
+          // SSE messages have format { type: 'status', payload: status }
+          // Extract the actual status from the payload
+          const status = data.payload || data;
+          handleStatusUpdate(status);
+        } catch (error) {
+          console.error('[CC360 Widget] Error parsing SSE message:', error);
+        }
+      };
+      
+      eventSource.onerror = (error) => {
+        console.warn('[CC360 Widget] ⚠️ SSE error/disconnected:', error);
+        sseConnected = false;
+        eventSource.close();
+        eventSource = null;
+        
+        // Increase polling frequency as fallback
+        if (pollInterval) {
+          clearInterval(pollInterval);
+        }
+        pollInterval = setInterval(pollForStatus, 5000);
+        console.log('[CC360 Widget] 📈 Increased polling to 5s (SSE fallback)');
+        
+        // Try to reconnect SSE after a delay
+        setTimeout(() => {
+          if (!sseConnected && locationId) {
+            console.log('[CC360 Widget] 🔄 Attempting SSE reconnect...');
+            startSSE();
+          }
+        }, 10000);
+      };
+      
+    } catch (error) {
+      console.error('[CC360 Widget] Failed to create SSE connection:', error);
+      sseConnected = false;
+    }
+  }
+  
+  // Polling function
+  async function pollForStatus() {
+    try {
+      const shouldShow = await fetchStatus();
+      
+      if (!shouldShow || !currentStatus || !shouldShowWidget) {
+        console.log('[CC360 Widget] Widget should no longer be shown, removing...');
+        if (widgetElement) {
+          widgetElement.remove();
+          widgetElement = null;
+        }
+        stopStatusUpdates();
+        return;
+      }
+      
+      // Update UI with current status
+      renderChecklist(currentStatus);
+    } catch (error) {
+      console.error('[CC360 Widget] Error polling status:', error);
+    }
+  }
+  
+  // Start hybrid status updates (SSE + polling fallback)
   function startStatusPolling() {
     if (!locationId) {
       console.warn('[CC360 Widget] Cannot poll status without location ID');
@@ -1264,37 +1380,31 @@
       clearInterval(pollInterval);
     }
     
-    // Poll every 10 seconds for status updates
-    pollInterval = setInterval(async () => {
-      try {
-        const shouldShow = await fetchStatus();
-        
-        if (!shouldShow || !currentStatus || !shouldShowWidget) {
-          console.log('[CC360 Widget] Widget should no longer be shown, removing...');
-          if (widgetElement) {
-            widgetElement.remove();
-            widgetElement = null;
-          }
-          stopStatusPolling();
-          return;
-        }
-        
-        // Update UI with current status
-        renderChecklist(currentStatus);
-      } catch (error) {
-        console.error('[CC360 Widget] Error polling status:', error);
-      }
-    }, 10000);
+    // Start with 5 second polling
+    pollInterval = setInterval(pollForStatus, 5000);
+    console.log('[CC360 Widget] ✅ Status polling started (every 5 seconds)');
     
-    console.log('[CC360 Widget] ✅ Status polling started (every 10 seconds)');
+    // Try to establish SSE connection for instant updates
+    startSSE();
   }
   
-  function stopStatusPolling() {
+  function stopStatusUpdates() {
     if (pollInterval) {
       clearInterval(pollInterval);
       pollInterval = null;
       console.log('[CC360 Widget] Status polling stopped');
     }
+    if (eventSource) {
+      eventSource.close();
+      eventSource = null;
+      sseConnected = false;
+      console.log('[CC360 Widget] SSE connection closed');
+    }
+  }
+  
+  // Keep old function name for compatibility
+  function stopStatusPolling() {
+    stopStatusUpdates();
   }
 
   // Show start onboarding screen
@@ -1474,15 +1584,35 @@
     
     document.body.appendChild(overlay);
     
-    // Handle "Got It!" button - just dismiss (booking already shown after survey)
-    document.getElementById('cc360-dialog-ok').addEventListener('click', () => {
+    // Handle "Got It!" button - dismiss widget permanently and show booking modal if not cancelled
+    document.getElementById('cc360-dialog-ok').addEventListener('click', async () => {
       overlay.remove();
+      
+      // Dismiss widget permanently
+      console.log('[CC360 Widget] All tasks completed - dismissing widget permanently');
+      await dismissWidgetPermanently();
+      
+      // Show booking modal if not cancelled
+      if (currentStatus && !currentStatus.bookingCancelled) {
+        console.log('[CC360 Widget] Showing booking modal after completion');
+        showBookingModal();
+      }
     });
     
-    // Close on overlay click - just dismiss
-    overlay.addEventListener('click', (e) => {
+    // Close on overlay click - same behavior as clicking "Got It!"
+    overlay.addEventListener('click', async (e) => {
       if (e.target === overlay) {
         overlay.remove();
+        
+        // Dismiss widget permanently
+        console.log('[CC360 Widget] All tasks completed (overlay click) - dismissing widget permanently');
+        await dismissWidgetPermanently();
+        
+        // Show booking modal if not cancelled
+        if (currentStatus && !currentStatus.bookingCancelled) {
+          console.log('[CC360 Widget] Showing booking modal after completion');
+          showBookingModal();
+        }
       }
     });
   }
@@ -1674,17 +1804,11 @@
                 }
                 surveyOverlay.remove();
                 
-                // Check if booking is cancelled
-                if (currentStatus && currentStatus.bookingCancelled) {
-                  console.log('[CC360 Widget] Survey completed, booking cancelled - showing widget directly');
-                  initializeChecklist().then(() => {
-                    initUserpilot();
-                  });
-                } else {
-                  console.log('[CC360 Widget] Survey completed - showing booking modal...');
-                  // Show booking modal - it will show widget after user closes/dismisses booking
-                  showBookingModal();
-                }
+                // Survey completed - show widget checklist (booking will show after completion)
+                console.log('[CC360 Widget] Survey completed - showing widget checklist');
+                initializeChecklist().then(() => {
+                  initUserpilot();
+                });
               }, 2000);
             } catch (error) {
               console.error('[CC360 Widget] ❌ Error submitting survey:', error);
@@ -2732,27 +2856,21 @@
       // Fetch status to check survey completion
       const shouldShow = await fetchStatus();
       if (shouldShow && currentStatus) {
-        console.log('[CC360 Widget] Decision logic - surveyCompleted:', currentStatus.surveyCompleted, 'bookingCancelled:', currentStatus.bookingCancelled);
+        console.log('[CC360 Widget] Decision logic - surveyCompleted:', currentStatus.surveyCompleted);
         // Check if survey is completed
         if (!currentStatus.surveyCompleted) {
           console.log('[CC360 Widget] Survey not completed - showing survey modal first');
-          // Show survey modal - it will show booking modal after completion
+          // Show survey modal - it will show checklist after completion
           showSurveyModal();
         } else {
-          // Survey completed - check if booking is cancelled
-          if (!currentStatus.bookingCancelled) {
-            console.log('[CC360 Widget] Survey completed, booking not cancelled - showing booking modal');
-            // Show booking modal - it will show widget after user closes/dismisses
-            showBookingModal();
-          } else {
-            console.log('[CC360 Widget] Survey completed, booking cancelled - showing checklist directly');
-            await initializeChecklist();
-            
-            // Initialize Userpilot after checklist loads
-            console.log('[CC360 Widget] 🎯 Calling initUserpilot...');
-            await initUserpilot();
-            console.log('[CC360 Widget] ✅ initUserpilot completed');
-          }
+          // Survey completed - show checklist directly (booking will show after completion)
+          console.log('[CC360 Widget] Survey completed - showing checklist');
+          await initializeChecklist();
+          
+          // Initialize Userpilot after checklist loads
+          console.log('[CC360 Widget] 🎯 Calling initUserpilot...');
+          await initUserpilot();
+          console.log('[CC360 Widget] ✅ initUserpilot completed');
         }
       } else {
         console.log('[CC360 Widget] Could not fetch status or widget should not be shown');
