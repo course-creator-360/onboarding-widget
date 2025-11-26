@@ -703,7 +703,8 @@
         key: 'domainConnected',
         title: 'Connect a Domain',
         url: 'settings/domain?userpilot=ZXhwZXJpZW5jZTpKbncxMkVPWHlj',
-        completed: status.domainConnected
+        completed: status.domainConnected,
+        featureFlag: 'connectDomainEnabled'
       }
     ];
 
@@ -718,8 +719,9 @@
     
     // Check if all tasks are completed - show completion dialog
     // Only check tasks that are enabled via feature flags
-    const allCompleted = status.domainConnected && status.courseCreated && 
-      (!featureFlags.connectPaymentsEnabled || status.paymentIntegrated);
+    const allCompleted = status.courseCreated && 
+      (!featureFlags.connectPaymentsEnabled || status.paymentIntegrated) &&
+      (!featureFlags.connectDomainEnabled || status.domainConnected);
     if (allCompleted && !hasShownCompletionDialog) {
       console.log('[CC360 Widget] All tasks completed! Showing completion dialog...');
       showCompletionDialog();
@@ -1218,6 +1220,8 @@
       
       currentStatus = await response.json();
       console.log('[CC360 Widget] Status received:', currentStatus);
+      console.log('[CC360 Widget] Survey completed:', currentStatus.surveyCompleted);
+      console.log('[CC360 Widget] Booking cancelled:', currentStatus.bookingCancelled);
       
       // Check if widget should be shown (based on age and completion)
       shouldShowWidget = currentStatus.shouldShowWidget !== false;
@@ -1470,17 +1474,15 @@
     
     document.body.appendChild(overlay);
     
-    // Handle "Got It!" button - show survey instead of dismissing
+    // Handle "Got It!" button - just dismiss (booking already shown after survey)
     document.getElementById('cc360-dialog-ok').addEventListener('click', () => {
       overlay.remove();
-      showSurveyModal();
     });
     
-    // Close on overlay click
+    // Close on overlay click - just dismiss
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) {
         overlay.remove();
-        showSurveyModal();
       }
     });
   }
@@ -1519,30 +1521,8 @@
       position: relative;
     `;
     
-    // Close button
-    const closeBtn = document.createElement('button');
-    closeBtn.innerHTML = '×';
-    closeBtn.style.cssText = `
-      position: absolute;
-      top: 16px;
-      right: 16px;
-      background: transparent;
-      border: none;
-      font-size: 32px;
-      color: #6c757d;
-      cursor: pointer;
-      padding: 0;
-      width: 32px;
-      height: 32px;
-      line-height: 32px;
-      text-align: center;
-    `;
-    closeBtn.onclick = () => {
-      surveyOverlay.remove();
-      dismissWidgetPermanently();
-    };
-    
-    surveyContainer.appendChild(closeBtn);
+    // Survey is mandatory - no close button
+    // Users must complete the survey before accessing the widget
     
     // Survey content container
     const surveyContent = document.createElement('div');
@@ -1551,6 +1531,28 @@
     
     surveyOverlay.appendChild(surveyContainer);
     document.body.appendChild(surveyOverlay);
+    
+    // Prevent dismissing survey by clicking outside (mandatory survey)
+    surveyOverlay.addEventListener('click', (e) => {
+      // Only prevent if clicking the overlay itself, not the container
+      if (e.target === surveyOverlay) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    });
+    
+    // Prevent ESC key from dismissing survey (mandatory survey)
+    const escKeyHandler = (e) => {
+      if (e.key === 'Escape' && document.getElementById('cc360-survey-overlay')) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[CC360 Widget] ESC key pressed - survey is mandatory and cannot be dismissed');
+      }
+    };
+    document.addEventListener('keydown', escKeyHandler);
+    
+    // Store handler reference for cleanup (though modal should persist until completion)
+    surveyOverlay._escKeyHandler = escKeyHandler;
     
     // Load React, ReactDOM, and Babel if not already loaded
     const loadScript = (src, type = 'text/javascript') => {
@@ -1576,8 +1578,14 @@
       renderSurvey();
     }).catch(err => {
       console.error('[CC360 Widget] Failed to load survey dependencies:', err);
-      surveyOverlay.remove();
-      dismissWidgetPermanently();
+      // Don't dismiss widget on error - show error message instead
+      surveyContent.innerHTML = `
+        <div style="text-align: center; padding: 40px;">
+          <h2 style="color: #dc2626; margin-bottom: 16px;">Error Loading Survey</h2>
+          <p style="color: #6b7280; margin-bottom: 24px;">Failed to load survey dependencies. Please refresh the page.</p>
+          <button onclick="window.location.reload()" style="padding: 12px 24px; background: #0475FF; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">Refresh Page</button>
+        </div>
+      `;
     });
     
     function renderSurvey() {
@@ -1601,39 +1609,89 @@
           setFormData((prev) => ({ ...prev, ...updates }));
         };
         
-        const handleNext = () => {
+        const handleNext = async () => {
           if (step < totalSteps - 1) {
             setStep(step + 1);
           } else {
             setSubmitted(true);
             console.log("Survey submitted with data:", formData);
             
-            // Track in Userpilot
-            if (window.userpilot) {
-              try {
-                console.log('[Userpilot] 📊 Tracking event: survey_completed');
-                window.userpilot.track('survey_completed', {
-                  location_id: locationId,
-                  reason: formData.reason,
-                  profession: formData.profession,
-                  has_domain: formData.hasDomain,
-                  domain: formData.domain || '',
-                  course_idea: formData.courseIdea || '',
-                  completed_at: new Date().toISOString()
-                });
-                console.log('[Userpilot] ✅ Survey completion event tracked');
-              } catch (e) {
-                console.error('[Userpilot] ❌ Error tracking survey completion:', e);
+            // Submit survey to API
+            try {
+              console.log('[CC360 Widget] Submitting survey to API...');
+              const response = await fetch(`${apiBase}/api/survey/complete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  locationId: locationId,
+                  surveyResponses: {
+                    reason: formData.reason,
+                    profession: formData.profession,
+                    hasDomain: formData.hasDomain,
+                    domain: formData.domain || '',
+                    courseIdea: formData.courseIdea || '',
+                    completedAt: new Date().toISOString()
+                  }
+                })
+              });
+              
+              if (!response.ok) {
+                throw new Error(`API error: ${response.status}`);
               }
-            } else {
-              console.log('[Userpilot] ⚠️ Userpilot not initialized, skipping survey tracking');
+              
+              const updatedStatus = await response.json();
+              console.log('[CC360 Widget] ✅ Survey completed and saved to database');
+              
+              // Update current status
+              currentStatus = updatedStatus;
+              
+              // Track in Userpilot (secondary tracking)
+              if (window.userpilot) {
+                try {
+                  console.log('[Userpilot] 📊 Tracking event: survey_completed');
+                  window.userpilot.track('survey_completed', {
+                    location_id: locationId,
+                    reason: formData.reason,
+                    profession: formData.profession,
+                    has_domain: formData.hasDomain,
+                    domain: formData.domain || '',
+                    course_idea: formData.courseIdea || '',
+                    completed_at: new Date().toISOString()
+                  });
+                  console.log('[Userpilot] ✅ Survey completion event tracked');
+                } catch (e) {
+                  console.error('[Userpilot] ❌ Error tracking survey completion:', e);
+                }
+              } else {
+                console.log('[Userpilot] ⚠️ Userpilot not initialized, skipping survey tracking');
+              }
+              
+              // Close survey modal and check booking status
+              setTimeout(() => {
+                // Clean up ESC key handler
+                if (surveyOverlay._escKeyHandler) {
+                  document.removeEventListener('keydown', surveyOverlay._escKeyHandler);
+                }
+                surveyOverlay.remove();
+                
+                // Check if booking is cancelled
+                if (currentStatus && currentStatus.bookingCancelled) {
+                  console.log('[CC360 Widget] Survey completed, booking cancelled - showing widget directly');
+                  initializeChecklist().then(() => {
+                    initUserpilot();
+                  });
+                } else {
+                  console.log('[CC360 Widget] Survey completed - showing booking modal...');
+                  // Show booking modal - it will show widget after user closes/dismisses booking
+                  showBookingModal();
+                }
+              }, 2000);
+            } catch (error) {
+              console.error('[CC360 Widget] ❌ Error submitting survey:', error);
+              // Show error message and allow retry
+              setSubmitted(false);
+              alert('Failed to submit survey. Please try again. If the problem persists, refresh the page.');
             }
-            
-            // Show booking modal after 2 seconds
-            setTimeout(() => {
-              surveyOverlay.remove();
-              showBookingModal();
-            }, 2000);
           }
         };
         
@@ -1790,7 +1848,7 @@
                   '🎉 Thanks! We\'ve received your responses.'
                 ),
                 React.createElement('p', { style: { fontSize: '1rem', color: '#6b7280', marginBottom: '24px', lineHeight: 1.5 } },
-                  'You can now proceed to book your free onboarding call.'
+                  'Your onboarding checklist is loading...'
                 )
               )
             )
@@ -1828,6 +1886,178 @@
       const root = ReactDOM.createRoot(document.getElementById('cc360-survey-root'));
       root.render(React.createElement(OnboardingSurveyWidget));
     }
+  }
+
+  // Show booking cancellation confirmation dialog
+  function showBookingCancelDialog(bookingOverlay) {
+    // Create confirmation dialog overlay with explicit styles
+    const confirmOverlay = document.createElement('div');
+    confirmOverlay.className = 'cc360-dialog-overlay';
+    confirmOverlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100003;
+      animation: cc360-fadeIn 0.2s ease;
+    `;
+    
+    const dialogContent = document.createElement('div');
+    dialogContent.className = 'cc360-dialog';
+    dialogContent.style.cssText = `
+      background: white;
+      border-radius: 16px;
+      padding: 32px;
+      max-width: 420px;
+      width: 90%;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      position: relative;
+    `;
+    
+    // Add close button (X)
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '×';
+    closeBtn.style.cssText = `
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: transparent;
+      border: none;
+      font-size: 28px;
+      color: #6b7280;
+      cursor: pointer;
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+      line-height: 1;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    `;
+    dialogContent.innerHTML = `
+      <h3 style="font-size: 1.5rem; font-weight: 700; color: #111827; margin-bottom: 12px;">Remove Booking Reminder?</h3>
+      <p style="color: #6b7280; margin-bottom: 24px; line-height: 1.5;">
+        Are you sure you want to remove the booking reminder? You won't see it again, but you can always book a call later from your dashboard.
+      </p>
+      <div style="display: flex; gap: 12px; justify-content: center;">
+        <button id="cc360-booking-cancel-dismiss" style="
+          padding: 12px 24px;
+          border-radius: 8px;
+          font-size: 1rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          background: #f3f4f6;
+          border: 1px solid #e5e7eb;
+          color: #374151;
+        ">Dismiss</button>
+        <button id="cc360-booking-cancel-remove" style="
+          padding: 12px 24px;
+          border-radius: 8px;
+          font-size: 1rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+          border: none;
+          color: white;
+        ">Remove Forever</button>
+      </div>
+    `;
+    
+    // Add close button AFTER setting innerHTML (so it doesn't get removed)
+    closeBtn.onmouseover = () => { closeBtn.style.background = '#f3f4f6'; closeBtn.style.color = '#374151'; };
+    closeBtn.onmouseout = () => { closeBtn.style.background = 'transparent'; closeBtn.style.color = '#6b7280'; };
+    closeBtn.onclick = () => {
+      // X button acts as "Dismiss" - close dialog and booking modal, but don't cancel
+      confirmOverlay.remove();
+      bookingOverlay.remove();
+      console.log('[CC360 Widget] Booking modal dismissed (X button) - showing widget (will show again on refresh)');
+      initializeChecklist().then(() => {
+        initUserpilot();
+      });
+    };
+    
+    dialogContent.appendChild(closeBtn);
+    confirmOverlay.appendChild(dialogContent);
+    document.body.appendChild(confirmOverlay);
+    
+    // Handle "Dismiss" button - close confirmation dialog and booking modal, but don't mark as cancelled
+    // Booking modal will show again on next page load/refresh
+    document.getElementById('cc360-booking-cancel-dismiss').addEventListener('click', () => {
+      confirmOverlay.remove();
+      bookingOverlay.remove();
+      // Show onboarding widget without marking booking as cancelled
+      console.log('[CC360 Widget] Booking modal dismissed - showing widget (will show again on refresh)');
+      initializeChecklist().then(() => {
+        // Initialize Userpilot after checklist loads
+        console.log('[CC360 Widget] 🎯 Calling initUserpilot...');
+        initUserpilot();
+        console.log('[CC360 Widget] ✅ initUserpilot completed');
+      });
+    });
+    
+    // Handle "Remove Forever" button - cancel booking permanently and show widget
+    document.getElementById('cc360-booking-cancel-remove').addEventListener('click', async () => {
+      confirmOverlay.remove();
+      bookingOverlay.remove();
+      
+      // Call API to mark booking as cancelled
+      try {
+        console.log('[CC360 Widget] Cancelling booking permanently...');
+        const response = await fetch(`${apiBase}/api/booking/cancel`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ locationId: locationId })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+        
+        const updatedStatus = await response.json();
+        console.log('[CC360 Widget] ✅ Booking cancelled permanently');
+        
+        // Update current status
+        currentStatus = updatedStatus;
+        
+        // Show onboarding widget
+        console.log('[CC360 Widget] Showing onboarding widget...');
+        initializeChecklist().then(() => {
+          // Initialize Userpilot after checklist loads
+          console.log('[CC360 Widget] 🎯 Calling initUserpilot...');
+          initUserpilot();
+          console.log('[CC360 Widget] ✅ initUserpilot completed');
+        });
+      } catch (error) {
+        console.error('[CC360 Widget] ❌ Error cancelling booking:', error);
+        // Even if API call fails, show widget (don't block user)
+        initializeChecklist().then(() => {
+          initUserpilot();
+        });
+      }
+    });
+    
+    // Close on overlay click - treat as dismiss (close dialog and booking modal, but don't cancel)
+    confirmOverlay.addEventListener('click', (e) => {
+      if (e.target === confirmOverlay) {
+        confirmOverlay.remove();
+        bookingOverlay.remove();
+        // Show onboarding widget without marking booking as cancelled
+        console.log('[CC360 Widget] Booking modal dismissed (overlay click) - showing widget (will show again on refresh)');
+        initializeChecklist().then(() => {
+          initUserpilot();
+        });
+      }
+    });
   }
 
   // Show booking modal after survey completion
@@ -1869,6 +2099,7 @@
       text-align: center;
       border-bottom: 1px solid #e5e7eb;
       position: relative;
+      z-index: 10;
     `;
     
     const logo = document.createElement('img');
@@ -1876,31 +2107,7 @@
     logo.alt = 'Course Creator 360';
     logo.style.cssText = 'height: 36px; width: auto; margin-bottom: 16px;';
     
-    const closeBtn = document.createElement('button');
-    closeBtn.innerHTML = '×';
-    closeBtn.style.cssText = `
-      position: absolute;
-      top: 16px;
-      right: 16px;
-      background: none;
-      border: none;
-      font-size: 28px;
-      color: #6b7280;
-      cursor: pointer;
-      width: 32px;
-      height: 32px;
-      border-radius: 6px;
-      transition: all 0.2s ease;
-    `;
-    closeBtn.onmouseover = () => { closeBtn.style.background = '#f3f4f6'; closeBtn.style.color = '#374151'; };
-    closeBtn.onmouseout = () => { closeBtn.style.background = 'none'; closeBtn.style.color = '#6b7280'; };
-    closeBtn.onclick = () => {
-      bookingOverlay.remove();
-      dismissWidgetPermanently();
-    };
-    
     header.appendChild(logo);
-    header.appendChild(closeBtn);
     
     // Initial content view
     const initialContent = document.createElement('div');
@@ -1980,8 +2187,9 @@
     skipBtn.onmouseover = () => { skipBtn.style.color = '#6b7280'; skipBtn.style.textDecoration = 'underline'; };
     skipBtn.onmouseout = () => { skipBtn.style.color = '#9ca3af'; skipBtn.style.textDecoration = 'none'; };
     skipBtn.onclick = () => {
-      bookingOverlay.remove();
-      dismissWidgetPermanently();
+      // Show confirmation dialog when "Maybe later" is clicked
+      console.log('[CC360 Widget] Maybe later button clicked - showing confirmation dialog');
+      showBookingCancelDialog(bookingOverlay);
     };
     
     initialContent.appendChild(scheduleBtn);
@@ -2032,11 +2240,11 @@
     bookingOverlay.appendChild(bookingModal);
     document.body.appendChild(bookingOverlay);
     
-    // Close on overlay click
+    // Close on overlay click - show confirmation dialog
     bookingOverlay.addEventListener('click', (e) => {
       if (e.target === bookingOverlay) {
-        bookingOverlay.remove();
-        dismissWidgetPermanently();
+        // Show confirmation dialog when clicking outside
+        showBookingCancelDialog(bookingOverlay);
       }
     });
     
@@ -2518,14 +2726,37 @@
       const errorMessage = window.cc360WidgetError || null;
       showNotAuthorized(errorMessage);
     } else {
-      // Authorized - show checklist directly
-      console.log('[CC360 Widget] Authorized, showing checklist');
-      await initializeChecklist();
+      // Authorized - check survey completion status first
+      console.log('[CC360 Widget] Authorized, checking survey completion status...');
       
-      // Initialize Userpilot after checklist loads
-      console.log('[CC360 Widget] 🎯 Calling initUserpilot...');
-      await initUserpilot();
-      console.log('[CC360 Widget] ✅ initUserpilot completed');
+      // Fetch status to check survey completion
+      const shouldShow = await fetchStatus();
+      if (shouldShow && currentStatus) {
+        console.log('[CC360 Widget] Decision logic - surveyCompleted:', currentStatus.surveyCompleted, 'bookingCancelled:', currentStatus.bookingCancelled);
+        // Check if survey is completed
+        if (!currentStatus.surveyCompleted) {
+          console.log('[CC360 Widget] Survey not completed - showing survey modal first');
+          // Show survey modal - it will show booking modal after completion
+          showSurveyModal();
+        } else {
+          // Survey completed - check if booking is cancelled
+          if (!currentStatus.bookingCancelled) {
+            console.log('[CC360 Widget] Survey completed, booking not cancelled - showing booking modal');
+            // Show booking modal - it will show widget after user closes/dismisses
+            showBookingModal();
+          } else {
+            console.log('[CC360 Widget] Survey completed, booking cancelled - showing checklist directly');
+            await initializeChecklist();
+            
+            // Initialize Userpilot after checklist loads
+            console.log('[CC360 Widget] 🎯 Calling initUserpilot...');
+            await initUserpilot();
+            console.log('[CC360 Widget] ✅ initUserpilot completed');
+          }
+        }
+      } else {
+        console.log('[CC360 Widget] Could not fetch status or widget should not be shown');
+      }
     }
   }
 

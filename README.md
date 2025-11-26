@@ -964,6 +964,18 @@ Control whether the "Connect Payments" step appears in the onboarding widget.
 - `true` - Show the "Connect Payments" checklist item
 - `false` - Hide the "Connect Payments" checklist item
 
+#### Connect Domain Checklist
+
+Control whether the "Connect a Domain" step appears in the onboarding widget.
+
+**Environment Variable:** `FEATURE_CONNECT_DOMAIN_ENABLED`
+
+**Default:** `true` (enabled)
+
+**Options:**
+- `true` - Show the "Connect a Domain" checklist item
+- `false` - Hide the "Connect a Domain" checklist item
+
 ### Configuration
 
 **Local Development (.env):**
@@ -974,6 +986,12 @@ FEATURE_CONNECT_PAYMENTS_ENABLED=true
 
 # Disable Connect Payments checklist
 FEATURE_CONNECT_PAYMENTS_ENABLED=false
+
+# Enable Connect Domain checklist (default)
+FEATURE_CONNECT_DOMAIN_ENABLED=true
+
+# Disable Connect Domain checklist
+FEATURE_CONNECT_DOMAIN_ENABLED=false
 ```
 
 **Vercel (Production/Staging):**
@@ -1045,6 +1063,30 @@ FEATURE_CONNECT_PAYMENTS_ENABLED=false
 - Completion: Only 3 tasks must be done
 - Console log: `[CC360 Widget] 🚩 Feature flags received: { connectPaymentsEnabled: false }`
 
+#### Scenario 3: Connect Domain Disabled
+
+```bash
+FEATURE_CONNECT_DOMAIN_ENABLED=false
+```
+
+**Result:**
+- Checklist shows: ✓ Sign in, Connect Payments, Create Course (no Connect Domain)
+- Progress: "0/3" → "3/3"
+- Completion: Only 3 tasks must be done
+- Console log: `[CC360 Widget] 🚩 Feature flags received: { connectDomainEnabled: false }`
+
+#### Scenario 4: Multiple Flags Disabled
+
+```bash
+FEATURE_CONNECT_PAYMENTS_ENABLED=false
+FEATURE_CONNECT_DOMAIN_ENABLED=false
+```
+
+**Result:**
+- Checklist shows: ✓ Sign in, Create Course
+- Progress: "0/2" → "2/2"
+- Completion: Only 2 tasks must be done
+
 ### Use Cases
 
 **Disable Connect Payments when:**
@@ -1054,6 +1096,13 @@ FEATURE_CONNECT_PAYMENTS_ENABLED=false
 - You want to focus on other onboarding steps first
 - A/B testing different onboarding flows
 - Customer-specific customization needs
+
+**Disable Connect Domain when:**
+- Users will use the default subdomain provided by the platform
+- Domain setup is handled separately outside the onboarding flow
+- You want to simplify onboarding for users who don't have a custom domain
+- The domain connection step is not relevant for certain user segments
+- A/B testing different onboarding experiences
 
 ### Console Logging
 
