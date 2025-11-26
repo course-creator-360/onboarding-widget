@@ -867,8 +867,7 @@ app.post('/api/booking/cancel', async (req, res) => {
       
       const bookingPayload = {
         locationId: locationId,
-        bookingCancelled: true,
-        cancelledAt: new Date().toISOString()
+        bookingCancelled: true
       };
       
       const externalApiResponse = await fetch(`${apiBaseUrl}/api/customers/survey`, {
