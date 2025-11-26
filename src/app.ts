@@ -904,6 +904,52 @@ app.post('/api/booking/cancel', async (req, res) => {
   }
 });
 
+// Check if booking data exists from cc360-customers-admin
+app.get('/api/booking/check', async (req, res) => {
+  const locationId = req.query.locationId as string;
+  
+  if (!locationId) {
+    return res.status(400).json({ error: 'locationId is required' });
+  }
+  
+  const apiKey = process.env.CC360_CUSTOMERS_ADMIN_API_KEY || process.env.CC360_CUSTOMERS_API_KEY;
+  const apiBaseUrl = process.env.CC360_CUSTOMERS_ADMIN_API_BASE_URL || 'https://cc360-customers-admin.vercel.app';
+  
+  try {
+    console.log(`[Booking Check] Checking booking data for ${locationId}`);
+    
+    if (!apiKey) {
+      console.warn('[Booking Check] No API key configured, returning no data');
+      return res.json({ hasBookingData: false, bookingData: null });
+    }
+    
+    const response = await fetch(`${apiBaseUrl}/api/customers/booking?locationId=${locationId}`, {
+      method: 'GET',
+      headers: {
+        'x-api-key': apiKey,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[Booking Check] ❌ External API error: ${response.status} - ${errorText}`);
+      return res.json({ hasBookingData: false, bookingData: null });
+    }
+    
+    const bookingData = await response.json();
+    console.log(`[Booking Check] ✅ Booking data received:`, bookingData);
+    
+    // Check if bookingData has actual data (not empty or null)
+    const hasBookingData = bookingData && Object.keys(bookingData).length > 0 && bookingData.data !== null && bookingData.data !== undefined;
+    
+    res.json({ hasBookingData, bookingData });
+  } catch (error) {
+    console.error('[Booking Check] Error checking booking data:', error);
+    res.json({ hasBookingData: false, bookingData: null, error: error instanceof Error ? error.message : 'Unknown error' });
+  }
+});
+
 // Update onboarding status fields (for testing/demo)
 app.post('/api/onboarding/update', async (req, res) => {
   const { locationId, updates } = req.body as { locationId?: string; updates?: Partial<OnboardingStatus> };
