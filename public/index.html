@@ -899,7 +899,7 @@
         showError('No location selected. Please select a location from the dropdown above.');
         return;
       }
-      if (!confirm(`⚠️ This will clear ALL data for location ${LOCATION_ID}:\n\n- All onboarding progress\n- Location-specific installation\n- Widget state (including dismissal)\n- Local storage (position, minimized state)\n\n✓ Agency authorization will be preserved\n\nContinue?`)) {
+      if (!confirm(`⚠️ This will clear ALL data for location ${LOCATION_ID}:\n\n- All onboarding progress\n- Survey completion status & responses\n- Booking cancellation status\n- Location-specific installation\n- Widget state (including dismissal)\n- Local storage (position, minimized state)\n\n✓ Agency authorization will be preserved\n\nContinue?`)) {
         return;
       }
       

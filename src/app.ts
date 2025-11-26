@@ -700,12 +700,15 @@ app.post('/api/test/clear-location', async (req, res) => {
   console.log(`[Test] Clearing all data for location: ${locationId}`);
   
   try {
-    // Clear onboarding status for this location
+    // Clear onboarding status for this location (including survey and booking data)
     await updateOnboardingStatus(locationId, {
       domainConnected: false,
       courseCreated: false,
       paymentIntegrated: false,
-      dismissed: false
+      dismissed: false,
+      surveyCompleted: false,
+      surveyResponses: null,
+      bookingCancelled: false
     });
     
     // Clear location-specific installation (but keep agency)
