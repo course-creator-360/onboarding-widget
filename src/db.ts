@@ -31,6 +31,9 @@ export type OnboardingStatus = {
   courseCreated: boolean;
   paymentIntegrated: boolean;
   dismissed: boolean;
+  surveyCompleted: boolean;
+  surveyResponses?: any;
+  bookingCancelled: boolean;
   updatedAt: number;
   createdAt: number;
   shouldShowWidget: boolean;
@@ -109,6 +112,8 @@ export async function ensureOnboardingRow(locationId: string): Promise<void> {
       courseCreated: false,
       paymentIntegrated: false,
       dismissed: false,
+      surveyCompleted: false,
+      bookingCancelled: false,
     },
   });
 }
@@ -144,6 +149,9 @@ export async function getOnboardingStatus(locationId: string): Promise<Onboardin
     courseCreated: row.courseCreated,
     paymentIntegrated: row.paymentIntegrated,
     dismissed: row.dismissed,
+    surveyCompleted: row.surveyCompleted ?? false,
+    surveyResponses: undefined, // Survey responses are not stored in database - only sent to external API
+    bookingCancelled: row.bookingCancelled ?? false,
     createdAt,
     updatedAt: dateToTimestamp(row.updatedAt),
     shouldShowWidget,
@@ -169,6 +177,10 @@ export async function updateOnboardingStatus(
   if (updates.courseCreated !== undefined) data.courseCreated = updates.courseCreated;
   if (updates.paymentIntegrated !== undefined) data.paymentIntegrated = updates.paymentIntegrated;
   if (updates.dismissed !== undefined) data.dismissed = updates.dismissed;
+  if (updates.surveyCompleted !== undefined) data.surveyCompleted = updates.surveyCompleted;
+  if (updates.bookingCancelled !== undefined) data.bookingCancelled = updates.bookingCancelled;
+  // Note: surveyResponses are NOT stored in database - only sent to external API
+  // If surveyResponses is provided, it is ignored
 
   console.log(`[DB] Updating database with data:`, data);
   
@@ -187,6 +199,49 @@ export async function updateOnboardingStatus(
  */
 export async function setDismissed(locationId: string, dismissed: boolean): Promise<OnboardingStatus> {
   return updateOnboardingStatus(locationId, { dismissed });
+}
+
+/**
+ * Update survey completion status (only flag, responses are sent to external API)
+ */
+export async function updateSurveyCompletion(
+  locationId: string
+): Promise<OnboardingStatus> {
+  console.log(`[DB] updateSurveyCompletion called for ${locationId}`);
+  
+  await ensureOnboardingRow(locationId);
+
+  const result = await prisma.onboarding.update({
+    where: { locationId },
+    data: {
+      surveyCompleted: true,
+      // Note: surveyResponses are NOT stored in database - only sent to external API
+    },
+  });
+  
+  console.log(`[DB] Survey completion flag updated for ${locationId}`);
+
+  return getOnboardingStatus(locationId);
+}
+
+/**
+ * Cancel booking (mark as cancelled so it won't show again)
+ */
+export async function cancelBooking(locationId: string): Promise<OnboardingStatus> {
+  console.log(`[DB] cancelBooking called for ${locationId}`);
+  
+  await ensureOnboardingRow(locationId);
+
+  const result = await prisma.onboarding.update({
+    where: { locationId },
+    data: {
+      bookingCancelled: true,
+    },
+  });
+  
+  console.log(`[DB] Booking cancelled for ${locationId}`);
+
+  return getOnboardingStatus(locationId);
 }
 
 /**

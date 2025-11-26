@@ -5,7 +5,7 @@ import cookieParser from 'cookie-parser';
 import path from 'path';
 import oauthRouter from './oauth';
 import webhookRouter from './webhooks';
-import { getOnboardingStatus, setDismissed, updateOnboardingStatus, getInstallation, hasAgencyAuthorization, getAgencyInstallation, deleteInstallation, OnboardingStatus, toggleOnboardingField, upsertInstallation, registerSubAccount, getSubAccount, getSubAccountsByAgency, getAllSubAccounts, getSubAccountStats, deactivateSubAccount, getAgencyForLocation, isSubAccountUnderAgency } from './db';
+import { getOnboardingStatus, setDismissed, updateOnboardingStatus, getInstallation, hasAgencyAuthorization, getAgencyInstallation, deleteInstallation, OnboardingStatus, toggleOnboardingField, upsertInstallation, registerSubAccount, getSubAccount, getSubAccountsByAgency, getAllSubAccounts, getSubAccountStats, deactivateSubAccount, getAgencyForLocation, isSubAccountUnderAgency, updateSurveyCompletion, cancelBooking } from './db';
 import { sseBroker } from './sse';
 import { checkLocationProducts, getAuthToken } from './ghl-api';
 import { getBaseUrl, getEnvironment, getGhlAppBaseUrl } from './config';
@@ -52,6 +52,7 @@ app.get('/api/config', async (_req, res) => {
   
   // Feature flags
   const featureConnectPaymentsEnabled = process.env.FEATURE_CONNECT_PAYMENTS_ENABLED !== 'false'; // Default to true
+  const featureConnectDomainEnabled = process.env.FEATURE_CONNECT_DOMAIN_ENABLED !== 'false'; // Default to true
   
   // Check if API verification is properly configured
   const customersApiConfigured = !!customersApiKey;
@@ -77,7 +78,8 @@ app.get('/api/config', async (_req, res) => {
     widgetLocationFilter: filterLocationId,  // Optional pre-filter
     customersApiConfigured: customersApiConfigured,  // Whether API verification is available
     featureFlags: {
-      connectPaymentsEnabled: featureConnectPaymentsEnabled
+      connectPaymentsEnabled: featureConnectPaymentsEnabled,
+      connectDomainEnabled: featureConnectDomainEnabled
     }
   });
 });
@@ -317,6 +319,9 @@ app.get('/api/status', async (req, res) => {
       courseCreated: false,
       paymentIntegrated: false,
       dismissed: false,
+      surveyCompleted: false,
+      surveyResponses: undefined, // Survey responses are not stored in database - only sent to external API
+      bookingCancelled: false,
       createdAt: Date.now(),
       updatedAt: Date.now(),
       shouldShowWidget: true,
@@ -769,6 +774,97 @@ app.post('/api/dismiss', async (req, res) => {
   const status = await setDismissed(locationId, true);
   await sseBroker.broadcastStatus(locationId);
   res.json(status);
+});
+
+// Complete survey and send responses to external API
+app.post('/api/survey/complete', async (req, res) => {
+  const { locationId, surveyResponses } = req.body as { locationId?: string; surveyResponses?: any };
+  
+  if (!locationId) {
+    return res.status(400).json({ error: 'locationId is required' });
+  }
+  
+  if (!surveyResponses) {
+    return res.status(400).json({ error: 'surveyResponses is required' });
+  }
+  
+  const apiKey = process.env.CC360_CUSTOMERS_ADMIN_API_KEY || process.env.CC360_CUSTOMERS_API_KEY;
+  const apiBaseUrl = process.env.CC360_CUSTOMERS_ADMIN_API_BASE_URL || 'https://cc360-customers-admin.vercel.app';
+  
+  if (!apiKey) {
+    console.error('[Survey Complete] ❌ CC360_CUSTOMERS_ADMIN_API_KEY or CC360_CUSTOMERS_API_KEY is not configured');
+    return res.status(500).json({ 
+      error: 'API key not configured',
+      message: 'Survey API key is not set'
+    });
+  }
+  
+  try {
+    console.log(`[Survey Complete] Sending survey data to external API for ${locationId}`);
+    
+    // Send survey data to external API
+    const surveyPayload = {
+      locationId: locationId,
+      surveyCompleted: true,
+      surveyResponses: surveyResponses
+    };
+    
+    const externalApiResponse = await fetch(`${apiBaseUrl}/api/customers/survey`, {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(surveyPayload)
+    });
+    
+    if (!externalApiResponse.ok) {
+      const errorText = await externalApiResponse.text();
+      console.error(`[Survey Complete] ❌ External API error: ${externalApiResponse.status} - ${errorText}`);
+      throw new Error(`External API error: ${externalApiResponse.status} - ${errorText}`);
+    }
+    
+    const externalApiResult = await externalApiResponse.json();
+    console.log(`[Survey Complete] ✅ Survey data sent to external API successfully`);
+    
+    // Mark survey as completed in local database (only flag, responses not stored)
+    // This flag is used by widget to know not to show survey again
+    console.log(`[Survey Complete] Marking survey complete flag in local database for ${locationId}`);
+    const status = await updateSurveyCompletion(locationId);
+    await sseBroker.broadcastStatus(locationId);
+    console.log(`[Survey Complete] Survey completed successfully for ${locationId}`);
+    
+    res.json(status);
+  } catch (error) {
+    console.error('[Survey Complete] Error completing survey:', error);
+    res.status(500).json({ 
+      error: 'Failed to complete survey',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Cancel booking (mark as cancelled so it won't show again)
+app.post('/api/booking/cancel', async (req, res) => {
+  const { locationId } = req.body as { locationId?: string };
+  
+  if (!locationId) {
+    return res.status(400).json({ error: 'locationId is required' });
+  }
+  
+  try {
+    console.log(`[Booking Cancel] Marking booking as cancelled for ${locationId}`);
+    const status = await cancelBooking(locationId);
+    await sseBroker.broadcastStatus(locationId);
+    console.log(`[Booking Cancel] Booking cancelled successfully for ${locationId}`);
+    res.json(status);
+  } catch (error) {
+    console.error('[Booking Cancel] Error cancelling booking:', error);
+    res.status(500).json({ 
+      error: 'Failed to cancel booking',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
 });
 
 // Update onboarding status fields (for testing/demo)
