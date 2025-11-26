@@ -852,8 +852,43 @@ app.post('/api/booking/cancel', async (req, res) => {
     return res.status(400).json({ error: 'locationId is required' });
   }
   
+  const apiKey = process.env.CC360_CUSTOMERS_ADMIN_API_KEY || process.env.CC360_CUSTOMERS_API_KEY;
+  const apiBaseUrl = process.env.CC360_CUSTOMERS_ADMIN_API_BASE_URL || 'https://cc360-customers-admin.vercel.app';
+  
   try {
     console.log(`[Booking Cancel] Marking booking as cancelled for ${locationId}`);
+    
+    // Send bookingCancelled data to external API (cc360-customers-admin)
+    if (apiKey) {
+      console.log(`[Booking Cancel] Sending bookingCancelled data to external API for ${locationId}`);
+      
+      const bookingPayload = {
+        locationId: locationId,
+        bookingCancelled: true,
+        cancelledAt: new Date().toISOString()
+      };
+      
+      const externalApiResponse = await fetch(`${apiBaseUrl}/api/customers/survey`, {
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(bookingPayload)
+      });
+      
+      if (!externalApiResponse.ok) {
+        const errorText = await externalApiResponse.text();
+        console.error(`[Booking Cancel] ❌ External API error: ${externalApiResponse.status} - ${errorText}`);
+        // Continue with local update even if external API fails
+      } else {
+        console.log(`[Booking Cancel] ✅ Booking cancelled data sent to external API successfully`);
+      }
+    } else {
+      console.warn('[Booking Cancel] No API key configured, skipping external API sync');
+    }
+    
+    // Update local database
     const status = await cancelBooking(locationId);
     await sseBroker.broadcastStatus(locationId);
     console.log(`[Booking Cancel] Booking cancelled successfully for ${locationId}`);
