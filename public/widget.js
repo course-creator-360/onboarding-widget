@@ -2376,7 +2376,7 @@
     };
     
     const iframe = document.createElement('iframe');
-    iframe.src = 'https://my.coursecreator360.com/widget/booking/k0yrAymNvet7hUvzBxTh';
+    iframe.src = `https://www.coursecreator360.com/book-cc360-onboarding?locationId=${locationId || ''}`;
     iframe.style.cssText = 'width: 100%; height: 100%; border: none;';
     iframe.setAttribute('scrolling', 'yes');
     
