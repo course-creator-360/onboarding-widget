@@ -732,6 +732,18 @@
       (!featureFlags.connectDomainEnabled || status.domainConnected);
     if (allCompleted && !hasShownCompletionDialog) {
       console.log('[CC360 Widget] All tasks completed! Showing completion dialog...');
+      
+      // Track onboarding completed (Segment best practice: noun + past-tense verb)
+      trackSegmentEvent('Onboarding Completed', {
+        completedSteps: [
+          status.courseCreated && 'course_created',
+          status.paymentIntegrated && 'payment_integrated',
+          status.domainConnected && 'domain_connected'
+        ].filter(Boolean),
+        totalSteps: items.length,
+        completedCount: completedCount
+      });
+      
       showCompletionDialog();
       hasShownCompletionDialog = true; // Only show once per session
     }
@@ -807,6 +819,9 @@
           href="${buildDashboardUrl(item.url)}" 
           class="cc360-checklist-item ${item.completed ? 'completed' : ''} ${item.isDisabled ? 'disabled' : ''}"
           target="_blank"
+          data-step-id="${item.id}"
+          data-step-title="${item.title}"
+          data-step-completed="${item.completed}"
         >
           <div class="cc360-checkbox"></div>
           <div class="cc360-checklist-content">
@@ -816,6 +831,23 @@
         </a>
       `;
     }).join('');
+    
+    // Add click tracking for checklist items (Segment best practice: noun + past-tense verb)
+    const checklistLinks = checklistContainer.querySelectorAll('a.cc360-checklist-item');
+    checklistLinks.forEach(link => {
+      link.addEventListener('click', () => {
+        const stepId = link.getAttribute('data-step-id');
+        const stepTitle = link.getAttribute('data-step-title');
+        const stepCompleted = link.getAttribute('data-step-completed') === 'true';
+        
+        trackSegmentEvent('Onboarding Step Clicked', {
+          stepId: stepId,
+          stepTitle: stepTitle,
+          stepCompleted: stepCompleted,
+          stepUrl: link.href
+        });
+      });
+    });
   }
 
   // Force widget into viewport if it's off-screen (safety function)
@@ -1564,6 +1596,16 @@
     isMinimized = true;
     widgetElement.classList.add('minimized');
     
+    // Track widget minimized (Segment best practice: noun + past-tense verb)
+    trackSegmentEvent('Widget Minimized', {
+      onboardingStatus: currentStatus?.allTasksCompleted ? 'completed' : 'active',
+      completedSteps: currentStatus ? [
+        currentStatus.courseCreated && 'course_created',
+        currentStatus.domainConnected && 'domain_connected',
+        currentStatus.paymentIntegrated && 'payment_integrated'
+      ].filter(Boolean) : []
+    });
+    
     // Keep current position, just change the visual state
     const position = getWidgetPosition();
     saveWidgetPosition(position.isRight, position.bottom, widget.style.height);
@@ -2137,6 +2179,11 @@
     document.getElementById('cc360-booking-cancel-dismiss').addEventListener('click', () => {
       confirmOverlay.remove();
       bookingOverlay.remove();
+      // Track booking modal dismissed (Segment best practice: noun + past-tense verb)
+      trackSegmentEvent('Booking Modal Dismissed', { 
+        permanentRemoval: false,
+        reason: 'temporary_dismiss'
+      });
       // Show onboarding widget without marking booking as cancelled
       console.log('[CC360 Widget] Booking modal dismissed - showing widget (will show again on refresh)');
       initializeChecklist().then(() => {
@@ -2154,6 +2201,12 @@
     document.getElementById('cc360-booking-cancel-remove').addEventListener('click', async () => {
       confirmOverlay.remove();
       bookingOverlay.remove();
+      
+      // Track booking cancelled (Segment best practice: noun + past-tense verb)
+      trackSegmentEvent('Booking Cancelled', { 
+        permanentRemoval: true,
+        reason: 'user_requested'
+      });
       
       // Call API to mark booking as cancelled
       try {
@@ -2527,6 +2580,11 @@
     // Expand the widget
     isMinimized = false;
     widgetElement.classList.remove('minimized');
+    
+    // Track widget expanded (Segment best practice: noun + past-tense verb)
+    trackSegmentEvent('Widget Expanded', {
+      onboardingStatus: currentStatus?.allTasksCompleted ? 'completed' : 'active'
+    });
     
     // Ensure the expanded widget fits in viewport
     const rect = widget.getBoundingClientRect();
@@ -2915,26 +2973,31 @@
       const context = await response.json();
       console.log('[Segment] ✅ Fetched location context:', context);
       
-      // Prepare user traits with GHL context
+      // Prepare user traits following Segment reserved trait names
+      // See: https://www.twilio.com/docs/segment/connections/spec/identify#custom-traits
       const userTraits = {
         name: context.name,
         email: context.email,
         phone: context.phone,
-        company: {
-          id: context.companyId,
-          name: context.name
-        },
+        website: context.website,
+        // Address object with reserved sub-fields
         address: {
           city: context.city,
           state: context.state,
           country: context.country
         },
-        website: context.website,
-        timezone: context.timezone,
-        onboarding_status: currentStatus?.allTasksCompleted ? 'completed' : 'active',
-        domain_connected: currentStatus?.domainConnected || false,
-        course_created: currentStatus?.courseCreated || false,
-        payment_integrated: currentStatus?.paymentIntegrated || false
+        // Company object with reserved sub-fields
+        company: {
+          id: context.companyId,
+          name: context.name
+        },
+        // Custom traits for onboarding status
+        onboardingStatus: currentStatus?.allTasksCompleted ? 'completed' : 'active',
+        domainConnected: currentStatus?.domainConnected || false,
+        courseCreated: currentStatus?.courseCreated || false,
+        paymentIntegrated: currentStatus?.paymentIntegrated || false,
+        // Timezone
+        timezone: context.timezone
       };
       
       console.log('[Segment] 👤 Identifying user:', locationId);
@@ -2946,9 +3009,29 @@
         console.log('[Segment] ✅ Called analytics.identify()');
       }
       
+      // Group call to associate user with their company/agency
+      // See: https://www.twilio.com/docs/segment/connections/spec/group
+      if (window.analytics && typeof window.analytics.group === 'function' && context.companyId) {
+        const groupTraits = {
+          name: context.name,
+          website: context.website,
+          address: {
+            city: context.city,
+            state: context.state,
+            country: context.country
+          },
+          timezone: context.timezone
+        };
+        window.analytics.group(context.companyId, groupTraits);
+        console.log('[Segment] ✅ Called analytics.group() with companyId:', context.companyId);
+      }
+      
       // Track page view
       if (window.analytics && typeof window.analytics.page === 'function') {
-        window.analytics.page('Onboarding Widget');
+        window.analytics.page('Onboarding Widget', {
+          locationId: locationId,
+          onboardingStatus: currentStatus?.allTasksCompleted ? 'completed' : 'active'
+        });
         console.log('[Segment] ✅ Tracked page view');
       }
       

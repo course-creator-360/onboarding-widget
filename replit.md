@@ -37,12 +37,19 @@ Commands:
 ## Analytics Integration
 
 ### Segment Analytics
-The widget integrates with Segment for user identification and event tracking:
-- **User Identification**: Automatically identifies users with location context (name, email, company, etc.)
-- **Event Tracking**: Tracks key events including:
+The widget integrates with Segment following best practices from the Twilio Segment documentation:
+- **User Identification** (`identify`): Identifies users with GHL location context using reserved trait names (name, email, phone, company, address, website)
+- **Group Association** (`group`): Associates users with their company/agency using companyId
+- **Event Tracking** (`track`): Tracks key events using "noun + past-tense verb" naming convention:
   - `Survey Completed` - When user completes the onboarding survey
-  - `Widget Dismissed` - When user dismisses the widget
-  - Page views with onboarding context
+  - `Widget Dismissed` - When user dismisses the widget permanently
+  - `Widget Minimized` - When user minimizes the widget
+  - `Widget Expanded` - When user expands the minimized widget
+  - `Onboarding Step Clicked` - When user clicks on a checklist step
+  - `Onboarding Completed` - When all onboarding tasks are completed
+  - `Booking Modal Dismissed` - When user temporarily dismisses booking modal
+  - `Booking Cancelled` - When user permanently removes booking
+- **Page Tracking** (`page`): Tracks page views with onboarding context
 - **Configuration**: Set `SEGMENT_WRITE_KEY` in environment variables
 
 ### Userpilot Integration
