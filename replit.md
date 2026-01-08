@@ -6,12 +6,27 @@ A persistent onboarding checklist widget for CourseCreator360 sub-accounts. Trac
 ## Project Structure
 - `src/` - TypeScript source code
   - `server.ts` - Express server entry point (port 5000)
-  - `app.ts` - Express application setup with routes
+  - `app.ts` - Express application setup (route mounting)
   - `config.ts` - Environment configuration helpers
   - `db.ts` - Prisma database operations
   - `oauth.ts` - OAuth flow handling for GoHighLevel
   - `webhooks.ts` - Webhook handlers for GHL events
+  - `routes/` - Modular API route handlers
+    - `index.ts` - Route aggregator
+    - `config.ts` - Widget configuration endpoint
+    - `status.ts` - Location status endpoint
+    - `location.ts` - Location data endpoint
+    - `installation.ts` - Installation status check
+    - `agency.ts` - Agency authorization
+    - `booking.ts` - Booking management
+    - `survey.ts` - Survey handling
+    - `subaccounts.ts` - Sub-account management
 - `public/` - Static files (HTML, JS, CSS)
+  - `widget.js` - Entry point, module loader with state initialization
+  - `widget-styles.js` - CSS injection module
+  - `widget-analytics.js` - Segment and Userpilot analytics
+  - `widget-ui.js` - UI components (modals, checklist, dialogs)
+  - `widget-core.js` - Core functionality (init, state, API calls)
 - `prisma/` - Database schema and migrations
 - `api/` - Vercel serverless functions
 
