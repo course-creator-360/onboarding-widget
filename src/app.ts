@@ -47,6 +47,9 @@ app.get('/api/config', async (_req, res) => {
     ? process.env.USERPILOT_TOKEN 
     : (process.env.USERPILOT_STAGE_TOKEN || process.env.USERPILOT_TOKEN);
   
+  // Get Segment write key
+  const segmentWriteKey = process.env.SEGMENT_WRITE_KEY || null;
+  
   const filterLocationId = process.env.WIDGET_LOCATION_ID_FILTER || null;
   const customersApiKey = process.env.CC360_CUSTOMERS_API_KEY;
   
@@ -70,11 +73,16 @@ app.get('/api/config', async (_req, res) => {
     }
   }
   
+  if (segmentWriteKey) {
+    console.log('[Config] ✅ Segment analytics is configured');
+  }
+  
   return res.json({
     apiBase: getBaseUrl(),
     environment: getEnvironment(),
     ghlAppBaseUrl: getGhlAppBaseUrl(),
     userpilotToken: userpilotToken || null,  // Expose for client-side SDK
+    segmentWriteKey: segmentWriteKey,  // Expose for client-side Segment SDK
     widgetLocationFilter: filterLocationId,  // Optional pre-filter
     customersApiConfigured: customersApiConfigured,  // Whether API verification is available
     featureFlags: {

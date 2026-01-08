@@ -99,6 +99,7 @@
   let hasShownCompletionDialog = false; // Track if we've shown the completion dialog
   let ghlAppBaseUrl = 'https://app.gohighlevel.com'; // Default, will be fetched from backend
   let userpilotToken = null; // Will be fetched from backend
+  let segmentWriteKey = null; // Will be fetched from backend for Segment analytics
   let widgetLocationFilter = null; // Optional pre-filter - fetched from backend
   let customersApiConfigured = false; // Whether CC360 Customers API is configured
   let featureFlags = { connectPaymentsEnabled: true }; // Feature flags - fetched from backend
@@ -122,6 +123,13 @@
           console.log('[CC360 Widget] ✅ Userpilot token received from backend');
         } else {
           console.log('[CC360 Widget] ⚠️ No Userpilot token in config');
+        }
+        
+        if (config.segmentWriteKey) {
+          segmentWriteKey = config.segmentWriteKey;
+          console.log('[CC360 Widget] ✅ Segment write key received from backend');
+        } else {
+          console.log('[CC360 Widget] ⚠️ No Segment write key in config');
         }
         
         // Optional pre-filter
@@ -1794,6 +1802,16 @@
                 console.log('[Userpilot] ⚠️ Userpilot not initialized, skipping survey tracking');
               }
               
+              // Track in Segment (analytics tracking)
+              trackSegmentEvent('Survey Completed', {
+                reason: formData.reason,
+                profession: formData.profession,
+                has_domain: formData.hasDomain,
+                domain: formData.domain || '',
+                course_idea: formData.courseIdea || '',
+                completed_at: new Date().toISOString()
+              });
+              
               // Close survey modal and check booking status
               setTimeout(() => {
                 // Clean up ESC key handler
@@ -1806,6 +1824,7 @@
                 console.log('[CC360 Widget] Survey completed - showing widget checklist');
                 initializeChecklist().then(() => {
                   initUserpilot();
+                  initSegment();
                 });
               }, 2000);
             } catch (error) {
@@ -2105,6 +2124,7 @@
       console.log('[CC360 Widget] Booking modal dismissed (X button) - showing widget (will show again on refresh)');
       initializeChecklist().then(() => {
         initUserpilot();
+        initSegment();
       });
     };
     
@@ -2124,6 +2144,9 @@
         console.log('[CC360 Widget] 🎯 Calling initUserpilot...');
         initUserpilot();
         console.log('[CC360 Widget] ✅ initUserpilot completed');
+        console.log('[CC360 Widget] 🎯 Calling initSegment...');
+        initSegment();
+        console.log('[CC360 Widget] ✅ initSegment completed');
       });
     });
     
@@ -2158,12 +2181,16 @@
           console.log('[CC360 Widget] 🎯 Calling initUserpilot...');
           initUserpilot();
           console.log('[CC360 Widget] ✅ initUserpilot completed');
+          console.log('[CC360 Widget] 🎯 Calling initSegment...');
+          initSegment();
+          console.log('[CC360 Widget] ✅ initSegment completed');
         });
       } catch (error) {
         console.error('[CC360 Widget] ❌ Error cancelling booking:', error);
         // Even if API call fails, show widget (don't block user)
         initializeChecklist().then(() => {
           initUserpilot();
+          initSegment();
         });
       }
     });
@@ -2177,6 +2204,7 @@
         console.log('[CC360 Widget] Booking modal dismissed (overlay click) - showing widget (will show again on refresh)');
         initializeChecklist().then(() => {
           initUserpilot();
+          initSegment();
         });
       }
     });
@@ -2459,6 +2487,11 @@
     } else {
       console.log('[Userpilot] ⚠️ Userpilot not initialized, skipping event tracking');
     }
+    
+    // Track in Segment
+    trackSegmentEvent('Widget Dismissed', {
+      dismissed_at: new Date().toISOString()
+    });
     
     // Remove widget from DOM
     widgetElement.remove();
@@ -2795,6 +2828,152 @@
     }
   }
 
+  // Initialize Segment analytics with user context from GHL
+  async function initSegment() {
+    console.log('[Segment] Starting initialization...');
+    console.log('[Segment] LocationId:', locationId);
+    
+    if (!locationId) {
+      console.warn('[Segment] ❌ No locationId, skipping initialization');
+      return;
+    }
+    
+    if (!segmentWriteKey) {
+      console.warn('[Segment] ❌ No write key available, skipping initialization');
+      console.log('[Segment] 💡 Set SEGMENT_WRITE_KEY in environment variables');
+      return;
+    }
+    
+    try {
+      // Load Segment SDK if not already loaded
+      if (!window.analytics || !window.analytics.initialized) {
+        console.log('[Segment] 📦 Loading Segment SDK...');
+        
+        // Initialize analytics array
+        var analytics = window.analytics = window.analytics || [];
+        if (!analytics.initialize) {
+          if (analytics.invoked) {
+            console.warn('[Segment] Snippet included twice.');
+          } else {
+            analytics.invoked = true;
+            analytics.methods = ["trackSubmit","trackClick","trackLink","trackForm","pageview","identify","reset","group","track","ready","alias","debug","page","screen","once","off","on","addSourceMiddleware","addIntegrationMiddleware","setAnonymousId","addDestinationMiddleware","register"];
+            analytics.factory = function(e) {
+              return function() {
+                if (window.analytics.initialized) return window.analytics[e].apply(window.analytics, arguments);
+                var n = Array.prototype.slice.call(arguments);
+                if (["track","screen","alias","group","page","identify"].indexOf(e) > -1) {
+                  var c = document.querySelector("link[rel='canonical']");
+                  n.push({__t:"bpc",c:c&&c.getAttribute("href")||void 0,p:location.pathname,u:location.href,s:location.search,t:document.title,r:document.referrer});
+                }
+                n.unshift(e);
+                analytics.push(n);
+                return analytics;
+              };
+            };
+            for (var n = 0; n < analytics.methods.length; n++) {
+              var key = analytics.methods[n];
+              analytics[key] = analytics.factory(key);
+            }
+            analytics.load = function(key, n) {
+              var t = document.createElement("script");
+              t.type = "text/javascript";
+              t.async = true;
+              t.setAttribute("data-global-segment-analytics-key", "analytics");
+              t.src = "https://cdn.segment.com/analytics.js/v1/" + key + "/analytics.min.js";
+              var r = document.getElementsByTagName("script")[0];
+              r.parentNode.insertBefore(t, r);
+              analytics._loadOptions = n;
+            };
+            analytics._writeKey = segmentWriteKey;
+            analytics.SNIPPET_VERSION = "5.2.0";
+            analytics.load(segmentWriteKey);
+            console.log('[Segment] ✅ SDK loaded with write key');
+          }
+        }
+        
+        // Wait for SDK to initialize
+        console.log('[Segment] ⏳ Waiting for SDK to initialize...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } else {
+        console.log('[Segment] SDK already loaded');
+      }
+      
+      // Fetch location context from backend
+      console.log('[Segment] 📡 Fetching location context from:', `${apiBase}/api/location-context?locationId=${locationId}`);
+      const response = await fetch(`${apiBase}/api/location-context?locationId=${locationId}`);
+      
+      if (!response.ok) {
+        console.error('[Segment] ❌ Failed to fetch context:', response.status);
+        // Still track page view even without context
+        if (window.analytics && typeof window.analytics.page === 'function') {
+          window.analytics.page();
+          console.log('[Segment] ✅ Tracked page view (without user context)');
+        }
+        return;
+      }
+      
+      const context = await response.json();
+      console.log('[Segment] ✅ Fetched location context:', context);
+      
+      // Prepare user traits with GHL context
+      const userTraits = {
+        name: context.name,
+        email: context.email,
+        phone: context.phone,
+        company: {
+          id: context.companyId,
+          name: context.name
+        },
+        address: {
+          city: context.city,
+          state: context.state,
+          country: context.country
+        },
+        website: context.website,
+        timezone: context.timezone,
+        onboarding_status: currentStatus?.allTasksCompleted ? 'completed' : 'active',
+        domain_connected: currentStatus?.domainConnected || false,
+        course_created: currentStatus?.courseCreated || false,
+        payment_integrated: currentStatus?.paymentIntegrated || false
+      };
+      
+      console.log('[Segment] 👤 Identifying user:', locationId);
+      console.log('[Segment] User traits:', userTraits);
+      
+      // Identify user with context from GHL
+      if (window.analytics && typeof window.analytics.identify === 'function') {
+        window.analytics.identify(locationId, userTraits);
+        console.log('[Segment] ✅ Called analytics.identify()');
+      }
+      
+      // Track page view
+      if (window.analytics && typeof window.analytics.page === 'function') {
+        window.analytics.page('Onboarding Widget');
+        console.log('[Segment] ✅ Tracked page view');
+      }
+      
+    } catch (error) {
+      console.error('[Segment] ❌ Failed to initialize:', error);
+      console.error('[Segment] Error details:', error.message || error);
+    }
+  }
+
+  // Helper function to track Segment events
+  function trackSegmentEvent(eventName, properties = {}) {
+    if (!window.analytics || typeof window.analytics.track !== 'function') {
+      console.warn('[Segment] ⚠️ Analytics not available for tracking:', eventName);
+      return;
+    }
+    
+    const eventProperties = {
+      location_id: locationId,
+      ...properties
+    };
+    
+    window.analytics.track(eventName, eventProperties);
+    console.log('[Segment] 📊 Tracked event:', eventName, eventProperties);
+  }
+
   // Initialize widget
   async function init() {
     console.log('[CC360 Widget] Initializing...');
@@ -2898,6 +3077,11 @@
           console.log('[CC360 Widget] 🎯 Calling initUserpilot...');
           await initUserpilot();
           console.log('[CC360 Widget] ✅ initUserpilot completed');
+          
+          // Initialize Segment analytics
+          console.log('[CC360 Widget] 🎯 Calling initSegment...');
+          await initSegment();
+          console.log('[CC360 Widget] ✅ initSegment completed');
         }
       } else {
         console.log('[CC360 Widget] Could not fetch status or widget should not be shown');

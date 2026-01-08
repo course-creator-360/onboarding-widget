@@ -32,8 +32,24 @@ Commands:
 - `GHL_CLIENT_ID` - GoHighLevel OAuth client ID
 - `GHL_CLIENT_SECRET` - GoHighLevel OAuth client secret
 - `CC360_CUSTOMERS_API_KEY` - CC360 Customers Admin API key
+- `SEGMENT_WRITE_KEY` - Segment analytics write key for event tracking
+
+## Analytics Integration
+
+### Segment Analytics
+The widget integrates with Segment for user identification and event tracking:
+- **User Identification**: Automatically identifies users with location context (name, email, company, etc.)
+- **Event Tracking**: Tracks key events including:
+  - `Survey Completed` - When user completes the onboarding survey
+  - `Widget Dismissed` - When user dismisses the widget
+  - Page views with onboarding context
+- **Configuration**: Set `SEGMENT_WRITE_KEY` in environment variables
+
+### Userpilot Integration
+Also supports Userpilot for in-app guidance (optional, set `USERPILOT_TOKEN`).
 
 ## Recent Changes
 - Configured for Replit environment (port 5000, host 0.0.0.0)
 - Database migrations applied successfully
 - Deployment configured for autoscale
+- Added Segment analytics integration for user tracking and event capture
