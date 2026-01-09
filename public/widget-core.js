@@ -4,8 +4,19 @@
   window.CC360Widget = window.CC360Widget || {};
 
   const currentScript = document.currentScript || document.querySelector('script[src*="widget.js"]');
-  const apiBase = currentScript?.getAttribute('data-api') || 'http://localhost:4002';
   const skipApiChecks = currentScript?.getAttribute('data-skip-api-checks') === 'true';
+  
+  // Auto-detect API base from script source URL if not explicitly provided
+  let apiBase = currentScript?.getAttribute('data-api');
+  if (!apiBase && currentScript?.src) {
+    try {
+      const scriptUrl = new URL(currentScript.src);
+      apiBase = scriptUrl.origin;
+    } catch (e) {
+      apiBase = 'http://localhost:5000';
+    }
+  }
+  apiBase = apiBase || 'http://localhost:5000';
 
   // Merge with existing state (initialized in widget.js entry point)
   // This preserves any state set before this module loads
