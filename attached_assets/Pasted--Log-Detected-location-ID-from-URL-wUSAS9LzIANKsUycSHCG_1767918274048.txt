@@ -1,0 +1,43 @@
+[Log] Detected location ID from URL: – "wUSAS9LzIANKsUycSHCG" (onboarding-widget-beryl.vercel.app, line 351)
+[Log] [FilterInfo] Fetching config from: – "https://onboarding-widget-beryl.vercel.app/api/config?t=1767918155110" (onboarding-widget-beryl.vercel.app, line 423)
+[Log] [FilterInfo] Config response: – Object (onboarding-widget-beryl.vercel.app, line 426)
+Object
+[Log] [FilterInfo] No location pre-filter configured (onboarding-widget-beryl.vercel.app, line 480)
+[Log] [UpdateButton] Fetching status from: – "https://onboarding-widget-beryl.vercel.app/api/agency/status?t=1767918155226" (onboarding-widget-beryl.vercel.app, line 497)
+[Log] [UpdateButton] Status response: – Object (onboarding-widget-beryl.vercel.app, line 500)
+Object
+[Log] [UpdateButton] Setting button to AUTHORIZED state (onboarding-widget-beryl.vercel.app, line 503)
+[Log] Widget loaded - will auto-detect location ID (onboarding-widget-beryl.vercel.app, line 548)
+[Log] [CC360 Widget] Loading modules... (widget.js, line 70)
+[Log] [CC360 Widget] Styles module loaded (widget-styles.js, line 602)
+[Log] [CC360 Widget] Module loaded: widget-styles.js (1/4) (widget.js, line 58)
+[Log] [CC360 Widget] Analytics module loaded (widget-analytics.js, line 220)
+[Log] [CC360 Widget] Module loaded: widget-analytics.js (2/4) (widget.js, line 58)
+[Log] [CC360 Widget] UI module loaded (widget-ui.js, line 1199)
+[Log] [CC360 Widget] Module loaded: widget-ui.js (3/4) (widget.js, line 58)
+[Log] [CC360 Widget] Core module loaded (widget-core.js, line 1017)
+[Log] [CC360 Widget] Module loaded: widget-core.js (4/4) (widget.js, line 58)
+[Log] [CC360 Widget] All modules loaded successfully (widget.js, line 76)
+[Log] [CC360 Widget] Bootstrap complete - starting initialization... (widget.js, line 96)
+[Log] [CC360 Widget] Initializing... (widget-core.js, line 866)
+[Log] [CC360 Widget] Detected location ID from URL: – "wUSAS9LzIANKsUycSHCG" (widget-core.js, line 57)
+[Log] [CC360 Widget] Using auto-detected location ID: – "wUSAS9LzIANKsUycSHCG" (widget-core.js, line 875)
+[Log] [CC360 Widget] 🔧 Fetching config from: – "http://localhost:4002/api/config" (widget-core.js, line 116)
+[Warning] [blocked] The page at https://onboarding-widget-beryl.vercel.app/?locationId=wUSAS9LzIANKsUycSHCG requested insecure content from http://localhost:4002/api/config. This content was blocked and must (widget-core.js, line 117)
+
+[Error] Not allowed to request resource
+	(anonymous function) (widget-core.js:117)
+	(anonymous function) (widget-core.js:113)
+	(anonymous function) (widget-core.js:882)
+[Error] Fetch API cannot load http://localhost:4002/api/config due to access control checks.
+	(anonymous function) (widget-core.js:117)
+	(anonymous function) (widget-core.js:113)
+	(anonymous function) (widget-core.js:882)
+[Warning] [CC360 Widget] ❌ Could not fetch config: – TypeError: Load failed (widget-core.js, line 162)
+TypeError: Load failed
+[Error] [CC360 Widget] ❌ CC360_CUSTOMERS_API_KEY is NOT configured
+	(anonymous function) (widget-core.js:885)
+[Error] [CC360 Widget] ❌ Widget initialization STOPPED - API key required
+	(anonymous function) (widget-core.js:886)
+> Selected Element
+< <body>…</body>

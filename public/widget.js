@@ -24,20 +24,29 @@
     skipApiChecks: false
   };
 
-  // Calculate module base path from current script location
+  // Calculate module base path and API base from current script location
   const currentScript = document.currentScript || document.querySelector('script[src*="widget.js"]');
   const scriptSrc = currentScript ? currentScript.src : '';
   // Use URL API for robust path handling across different embedding scenarios
   let scriptBasePath = '';
+  let detectedApiBase = currentScript?.getAttribute('data-api') || '';
+  
   if (scriptSrc) {
     try {
       const scriptUrl = new URL(scriptSrc);
       scriptBasePath = scriptUrl.href.substring(0, scriptUrl.href.lastIndexOf('/') + 1);
+      // Auto-detect API base from script origin if not provided
+      if (!detectedApiBase) {
+        detectedApiBase = scriptUrl.origin;
+      }
     } catch (e) {
       // Fallback for relative URLs
       scriptBasePath = scriptSrc.substring(0, scriptSrc.lastIndexOf('/') + 1);
     }
   }
+  
+  // Set API base in state before modules load
+  window.CC360Widget.state.apiBase = detectedApiBase || 'http://localhost:5000';
 
   const moduleFiles = [
     'widget-styles.js',
