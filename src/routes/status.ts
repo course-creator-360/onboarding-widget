@@ -31,6 +31,31 @@ router.get('/status', async (req, res) => {
         console.log(`[Status] Location already verified (no update needed)`);
       }
       
+      // If courseCreated is false, check admin API for courseOutlineGenerated
+      if (!status.courseCreated) {
+        const apiKey = process.env.CC360_CUSTOMERS_ADMIN_API_KEY || process.env.CC360_CUSTOMERS_API_KEY;
+        const apiBaseUrl = process.env.CC360_CUSTOMERS_ADMIN_API_BASE_URL || 'https://cc360-customers-admin.vercel.app';
+        if (apiKey) {
+          try {
+            const controller = new AbortController();
+            const tid = setTimeout(() => controller.abort(), 2000);
+            const custResp = await fetch(`${apiBaseUrl}/api/customers?locationId=${locationId}`, {
+              headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+              signal: controller.signal,
+            });
+            clearTimeout(tid);
+            if (custResp.ok) {
+              const cust = await custResp.json();
+              if (cust?.courseOutlineGenerated === true) {
+                console.log(`[Status] Admin reports courseOutlineGenerated=true, syncing courseCreated for ${locationId}`);
+                status = await updateOnboardingStatus(locationId, { courseCreated: true });
+                await sseBroker.broadcastStatus(locationId);
+              }
+            }
+          } catch { /* ignore timeout / errors */ }
+        }
+      }
+      
       console.log(`[Status] Returning in ${Date.now() - startTime}ms`);
       return status;
     })();
