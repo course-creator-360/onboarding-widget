@@ -704,6 +704,46 @@
       position: relative;
     `;
     
+    const closeSurvey = () => {
+      console.log('[CC360 Widget] Survey dismissed by user');
+      if (surveyOverlay._escKeyHandler) {
+        document.removeEventListener('keydown', surveyOverlay._escKeyHandler);
+      }
+      surveyOverlay.remove();
+      window.CC360Widget.initializeChecklist().then(() => {
+        window.CC360Widget.initUserpilot();
+        window.CC360Widget.initSegment();
+      });
+    };
+    
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '&times;';
+    closeBtn.style.cssText = `
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: transparent;
+      border: none;
+      font-size: 28px;
+      color: #9ca3af;
+      cursor: pointer;
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      z-index: 10;
+      line-height: 1;
+      padding: 0;
+    `;
+    closeBtn.onmouseover = () => { closeBtn.style.background = '#f3f4f6'; closeBtn.style.color = '#374151'; };
+    closeBtn.onmouseout = () => { closeBtn.style.background = 'transparent'; closeBtn.style.color = '#9ca3af'; };
+    closeBtn.onclick = closeSurvey;
+    
+    surveyContainer.appendChild(closeBtn);
+    
     const surveyContent = document.createElement('div');
     surveyContent.id = 'cc360-survey-root';
     surveyContainer.appendChild(surveyContent);
@@ -713,16 +753,13 @@
     
     surveyOverlay.addEventListener('click', (e) => {
       if (e.target === surveyOverlay) {
-        e.preventDefault();
-        e.stopPropagation();
+        closeSurvey();
       }
     });
     
     const escKeyHandler = (e) => {
       if (e.key === 'Escape' && document.getElementById('cc360-survey-overlay')) {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('[CC360 Widget] ESC key pressed - survey is mandatory and cannot be dismissed');
+        closeSurvey();
       }
     };
     document.addEventListener('keydown', escKeyHandler);
@@ -879,7 +916,7 @@
               if (formData.hasDomain === "yes" && !formData.domain) return true;
               return false;
             case 4:
-              return formData.courseIdea.trim().length < 40;
+              return formData.courseIdea.trim().length < 10;
             default:
               return false;
           }
@@ -994,7 +1031,11 @@
                   style: styles.textArea,
                   rows: 5
                 }),
-                React.createElement('p', { style: styles.counter }, `${formData.courseIdea.trim().length} / 40`)
+                React.createElement('p', { style: { ...styles.counter, color: formData.courseIdea.trim().length < 10 ? '#ef4444' : '#9ca3af' } }, 
+                  formData.courseIdea.trim().length < 10 
+                    ? `${10 - formData.courseIdea.trim().length} more characters needed (minimum 10)` 
+                    : `${formData.courseIdea.trim().length} characters`
+                )
               );
             default:
               return null;

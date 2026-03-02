@@ -99,9 +99,44 @@ function calculateShouldShowWidget(
 }
 
 /**
- * Ensure onboarding row exists for a location
+ * Check admin API for existing survey completion status.
+ * Returns true if the customer already completed the survey in the admin DB.
+ */
+async function checkAdminSurveyStatus(locationId: string): Promise<boolean> {
+  const apiKey = process.env.CC360_CUSTOMERS_ADMIN_API_KEY || process.env.CC360_CUSTOMERS_API_KEY;
+  const apiBaseUrl = process.env.CC360_CUSTOMERS_ADMIN_API_BASE_URL || 'https://cc360-customers-admin.vercel.app';
+  if (!apiKey) return false;
+  
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    const response = await fetch(`${apiBaseUrl}/api/customers?locationId=${locationId}`, {
+      headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!response.ok) return false;
+    const customer = await response.json();
+    return customer?.surveyCompleted === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Ensure onboarding row exists for a location.
+ * When creating a new row, syncs surveyCompleted from the admin API
+ * so existing customers who already completed the survey aren't asked again.
  */
 export async function ensureOnboardingRow(locationId: string): Promise<void> {
+  const existing = await prisma.onboarding.findUnique({ where: { locationId } });
+  if (existing) return;
+
+  const alreadyCompleted = await checkAdminSurveyStatus(locationId);
+  if (alreadyCompleted) {
+    console.log(`[DB] Admin API reports survey already completed for ${locationId} - syncing`);
+  }
+
   await prisma.onboarding.upsert({
     where: { locationId },
     update: {},
@@ -112,7 +147,7 @@ export async function ensureOnboardingRow(locationId: string): Promise<void> {
       courseCreated: false,
       paymentIntegrated: false,
       dismissed: false,
-      surveyCompleted: false,
+      surveyCompleted: alreadyCompleted,
       bookingCancelled: false,
     },
   });

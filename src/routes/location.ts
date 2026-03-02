@@ -52,7 +52,10 @@ router.get('/location/verify', async (req, res) => {
             id: customer.id,
             locationId: customer.locationId,
             name: customer.name,
-            email: customer.email
+            email: customer.email,
+            subscriptionStatus: customer.subscriptionStatus || null,
+            createdAt: customer.createdAt || null,
+            surveyCompleted: customer.surveyCompleted ?? null,
           }
         });
       } else {

@@ -910,6 +910,18 @@
         console.log('[CC360 Widget] ✅ Location authorized by API');
         if (result.customer) {
           console.log('[CC360 Widget] Customer:', result.customer.name || result.customer.locationId);
+          
+          const subscriptionStatus = result.customer.subscriptionStatus;
+          const customerCreatedAt = result.customer.createdAt ? new Date(result.customer.createdAt) : null;
+          const daysSinceCreation = customerCreatedAt ? (Date.now() - customerCreatedAt.getTime()) / (1000 * 60 * 60 * 24) : Infinity;
+          const isTrialing = subscriptionStatus === 'trialing';
+          
+          console.log('[CC360 Widget] Subscription status:', subscriptionStatus, '| Days since creation:', Math.round(daysSinceCreation));
+          
+          if (!isTrialing || daysSinceCreation > 30) {
+            console.log('[CC360 Widget] Widget NOT shown - subscription is not trialing or account is older than 30 days');
+            return;
+          }
         }
       } else {
         console.log('[CC360 Widget] ❌ Location NOT authorized by API');
