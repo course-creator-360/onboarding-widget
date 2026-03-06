@@ -633,7 +633,7 @@ router.get('/callback', async (req, res) => {
                 type: 'oauth_complete',
                 locationId: '${locationId}',
                 tokenType: '${tokenType}'
-              }, '*');
+              }, '${getBaseUrl()}');
             }
             
             // Close window after delay (longer for agency setup)

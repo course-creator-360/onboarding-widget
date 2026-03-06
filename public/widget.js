@@ -46,7 +46,7 @@
   }
   
   // Set API base in state before modules load
-  window.CC360Widget.state.apiBase = detectedApiBase || 'http://localhost:5000';
+  window.CC360Widget.state.apiBase = detectedApiBase || 'http://localhost:4002';
 
   const moduleFiles = [
     'widget-styles.js',

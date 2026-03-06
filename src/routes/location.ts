@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { getCC360AdminConfig } from '../cc360-admin';
 
 const router = Router();
 
@@ -12,8 +13,7 @@ router.get('/location/verify', async (req, res) => {
     });
   }
   
-  const apiKey = process.env.CC360_CUSTOMERS_API_KEY;
-  const apiBaseUrl = process.env.CC360_CUSTOMERS_API_BASE_URL || 'https://cc360-customers-admin/api';
+  const { apiKey, apiBaseUrl } = getCC360AdminConfig();
   
   if (!apiKey) {
     console.error('[Location Verify] ❌ CC360_CUSTOMERS_API_KEY is not configured');
@@ -25,12 +25,12 @@ router.get('/location/verify', async (req, res) => {
   
   try {
     console.log(`[Location Verify] Checking authorization for location: ${locationId}`);
-    console.log(`[Location Verify] Calling: ${apiBaseUrl}/customers?locationId=${locationId}`);
+    console.log(`[Location Verify] Calling: ${apiBaseUrl}/api/customers?locationId=${locationId}`);
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
     
-    const response = await fetch(`${apiBaseUrl}/customers?locationId=${locationId}`, {
+    const response = await fetch(`${apiBaseUrl}/api/customers?locationId=${locationId}`, {
       method: 'GET',
       headers: {
         'x-api-key': apiKey,
@@ -95,8 +95,7 @@ router.get('/location/validate', async (req, res) => {
     return res.status(400).json({ error: 'locationId is required' });
   }
   
-  const apiKey = process.env.CC360_CUSTOMERS_API_KEY;
-  const apiBaseUrl = process.env.CC360_CUSTOMERS_API_BASE_URL || 'https://cc360-customers-admin/api';
+  const { apiKey, apiBaseUrl } = getCC360AdminConfig();
   
   if (!apiKey) {
     console.error('[Location Validation] ❌ CC360_CUSTOMERS_API_KEY is not configured');
@@ -109,13 +108,13 @@ router.get('/location/validate', async (req, res) => {
   
   const startTime = Date.now();
   console.log('[Location Validation] Checking locationId:', locationId);
-  console.log(`[Location Validation] Calling: ${apiBaseUrl}/customers?locationId=${locationId}`);
+  console.log(`[Location Validation] Calling: ${apiBaseUrl}/api/customers?locationId=${locationId}`);
   
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 2000);
     
-    const response = await fetch(`${apiBaseUrl}/customers?locationId=${locationId}`, {
+    const response = await fetch(`${apiBaseUrl}/api/customers?locationId=${locationId}`, {
       method: 'GET',
       headers: {
         'x-api-key': apiKey,
@@ -182,8 +181,7 @@ router.get('/location-context', async (req, res) => {
   const locationId = (req.query.locationId as string) || '';
   if (!locationId) return res.status(400).json({ error: 'locationId is required' });
   
-  const apiKey = process.env.CC360_CUSTOMERS_API_KEY;
-  const apiBaseUrl = process.env.CC360_CUSTOMERS_API_BASE_URL || 'https://cc360-customers-admin/api';
+  const { apiKey, apiBaseUrl } = getCC360AdminConfig();
   
   if (!apiKey) {
     console.error('[Location Context] ❌ CC360_CUSTOMERS_API_KEY is not configured');
@@ -194,12 +192,12 @@ router.get('/location-context', async (req, res) => {
   
   try {
     console.log(`[Location Context] Fetching context for location: ${locationId}`);
-    console.log(`[Location Context] Calling: ${apiBaseUrl}/customers?locationId=${locationId}`);
+    console.log(`[Location Context] Calling: ${apiBaseUrl}/api/customers?locationId=${locationId}`);
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
     
-    const response = await fetch(`${apiBaseUrl}/customers?locationId=${locationId}`, {
+    const response = await fetch(`${apiBaseUrl}/api/customers?locationId=${locationId}`, {
       method: 'GET',
       headers: {
         'x-api-key': apiKey,

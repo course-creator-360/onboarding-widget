@@ -118,7 +118,7 @@
         minimizedIconEl.textContent = '🎉';
         if (minimizedWidget) minimizedWidget.classList.add('complete');
       } else {
-        minimizedTextEl.textContent = 'Onboaring In Progress';
+        minimizedTextEl.textContent = 'Onboarding In Progress';
         minimizedIconEl.textContent = '⚡';
         if (minimizedWidget) minimizedWidget.classList.remove('complete');
       }
@@ -162,7 +162,7 @@
           href="${window.CC360Widget.buildDashboardUrl(item.url)}" 
           class="cc360-checklist-item ${item.completed ? 'completed' : ''} ${item.isDisabled ? 'disabled' : ''}"
           target="_blank"
-          data-step-id="${item.id}"
+          data-step-id="${item.key}"
           data-step-title="${item.title}"
           data-step-completed="${item.completed}"
         >
@@ -189,6 +189,13 @@
           stepUrl: link.href
         });
       });
+    });
+  };
+
+  window.CC360Widget.initChecklistAndAnalytics = function() {
+    return window.CC360Widget.initializeChecklist().then(() => {
+      window.CC360Widget.initUserpilot();
+      window.CC360Widget.initSegment();
     });
   };
 
@@ -297,96 +304,30 @@
   window.CC360Widget.showBookingCancelDialog = function(bookingOverlay) {
     const state = window.CC360Widget.state;
     const confirmOverlay = document.createElement('div');
-    confirmOverlay.className = 'cc360-dialog-overlay';
-    confirmOverlay.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 100003;
-      animation: cc360-fadeIn 0.2s ease;
-    `;
+    confirmOverlay.className = 'cc360-dialog-overlay cc360-dialog-overlay--high';
     
     const dialogContent = document.createElement('div');
-    dialogContent.className = 'cc360-dialog';
-    dialogContent.style.cssText = `
-      background: white;
-      border-radius: 16px;
-      padding: 32px;
-      max-width: 420px;
-      width: 90%;
-      text-align: center;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-      position: relative;
-    `;
+    dialogContent.className = 'cc360-dialog cc360-dialog--wide';
     
     const closeBtn = document.createElement('button');
     closeBtn.innerHTML = '×';
-    closeBtn.style.cssText = `
-      position: absolute;
-      top: 16px;
-      right: 16px;
-      background: transparent;
-      border: none;
-      font-size: 28px;
-      color: #6b7280;
-      cursor: pointer;
-      width: 32px;
-      height: 32px;
-      border-radius: 6px;
-      transition: all 0.2s ease;
-      line-height: 1;
-      padding: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    `;
+    closeBtn.className = 'cc360-dialog-close';
     dialogContent.innerHTML = `
-      <h3 style="font-size: 1.5rem; font-weight: 700; color: #111827; margin-bottom: 12px;">Remove Booking Reminder?</h3>
-      <p style="color: #6b7280; margin-bottom: 24px; line-height: 1.5;">
+      <h3 class="cc360-dialog-title">Remove Booking Reminder?</h3>
+      <p class="cc360-dialog-message">
         Are you sure you want to remove the booking reminder? You won't see it again, but you can always book a call later from your dashboard.
       </p>
-      <div style="display: flex; gap: 12px; justify-content: center;">
-        <button id="cc360-booking-cancel-dismiss" style="
-          padding: 12px 24px;
-          border-radius: 8px;
-          font-size: 1rem;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          background: #f3f4f6;
-          border: 1px solid #e5e7eb;
-          color: #374151;
-        ">Dismiss</button>
-        <button id="cc360-booking-cancel-remove" style="
-          padding: 12px 24px;
-          border-radius: 8px;
-          font-size: 1rem;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-          border: none;
-          color: white;
-        ">Remove Forever</button>
+      <div class="cc360-dialog-buttons">
+        <button id="cc360-booking-cancel-dismiss" class="cc360-dialog-btn cc360-dialog-btn-secondary">Dismiss</button>
+        <button id="cc360-booking-cancel-remove" class="cc360-dialog-btn cc360-dialog-btn-danger">Remove Forever</button>
       </div>
     `;
     
-    closeBtn.onmouseover = () => { closeBtn.style.background = '#f3f4f6'; closeBtn.style.color = '#374151'; };
-    closeBtn.onmouseout = () => { closeBtn.style.background = 'transparent'; closeBtn.style.color = '#6b7280'; };
     closeBtn.onclick = () => {
       confirmOverlay.remove();
       bookingOverlay.remove();
       console.log('[CC360 Widget] Booking modal dismissed (X button) - showing widget (will show again on refresh)');
-      window.CC360Widget.initializeChecklist().then(() => {
-        window.CC360Widget.initUserpilot();
-        window.CC360Widget.initSegment();
-      });
+      window.CC360Widget.initChecklistAndAnalytics();
     };
     
     dialogContent.appendChild(closeBtn);
@@ -401,10 +342,7 @@
         reason: 'temporary_dismiss'
       });
       console.log('[CC360 Widget] Booking modal dismissed - showing widget (will show again on refresh)');
-      window.CC360Widget.initializeChecklist().then(() => {
-        window.CC360Widget.initUserpilot();
-        window.CC360Widget.initSegment();
-      });
+      window.CC360Widget.initChecklistAndAnalytics();
     });
     
     document.getElementById('cc360-booking-cancel-remove').addEventListener('click', async () => {
@@ -434,16 +372,10 @@
         state.currentStatus = updatedStatus;
         
         console.log('[CC360 Widget] Showing onboarding widget...');
-        window.CC360Widget.initializeChecklist().then(() => {
-          window.CC360Widget.initUserpilot();
-          window.CC360Widget.initSegment();
-        });
+        window.CC360Widget.initChecklistAndAnalytics();
       } catch (error) {
         console.error('[CC360 Widget] ❌ Error cancelling booking:', error);
-        window.CC360Widget.initializeChecklist().then(() => {
-          window.CC360Widget.initUserpilot();
-          window.CC360Widget.initSegment();
-        });
+        window.CC360Widget.initChecklistAndAnalytics();
       }
     });
     
@@ -452,10 +384,7 @@
         confirmOverlay.remove();
         bookingOverlay.remove();
         console.log('[CC360 Widget] Booking modal dismissed (overlay click) - showing widget (will show again on refresh)');
-        window.CC360Widget.initializeChecklist().then(() => {
-          window.CC360Widget.initUserpilot();
-          window.CC360Widget.initSegment();
-        });
+        window.CC360Widget.initChecklistAndAnalytics();
       }
     });
   };
@@ -593,12 +522,13 @@
     
     const calendarContent = document.createElement('div');
     calendarContent.id = 'cc360-booking-calendar';
-    calendarContent.style.cssText = 'padding: 0; height: 700px; overflow-y: auto; display: none; position: relative;';
+    calendarContent.style.cssText = 'padding: 0; max-height: 700px; overflow-y: auto; display: none; position: relative;';
     
     scheduleBtn.onclick = () => {
       initialContent.style.display = 'none';
       calendarContent.style.display = 'block';
       header.style.display = 'none';
+      window.CC360Widget.loadSlotPicker(calendarContent, bookingOverlay);
     };
     
     const skipBtn = document.createElement('button');
@@ -623,38 +553,6 @@
     initialContent.appendChild(scheduleBtn);
     initialContent.appendChild(skipBtn);
     
-    const backBtn = document.createElement('button');
-    backBtn.innerHTML = '← Back';
-    backBtn.style.cssText = `
-      position: absolute;
-      top: 16px;
-      left: 16px;
-      background: #f3f4f6;
-      border: none;
-      padding: 8px 16px;
-      border-radius: 6px;
-      font-size: 0.9rem;
-      color: #374151;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      z-index: 10;
-    `;
-    backBtn.onmouseover = () => { backBtn.style.background = '#e5e7eb'; };
-    backBtn.onmouseout = () => { backBtn.style.background = '#f3f4f6'; };
-    backBtn.onclick = () => {
-      calendarContent.style.display = 'none';
-      initialContent.style.display = 'block';
-      header.style.display = 'block';
-    };
-    
-    const iframe = document.createElement('iframe');
-    iframe.src = `https://www.coursecreator360.com/book-cc360-onboarding?locationId=${state.locationId || ''}`;
-    iframe.style.cssText = 'width: 100%; height: 100%; border: none;';
-    iframe.setAttribute('scrolling', 'yes');
-    
-    calendarContent.appendChild(backBtn);
-    calendarContent.appendChild(iframe);
-    
     bookingModal.appendChild(header);
     bookingModal.appendChild(initialContent);
     bookingModal.appendChild(calendarContent);
@@ -669,6 +567,234 @@
     });
     
     console.log('[CC360 Widget] Booking modal opened');
+  };
+
+  // ---------------------------------------------------------------------------
+  // Native slot-picker for booking (replaces the old iframe approach)
+  // ---------------------------------------------------------------------------
+  window.CC360Widget.loadSlotPicker = async function(container, bookingOverlay) {
+    const state = window.CC360Widget.state;
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    container.innerHTML = '';
+
+    const backBtn = document.createElement('button');
+    backBtn.innerHTML = '← Back';
+    backBtn.style.cssText = 'position:sticky;top:0;left:0;background:#f3f4f6;border:none;padding:8px 16px;border-radius:6px;font-size:0.9rem;color:#374151;cursor:pointer;transition:all 0.2s;z-index:10;margin:16px;';
+    backBtn.onmouseover = () => { backBtn.style.background = '#e5e7eb'; };
+    backBtn.onmouseout = () => { backBtn.style.background = '#f3f4f6'; };
+    backBtn.onclick = () => {
+      container.style.display = 'none';
+      const init = document.getElementById('cc360-booking-initial');
+      const hdr = container.parentElement.querySelector('div[style*="border-bottom"]');
+      if (init) init.style.display = 'block';
+      if (hdr) hdr.style.display = 'block';
+    };
+    container.appendChild(backBtn);
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'padding:0 20px 20px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;';
+    container.appendChild(wrap);
+
+    const ONBOARDING_CALENDAR_ID = 'k0yrAymNvet7hUvzBxTh';
+
+    wrap.innerHTML = '<p style="text-align:center;color:#6b7280;padding:24px 0;">Loading available times...</p>';
+
+    const today = new Date();
+    const twoWeeksOut = new Date(today);
+    twoWeeksOut.setDate(twoWeeksOut.getDate() + 14);
+    const fmtDate = (d) => d.toISOString().split('T')[0];
+
+    let selectedCalendarId = ONBOARDING_CALENDAR_ID;
+    let selectedSlot = null;
+
+    wrap.innerHTML = '';
+
+    // Slots container
+    const slotsWrap = document.createElement('div');
+    slotsWrap.id = 'cc360-slots-wrap';
+    wrap.appendChild(slotsWrap);
+
+    // Confirmation area (hidden until slot selected)
+    const confirmWrap = document.createElement('div');
+    confirmWrap.id = 'cc360-confirm-wrap';
+    confirmWrap.style.cssText = 'display:none;margin-top:16px;border-top:1px solid #e5e7eb;padding-top:16px;';
+    wrap.appendChild(confirmWrap);
+
+    async function loadSlots() {
+      slotsWrap.innerHTML = '<p style="text-align:center;color:#6b7280;padding:16px 0;">Loading available times...</p>';
+      confirmWrap.style.display = 'none';
+      selectedSlot = null;
+
+      try {
+        const qs = new URLSearchParams({
+          calendarId: selectedCalendarId,
+          startDate: fmtDate(today),
+          endDate: fmtDate(twoWeeksOut),
+          timezone: tz
+        });
+        const resp = await fetch(`${state.apiBase}/api/booking/slots?${qs}`);
+        const data = await resp.json();
+        const slots = data.slots || data;
+        renderSlots(slots);
+      } catch (e) {
+        console.error('[CC360 Widget] Failed to fetch slots:', e);
+        slotsWrap.innerHTML = '<p style="text-align:center;color:#dc2626;padding:16px 0;">Failed to load times. Please try again.</p>';
+      }
+    }
+
+    function renderSlots(slots) {
+      slotsWrap.innerHTML = '';
+
+      const slotsHeader = document.createElement('div');
+      slotsHeader.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;';
+      const slotsTitle = document.createElement('p');
+      slotsTitle.textContent = 'Available Slots';
+      slotsTitle.style.cssText = 'font-size:0.875rem;font-weight:500;color:#374151;';
+      const refreshBtn = document.createElement('button');
+      refreshBtn.textContent = 'Refresh';
+      refreshBtn.style.cssText = 'background:transparent;border:none;font-size:0.75rem;color:#6b7280;cursor:pointer;padding:4px 8px;border-radius:6px;';
+      refreshBtn.onmouseover = () => { refreshBtn.style.background = '#f3f4f6'; };
+      refreshBtn.onmouseout = () => { refreshBtn.style.background = 'transparent'; };
+      refreshBtn.onclick = loadSlots;
+      slotsHeader.appendChild(slotsTitle);
+      slotsHeader.appendChild(refreshBtn);
+      slotsWrap.appendChild(slotsHeader);
+
+      const dateKeys = Object.keys(slots).sort();
+      if (!dateKeys.length) {
+        const empty = document.createElement('p');
+        empty.textContent = 'No available slots in this period.';
+        empty.style.cssText = 'text-align:center;color:#9ca3af;font-size:0.875rem;padding:16px 0;';
+        slotsWrap.appendChild(empty);
+        return;
+      }
+
+      const scrollArea = document.createElement('div');
+      scrollArea.style.cssText = 'max-height:320px;overflow-y:auto;padding-right:4px;';
+
+      dateKeys.forEach(dateStr => {
+        const timeslots = slots[dateStr];
+        if (!timeslots || !timeslots.length) return;
+
+        const dayBlock = document.createElement('div');
+        dayBlock.style.cssText = 'margin-bottom:16px;';
+
+        const dayLabel = document.createElement('p');
+        const d = new Date(dateStr + 'T12:00:00');
+        dayLabel.textContent = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        dayLabel.style.cssText = 'font-size:0.7rem;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;';
+        dayBlock.appendChild(dayLabel);
+
+        const grid = document.createElement('div');
+        grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
+
+        timeslots.forEach(isoStr => {
+          const t = new Date(isoStr);
+          const label = t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz });
+
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.textContent = label;
+          btn.dataset.slot = isoStr;
+          btn.style.cssText = 'border-radius:6px;padding:6px 10px;font-size:0.75rem;font-weight:500;border:1px solid #e5e7eb;background:#fff;color:#374151;cursor:pointer;transition:all 0.15s;';
+          btn.onmouseover = () => { if (selectedSlot !== isoStr) { btn.style.borderColor = '#818cf8'; btn.style.background = '#eef2ff'; } };
+          btn.onmouseout = () => { if (selectedSlot !== isoStr) { btn.style.borderColor = '#e5e7eb'; btn.style.background = '#fff'; } };
+          btn.onclick = () => {
+            selectedSlot = isoStr;
+            scrollArea.querySelectorAll('button[data-slot]').forEach(b => {
+              b.style.borderColor = '#e5e7eb'; b.style.background = '#fff'; b.style.color = '#374151';
+            });
+            btn.style.borderColor = '#4f46e5';
+            btn.style.background = '#4f46e5';
+            btn.style.color = '#fff';
+            showConfirm(isoStr);
+          };
+          grid.appendChild(btn);
+        });
+
+        dayBlock.appendChild(grid);
+        scrollArea.appendChild(dayBlock);
+      });
+
+      slotsWrap.appendChild(scrollArea);
+    }
+
+    function showConfirm(slotIso) {
+      const t = new Date(slotIso);
+      const pretty = t.toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz });
+
+      confirmWrap.style.display = 'block';
+      confirmWrap.innerHTML = `
+        <p style="font-size:0.875rem;font-weight:500;color:#111827;margin-bottom:8px;">Confirm Booking</p>
+        <p style="font-size:0.8rem;color:#6b7280;margin-bottom:16px;">${pretty} (${tz})</p>
+      `;
+
+      const bookBtn = document.createElement('button');
+      bookBtn.textContent = 'Book This Time';
+      bookBtn.style.cssText = 'width:100%;padding:12px;font-size:0.95rem;font-weight:600;background:linear-gradient(135deg,#0E325E,#0475FF);color:#fff;border:none;border-radius:8px;cursor:pointer;transition:all 0.2s;box-shadow:0 4px 14px rgba(4,117,255,0.3);';
+      bookBtn.onmouseover = () => { bookBtn.style.transform = 'translateY(-1px)'; bookBtn.style.boxShadow = '0 6px 18px rgba(4,117,255,0.4)'; };
+      bookBtn.onmouseout = () => { bookBtn.style.transform = 'translateY(0)'; bookBtn.style.boxShadow = '0 4px 14px rgba(4,117,255,0.3)'; };
+      bookBtn.onclick = () => bookAppointment(slotIso, bookBtn);
+      confirmWrap.appendChild(bookBtn);
+    }
+
+    async function bookAppointment(slotIso, btn) {
+      btn.disabled = true;
+      btn.textContent = 'Booking...';
+      btn.style.opacity = '0.7';
+
+      try {
+        const resp = await fetch(`${state.apiBase}/api/booking/book`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            calendarId: selectedCalendarId,
+            selectedSlot: slotIso,
+            selectedTimezone: tz,
+            title: 'CC360 Onboarding Call',
+            locationId: state.locationId
+          })
+        });
+
+        if (!resp.ok) throw new Error(`API error: ${resp.status}`);
+
+        const data = await resp.json();
+        console.log('[CC360 Widget] ✅ Appointment booked:', data);
+
+        window.CC360Widget.trackSegmentEvent('Booking Completed', {
+          calendarId: selectedCalendarId,
+          selectedSlot: slotIso,
+          timezone: tz
+        });
+
+        confirmWrap.innerHTML = `
+          <div style="text-align:center;padding:16px 0;">
+            <div style="font-size:2.5rem;margin-bottom:12px;">🎉</div>
+            <p style="font-size:1.1rem;font-weight:600;color:#111827;margin-bottom:8px;">You're all set!</p>
+            <p style="font-size:0.875rem;color:#6b7280;">Your onboarding call has been booked. Check your email for confirmation details.</p>
+          </div>
+        `;
+
+        setTimeout(() => {
+          bookingOverlay.remove();
+          window.CC360Widget.initChecklistAndAnalytics();
+        }, 3000);
+      } catch (e) {
+        console.error('[CC360 Widget] ❌ Booking failed:', e);
+        btn.disabled = false;
+        btn.textContent = 'Book This Time';
+        btn.style.opacity = '1';
+
+        const err = document.createElement('p');
+        err.textContent = 'Booking failed. Please try again.';
+        err.style.cssText = 'color:#dc2626;font-size:0.8rem;margin-top:8px;text-align:center;';
+        confirmWrap.appendChild(err);
+        setTimeout(() => err.remove(), 4000);
+      }
+    }
+
+    loadSlots();
   };
 
   window.CC360Widget.showSurveyModal = function() {
@@ -710,10 +836,7 @@
         document.removeEventListener('keydown', surveyOverlay._escKeyHandler);
       }
       surveyOverlay.remove();
-      window.CC360Widget.initializeChecklist().then(() => {
-        window.CC360Widget.initUserpilot();
-        window.CC360Widget.initSegment();
-      });
+      window.CC360Widget.initChecklistAndAnalytics();
     };
     
     const closeBtn = document.createElement('button');
@@ -886,10 +1009,7 @@
                 surveyOverlay.remove();
                 
                 console.log('[CC360 Widget] Survey completed - showing widget checklist');
-                window.CC360Widget.initializeChecklist().then(() => {
-                  window.CC360Widget.initUserpilot();
-                  window.CC360Widget.initSegment();
-                });
+                window.CC360Widget.initChecklistAndAnalytics();
               }, 2000);
             } catch (error) {
               console.error('[CC360 Widget] ❌ Error submitting survey:', error);

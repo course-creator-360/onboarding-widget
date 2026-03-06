@@ -441,6 +441,45 @@
       .cc360-dialog-btn-secondary:hover {
         background: #e9ecef;
       }
+      .cc360-dialog-overlay--high {
+        z-index: 100003;
+      }
+      .cc360-dialog--wide {
+        max-width: 420px;
+        text-align: center;
+        position: relative;
+      }
+      .cc360-dialog-close {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        background: transparent;
+        border: none;
+        font-size: 28px;
+        color: #6b7280;
+        cursor: pointer;
+        width: 32px;
+        height: 32px;
+        border-radius: 6px;
+        transition: all 0.2s ease;
+        line-height: 1;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .cc360-dialog-close:hover {
+        background: #f3f4f6;
+        color: #374151;
+      }
+      .cc360-dialog-btn-danger {
+        background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+        color: white;
+      }
+      .cc360-dialog-btn-danger:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
+      }
       .cc360-dialog-icon {
         font-size: 48px;
         text-align: center;
@@ -538,63 +577,6 @@
       }
       .cc360-start-button:active {
         transform: translateY(0);
-      }
-    `;
-  };
-
-  window.CC360Widget.getNotAuthorizedStyles = function() {
-    return `
-      #cc360-onboarding-widget {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        width: 380px;
-        background: white;
-        border-radius: 12px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-        z-index: 99999;
-        overflow: hidden;
-        transition: transform 0.3s ease;
-      }
-      #cc360-onboarding-widget.hidden {
-        transform: translateY(120%);
-      }
-      .cc360-auth-screen {
-        padding: 40px;
-        text-align: center;
-      }
-      .cc360-auth-icon {
-        font-size: 64px;
-        margin-bottom: 20px;
-      }
-      .cc360-auth-title {
-        font-size: 20px;
-        font-weight: 600;
-        color: #2c3e50;
-        margin: 0 0 12px 0;
-        font-family: 'Helvetica Now', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-      }
-      .cc360-auth-subtitle {
-        font-size: 14px;
-        color: #6c757d;
-        margin: 0;
-        line-height: 1.5;
-      }
-      .cc360-auth-close {
-        position: absolute;
-        top: 12px;
-        right: 12px;
-        background: transparent;
-        border: none;
-        font-size: 24px;
-        cursor: pointer;
-        color: #6c757d;
-        padding: 4px 8px;
-        line-height: 1;
-      }
-      .cc360-auth-close:hover {
-        color: #343a40;
       }
     `;
   };

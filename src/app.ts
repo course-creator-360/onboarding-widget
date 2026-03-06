@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import path from 'path';
 import oauthRouter from './oauth';
 import webhookRouter from './webhooks';
+import { getBaseUrl, isProduction } from './config';
 import {
   configRouter,
   statusRouter,
@@ -18,10 +19,24 @@ import {
 
 const app = express();
 
+// Widget is embedded on dynamic GHL customer domains, so CORS must be permissive
+// by default. Set CORS_ALLOWED_ORIGINS to restrict to specific origins if needed.
+function getAllowedOrigins(): string[] | null {
+  if (process.env.CORS_ALLOWED_ORIGINS) {
+    return process.env.CORS_ALLOWED_ORIGINS.split(',').map(o => o.trim());
+  }
+  return null;
+}
+
 const corsOptions = {
   origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
     if (!origin) return callback(null, true);
-    callback(null, true);
+    const allowed = getAllowedOrigins();
+    if (!allowed) return callback(null, true);
+    if (allowed.includes(origin) || allowed.includes('*')) {
+      return callback(null, true);
+    }
+    callback(new Error(`Origin ${origin} not allowed by CORS`));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

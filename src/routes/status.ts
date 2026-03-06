@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { getOnboardingStatus, updateOnboardingStatus, hasAgencyAuthorization, setDismissed, toggleOnboardingField, OnboardingStatus } from '../db';
 import { sseBroker } from '../sse';
 import { checkLocationProducts } from '../ghl-api';
+import { getCC360AdminConfig } from '../cc360-admin';
 
 const router = Router();
 
@@ -33,8 +34,7 @@ router.get('/status', async (req, res) => {
       
       // If courseCreated is false, check admin API for courseOutlineGenerated
       if (!status.courseCreated) {
-        const apiKey = process.env.CC360_CUSTOMERS_ADMIN_API_KEY || process.env.CC360_CUSTOMERS_API_KEY;
-        const apiBaseUrl = process.env.CC360_CUSTOMERS_ADMIN_API_BASE_URL || 'https://cc360-customers-admin.vercel.app';
+        const { apiKey, apiBaseUrl } = getCC360AdminConfig();
         if (apiKey) {
           try {
             const controller = new AbortController();
@@ -168,6 +168,10 @@ router.post('/onboarding/update', async (req, res) => {
 });
 
 router.post('/onboarding/toggle', async (req, res) => {
+  if (process.env.NODE_ENV === 'production' && !process.env.ENABLE_TEST_ENDPOINTS) {
+    return res.status(403).json({ error: 'Test endpoints are disabled in production' });
+  }
+
   const { locationId, field } = req.body as { locationId?: string; field?: string };
   if (!locationId) return res.status(400).json({ error: 'locationId is required' });
   if (!field) return res.status(400).json({ error: 'field is required' });

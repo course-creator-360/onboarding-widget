@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { getCC360AdminConfig } from './cc360-admin';
 
 // Prisma Client singleton for serverless environments
 // Prevents connection pool exhaustion in Vercel/serverless
@@ -103,8 +104,7 @@ function calculateShouldShowWidget(
  * Returns true if the customer already completed the survey in the admin DB.
  */
 async function checkAdminSurveyStatus(locationId: string): Promise<boolean> {
-  const apiKey = process.env.CC360_CUSTOMERS_ADMIN_API_KEY || process.env.CC360_CUSTOMERS_API_KEY;
-  const apiBaseUrl = process.env.CC360_CUSTOMERS_ADMIN_API_BASE_URL || 'https://cc360-customers-admin.vercel.app';
+  const { apiKey, apiBaseUrl } = getCC360AdminConfig();
   if (!apiKey) return false;
   
   try {

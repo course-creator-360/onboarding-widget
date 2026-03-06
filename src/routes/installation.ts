@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { getInstallation, hasAgencyAuthorization, getAgencyInstallation, deleteInstallation, upsertInstallation, registerSubAccount, getSubAccount, updateOnboardingStatus } from '../db';
 import { sseBroker } from '../sse';
 import { getAuthToken } from '../ghl-api';
+import { getCC360AdminConfig } from '../cc360-admin';
 
 const router = Router();
 
@@ -82,8 +83,7 @@ router.get('/installation/check', async (req, res) => {
           .then(async (agencyInstallation) => {
             if (!agencyInstallation?.accountId) return;
             
-            const apiKey = process.env.CC360_CUSTOMERS_API_KEY;
-            const apiBaseUrl = process.env.CC360_CUSTOMERS_API_BASE_URL || 'https://cc360-customers-admin/api';
+            const { apiKey, apiBaseUrl } = getCC360AdminConfig();
             
             if (!apiKey) {
               console.warn('[Installation Check] No API key configured, skipping background sync');
@@ -94,7 +94,7 @@ router.get('/installation/check', async (req, res) => {
               const controller = new AbortController();
               const timeoutId = setTimeout(() => controller.abort(), 3000);
               
-              const response = await fetch(`${apiBaseUrl}/customers?locationId=${locationId}`, {
+              const response = await fetch(`${apiBaseUrl}/api/customers?locationId=${locationId}`, {
                 method: 'GET',
                 headers: {
                   'x-api-key': apiKey,
@@ -206,6 +206,10 @@ router.delete('/installation', async (req, res) => {
 });
 
 router.post('/test/clear-location', async (req, res) => {
+  if (process.env.NODE_ENV === 'production' && !process.env.ENABLE_TEST_ENDPOINTS) {
+    return res.status(403).json({ error: 'Test endpoints are disabled in production' });
+  }
+
   const { locationId } = req.body as { locationId?: string };
   if (!locationId) return res.status(400).json({ error: 'locationId is required' });
   

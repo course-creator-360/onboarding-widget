@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { updateSurveyCompletion } from '../db';
 import { sseBroker } from '../sse';
+import { getCC360AdminConfig } from '../cc360-admin';
 
 const router = Router();
 
@@ -15,8 +16,7 @@ router.post('/survey/complete', async (req, res) => {
     return res.status(400).json({ error: 'surveyResponses is required' });
   }
   
-  const apiKey = process.env.CC360_CUSTOMERS_ADMIN_API_KEY || process.env.CC360_CUSTOMERS_API_KEY;
-  const apiBaseUrl = process.env.CC360_CUSTOMERS_ADMIN_API_BASE_URL || 'https://cc360-customers-admin.vercel.app';
+  const { apiKey, apiBaseUrl } = getCC360AdminConfig();
   
   if (!apiKey) {
     console.error('[Survey Complete] ❌ CC360_CUSTOMERS_ADMIN_API_KEY or CC360_CUSTOMERS_API_KEY is not configured');

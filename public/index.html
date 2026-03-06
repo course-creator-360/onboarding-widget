@@ -5,11 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CC360 Onboarding Widget - Demo</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
+    :root {
+      --cc360-navy: #0E325E;
+      --cc360-blue: #0475FF;
+      --cc360-red: #FF2F00;
+      --cc360-green: #00D9A3;
+      --cc360-green-muted: #4CAF50;
+      --cc360-gray: #6c757d;
+      --cc360-gray-light: #868e96;
+      --cc360-gray-border: #e5e7eb;
+      --cc360-dark: #111D2C;
+      --cc360-orange: #FF9800;
+      --cc360-orange-dark: #E65100;
+      --cc360-orange-light: #FFE0B2;
+      --cc360-warning: #ffc107;
+      --cc360-danger: #dc3545;
+      --cc360-bg-subtle: #f5f7fa;
+      --cc360-font-display: 'Helvetica Now', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      --cc360-font-mono: 'Monaco', 'Courier New', monospace;
     }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
     body {
       font-family: Arial, sans-serif;
       background: #0a0a0a;
@@ -20,10 +37,7 @@
       padding: 20px;
       position: relative;
     }
-    body > * {
-      position: relative;
-      z-index: 1;
-    }
+    body > * { position: relative; z-index: 1; }
     body::before {
       content: '';
       position: fixed;
@@ -48,6 +62,7 @@
       filter: blur(120px);
       z-index: 0;
     }
+
     .demo-container {
       background: white;
       border-radius: 20px;
@@ -57,28 +72,28 @@
       padding: 48px;
     }
     h1 {
-      color: #0E325E;
+      color: var(--cc360-navy);
       font-size: 32px;
       margin-bottom: 16px;
       font-weight: 700;
-      font-family: 'Helvetica Now', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      font-family: var(--cc360-font-display);
     }
     h2 {
-      color: #0475FF;
+      color: var(--cc360-blue);
       font-size: 20px;
       margin-top: 32px;
       margin-bottom: 16px;
       font-weight: 600;
-      font-family: 'Helvetica Now', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      font-family: var(--cc360-font-display);
     }
     p {
-      color: #6c757d;
+      color: var(--cc360-gray);
       line-height: 1.6;
       margin-bottom: 16px;
     }
     .info-box {
-      background: #f5f7fa;
-      border-left: 4px solid #0475FF;
+      background: var(--cc360-bg-subtle);
+      border-left: 4px solid var(--cc360-blue);
       padding: 16px;
       margin: 24px 0;
       border-radius: 8px;
@@ -88,17 +103,19 @@
       color: #2c3e50;
       display: block;
       margin-bottom: 8px;
-      font-family: 'Helvetica Now', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      font-family: var(--cc360-font-display);
     }
     code {
-      background: #f5f7fa;
+      background: var(--cc360-bg-subtle);
       padding: 3px 8px;
       border-radius: 6px;
-      font-family: 'Monaco', 'Courier New', monospace;
+      font-family: var(--cc360-font-mono);
       font-size: 14px;
-      color: #0475FF;
+      color: var(--cc360-blue);
       font-weight: 500;
     }
+    code.small { font-size: 11px; }
+
     .controls {
       display: flex;
       gap: 12px;
@@ -106,7 +123,7 @@
       flex-wrap: wrap;
     }
     button {
-      background: linear-gradient(135deg, #0E325E 0%, #0475FF 100%);
+      background: linear-gradient(135deg, var(--cc360-navy) 0%, var(--cc360-blue) 100%);
       color: white;
       border: none;
       padding: 12px 24px;
@@ -116,17 +133,20 @@
       cursor: pointer;
       transition: all 0.2s;
       box-shadow: 0 2px 8px rgba(4, 117, 255, 0.2);
-      font-family: 'Helvetica Now', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      font-family: var(--cc360-font-display);
     }
     button:hover {
       transform: translateY(-2px);
       box-shadow: 0 4px 16px rgba(4, 117, 255, 0.4);
     }
-    button:active {
-      transform: translateY(0);
+    button:active { transform: translateY(0); }
+    button:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+      transform: none !important;
     }
     button.secondary {
-      background: #111D2C;
+      background: var(--cc360-dark);
       box-shadow: 0 2px 8px rgba(17, 29, 44, 0.2);
     }
     button.secondary:hover {
@@ -134,12 +154,173 @@
       box-shadow: 0 4px 16px rgba(17, 29, 44, 0.3);
     }
     button.success {
-      background: linear-gradient(135deg, #0E325E 0%, #00D9A3 100%);
+      background: linear-gradient(135deg, var(--cc360-navy) 0%, var(--cc360-green) 100%);
       box-shadow: 0 2px 8px rgba(0, 217, 163, 0.2);
     }
     button.success:hover {
       box-shadow: 0 4px 16px rgba(0, 217, 163, 0.4);
     }
+    button.danger { background: var(--cc360-danger); }
+    .badge {
+      display: inline-block;
+      background: linear-gradient(135deg, var(--cc360-blue) 0%, var(--cc360-green) 100%);
+      color: white;
+      padding: 6px 14px;
+      border-radius: 16px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 8px;
+      box-shadow: 0 2px 8px rgba(4, 117, 255, 0.3);
+    }
+
+    /* Location selector */
+    .location-selector {
+      background: linear-gradient(135deg, rgba(14, 50, 94, 0.05) 0%, rgba(4, 117, 255, 0.05) 100%);
+      border: 2px solid var(--cc360-blue);
+      padding: 16px;
+      border-radius: 10px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 8px rgba(4, 117, 255, 0.1);
+    }
+    .location-selector__title {
+      color: var(--cc360-navy);
+      display: block;
+      margin-bottom: 10px;
+      font-size: 15px;
+    }
+    .location-input {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      border: 2px solid var(--cc360-gray-border);
+      font-size: 14px;
+      margin-bottom: 10px;
+      outline: none;
+      transition: border-color 0.2s;
+      box-sizing: border-box;
+      font-family: var(--cc360-font-mono);
+    }
+    .location-input:focus { border-color: var(--cc360-blue); }
+    .location-btn { width: 100%; padding: 12px; }
+    .location-hint {
+      margin: 10px 0 0 0;
+      font-size: 12px;
+      color: var(--cc360-gray);
+      line-height: 1.4;
+    }
+    .config-wrapper { margin-top: 12px; }
+    .config-meta {
+      margin: 0;
+      font-size: 13px;
+      color: var(--cc360-gray);
+    }
+    .validation-text { display: none; margin-top: 4px; }
+    .validation-text--valid { color: var(--cc360-blue); font-weight: 600; }
+    .validation-text--invalid { color: var(--cc360-red); font-weight: 600; }
+
+    /* Filter info boxes */
+    .filter-box { display: none; }
+    .filter-box--warning {
+      background: linear-gradient(135deg, rgba(255, 193, 7, 0.08) 0%, rgba(255, 152, 0, 0.08) 100%);
+      border-left: 4px solid var(--cc360-orange);
+    }
+    .filter-box--success {
+      background: linear-gradient(135deg, rgba(76, 175, 80, 0.08) 0%, rgba(56, 142, 60, 0.08) 100%);
+      border-left: 4px solid var(--cc360-green-muted);
+    }
+    .filter-box__title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .filter-box__title--warning { color: var(--cc360-orange-dark); }
+    .filter-box__title--success { color: #2E7D32; }
+    .filter-box__desc {
+      margin: 8px 0 0 0;
+      font-size: 14px;
+      color: var(--cc360-gray);
+      line-height: 1.6;
+    }
+    .filter-box__hint {
+      margin: 12px 0 0 0;
+      font-size: 12px;
+      color: var(--cc360-gray);
+      line-height: 1.5;
+    }
+    .filter-detail {
+      background: white;
+      padding: 12px;
+      border-radius: 8px;
+      margin-top: 10px;
+      border: 2px solid var(--cc360-orange-light);
+    }
+    .filter-detail__id {
+      font-family: var(--cc360-font-mono);
+      font-size: 14px;
+      color: var(--cc360-blue);
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .filter-detail__status {
+      font-size: 12px;
+      color: var(--cc360-gray-light);
+    }
+    .filter-detail__status-value { font-weight: 600; }
+
+    /* Skip API checks box */
+    .skip-api-box {
+      background: linear-gradient(135deg, rgba(255, 47, 0, 0.06) 0%, rgba(226, 255, 0, 0.06) 100%);
+      border-left: 4px solid var(--cc360-red);
+      padding: 14px;
+      margin-bottom: 16px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(255, 47, 0, 0.08);
+    }
+    .skip-api-label {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+    }
+    .skip-api-checkbox {
+      margin-right: 10px;
+      cursor: pointer;
+      width: 18px;
+      height: 18px;
+      accent-color: var(--cc360-blue);
+    }
+    .skip-api-text { color: #6c4a00; font-size: 14px; font-weight: 500; }
+    .skip-api-text strong { color: #c41e00; }
+    .skip-api-hint {
+      margin: 10px 0 0 28px;
+      font-size: 12px;
+      color: #6c4a00;
+      line-height: 1.5;
+    }
+
+    /* Status display */
+    .status-display {
+      background: #fff3cd;
+      border: 1px solid var(--cc360-warning);
+      padding: 16px;
+      border-radius: 8px;
+      margin-top: 16px;
+      display: none;
+    }
+    .status-display.show { display: block; }
+    .status-display.status-display--error {
+      background: linear-gradient(135deg, rgba(255, 47, 0, 0.1) 0%, rgba(226, 255, 0, 0.1) 100%);
+      border-color: var(--cc360-red);
+      border-width: 2px;
+    }
+    .status-display pre {
+      background: white;
+      padding: 12px;
+      border-radius: 4px;
+      overflow-x: auto;
+      margin-top: 8px;
+    }
+
+    /* Endpoint list */
     .endpoint-list {
       background: linear-gradient(135deg, rgba(14, 50, 94, 0.03) 0%, rgba(4, 117, 255, 0.03) 100%);
       padding: 20px;
@@ -151,147 +332,294 @@
       margin-bottom: 8px;
       color: #495057;
     }
-    .status-display {
-      background: #fff3cd;
-      border: 1px solid #ffc107;
-      padding: 16px;
-      border-radius: 8px;
-      margin-top: 16px;
-      display: none;
+
+    /* Preview grid */
+    .preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 14px;
+      margin-top: 20px;
     }
-    .status-display.show {
-      display: block;
+    .preview-card {
+      background: var(--cc360-bg-subtle);
+      border: 1px solid var(--cc360-gray-border);
+      border-radius: 12px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
-    .status-display pre {
-      background: white;
-      padding: 12px;
-      border-radius: 4px;
-      overflow-x: auto;
-      margin-top: 8px;
+    .preview-card__label {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--cc360-navy);
+      font-family: var(--cc360-font-display);
     }
-    .badge {
-      display: inline-block;
-      background: linear-gradient(135deg, #0475FF 0%, #00D9A3 100%);
-      color: white;
-      padding: 6px 14px;
-      border-radius: 16px;
+    .preview-card__desc {
       font-size: 12px;
-      font-weight: 600;
-      margin-left: 8px;
-      box-shadow: 0 2px 8px rgba(4, 117, 255, 0.3);
+      color: var(--cc360-gray);
+      margin: 0;
+      line-height: 1.4;
+      flex: 1;
+    }
+    .preview-card__btn {
+      margin-top: 4px;
+      padding: 8px 16px;
+      font-size: 13px;
+    }
+    .preview-card__btn.secondary {
+      background: var(--cc360-dark);
+    }
+
+    /* Toast notifications */
+    .toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-width: 420px;
+    }
+    .toast {
+      padding: 14px 20px;
+      border-radius: 10px;
+      color: white;
+      font-size: 14px;
+      font-weight: 500;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+      animation: toastIn 0.3s ease-out;
+      line-height: 1.5;
+      font-family: var(--cc360-font-display);
+      word-break: break-word;
+      white-space: pre-line;
+    }
+    .toast--success { background: linear-gradient(135deg, var(--cc360-navy), var(--cc360-green-muted)); }
+    .toast--error { background: linear-gradient(135deg, #b71c1c, var(--cc360-red)); }
+    .toast--info { background: linear-gradient(135deg, var(--cc360-navy), var(--cc360-blue)); }
+    .toast--removing { animation: toastOut 0.3s ease-in forwards; }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateX(40px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes toastOut {
+      from { opacity: 1; transform: translateX(0); }
+      to { opacity: 0; transform: translateX(40px); }
+    }
+
+    /* Confirm dialog */
+    .confirm-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 10001;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn 0.2s ease-out;
+    }
+    .confirm-dialog {
+      background: white;
+      border-radius: 16px;
+      padding: 28px;
+      max-width: 480px;
+      width: 90%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      animation: scaleIn 0.2s ease-out;
+    }
+    .confirm-dialog__message {
+      color: #333;
+      font-size: 15px;
+      line-height: 1.6;
+      margin-bottom: 24px;
+      white-space: pre-line;
+    }
+    .confirm-dialog__actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+    .confirm-dialog__cancel {
+      background: var(--cc360-bg-subtle);
+      color: var(--cc360-gray);
+      padding: 10px 20px;
+      border: 1px solid var(--cc360-gray-border);
+    }
+    .confirm-dialog__cancel:hover {
+      background: #eee;
+      transform: none;
+      box-shadow: none;
+    }
+    .confirm-dialog__ok { padding: 10px 20px; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes scaleIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
     }
   </style>
 </head>
 <body>
+  <div id="toast-container" class="toast-container" role="status" aria-live="polite"></div>
+
   <div class="demo-container">
     <h1>🚀 CC360 Onboarding Widget</h1>
     <p class="badge">Demo Mode</p>
     <p>
-      This is a demo page for the CourseCreator360 onboarding widget. 
+      This is a demo page for the CourseCreator360 onboarding widget.
       The widget appears in the bottom-right corner and tracks onboarding progress.
     </p>
 
     <div class="info-box">
       <strong>Widget Configuration:</strong>
-      <div style="margin-top: 12px;">
-        <div id="locationSelector" style="background: linear-gradient(135deg, rgba(14, 50, 94, 0.05) 0%, rgba(4, 117, 255, 0.05) 100%); border: 2px solid #0475FF; padding: 16px; border-radius: 10px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(4, 117, 255, 0.1);">
-          <strong style="color: #0E325E; display: block; margin-bottom: 10px; font-size: 15px;">🎯 Enter Location ID:</strong>
-          <input 
-            type="text" 
-            id="locationInput" 
-            placeholder="e.g., kgREXsjAvhag6Qn8Yjqn" 
-            style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e5e7eb; font-size: 14px; margin-bottom: 10px; outline: none; transition: border-color 0.2s; box-sizing: border-box; font-family: 'Monaco', 'Courier New', monospace;"
-            onfocus="this.style.borderColor='#0475FF'"
-            onblur="this.style.borderColor='#e5e7eb'"
+      <div class="config-wrapper">
+        <div id="locationSelector" class="location-selector">
+          <strong class="location-selector__title">🎯 Enter Location ID:</strong>
+          <input
+            type="text"
+            id="locationInput"
+            class="location-input"
+            placeholder="e.g., kgREXsjAvhag6Qn8Yjqn"
+            aria-label="Location ID"
           />
-          <button onclick="selectLocation()" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #0E325E 0%, #0475FF 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; box-shadow: 0 2px 8px rgba(4, 117, 255, 0.2); transition: all 0.2s;">
+          <button id="loadLocationBtn" class="location-btn" aria-label="Load location by ID">
             Load Location
           </button>
-          <p style="margin: 10px 0 0 0; font-size: 12px; color: #6c757d; line-height: 1.4;">
-            💡 Find your location ID in the GHL dashboard URL: <code style="font-size: 11px;">https://app.gohighlevel.com/v2/location/<strong style="color: #0475FF;">YOUR_LOCATION_ID</strong>/dashboard</code>
+          <p class="location-hint">
+            💡 Find your location ID in the GHL dashboard URL: <code class="small">https://app.gohighlevel.com/v2/location/<strong>YOUR_LOCATION_ID</strong>/dashboard</code>
           </p>
         </div>
-        <p style="margin: 0; font-size: 13px; color: #6c757d;">
+        <p class="config-meta">
           Current Location: <code id="currentLocationId">None selected</code><br>
-          <span id="locationValidation" style="display: none; margin-top: 4px; display: block;"></span>
+          <span id="locationValidation" class="validation-text"></span>
           API Base: <code id="apiBaseUrl">Loading...</code>
         </p>
       </div>
     </div>
 
-    <div id="filterInfoBox" class="info-box" style="display: none; background: linear-gradient(135deg, rgba(255, 193, 7, 0.08) 0%, rgba(255, 152, 0, 0.08) 100%); border-left: 4px solid #FF9800;">
-      <strong style="color: #E65100; display: flex; align-items: center; gap: 8px;">
+    <div id="filterInfoBox" class="info-box filter-box filter-box--warning">
+      <strong class="filter-box__title filter-box__title--warning">
         🎯 Location Pre-Filter Active
       </strong>
-      <p style="margin: 8px 0 0 0; font-size: 14px; color: #6c757d; line-height: 1.6;">
+      <p class="filter-box__desc">
         The widget will <strong>pre-filter</strong> to only check authorization for this location:
       </p>
-      <div style="background: white; padding: 12px; border-radius: 8px; margin-top: 10px; border: 2px solid #FFE0B2;">
-        <div style="font-family: 'Monaco', 'Courier New', monospace; font-size: 14px; color: #0475FF; font-weight: 600; margin-bottom: 6px;">
+      <div class="filter-detail">
+        <div class="filter-detail__id">
           <span id="filteredLocationId">Loading...</span>
         </div>
-        <div style="font-size: 12px; color: #868e96;">
-          <strong>API Status:</strong> <span id="filterValidationStatus" style="font-weight: 600;">Checking...</span>
+        <div class="filter-detail__status">
+          <strong>API Status:</strong> <span id="filterValidationStatus" class="filter-detail__status-value">Checking...</span>
         </div>
       </div>
-      <p style="margin: 12px 0 0 0; font-size: 12px; color: #6c757d; line-height: 1.5;">
-        💡 The widget will verify this location with the <strong>CC360 Customers Admin API</strong>. To check all locations, remove <code style="font-size: 11px;">WIDGET_LOCATION_ID_FILTER</code>.
+      <p class="filter-box__hint">
+        💡 The widget will verify this location with the <strong>CC360 Customers Admin API</strong>. To check all locations, remove <code class="small">WIDGET_LOCATION_ID_FILTER</code>.
       </p>
     </div>
 
-    <div id="noFilterInfoBox" class="info-box" style="display: none; background: linear-gradient(135deg, rgba(76, 175, 80, 0.08) 0%, rgba(56, 142, 60, 0.08) 100%); border-left: 4px solid #4CAF50;">
-      <strong style="color: #2E7D32; display: flex; align-items: center; gap: 8px;">
+    <div id="noFilterInfoBox" class="info-box filter-box filter-box--success">
+      <strong class="filter-box__title filter-box__title--success">
         🌍 No Pre-Filter - API Verification Enabled
       </strong>
-      <p style="margin: 8px 0 0 0; font-size: 14px; color: #6c757d; line-height: 1.6;">
+      <p class="filter-box__desc">
         The widget will check <strong>all detected locations</strong> via the CC360 Customers Admin API to determine authorization.
       </p>
-      <p style="margin: 12px 0 0 0; font-size: 12px; color: #6c757d; line-height: 1.5;">
-        💡 To pre-filter to a specific location (performance optimization), set the <code style="font-size: 11px;">WIDGET_LOCATION_ID_FILTER</code> environment variable.
+      <p class="filter-box__hint">
+        💡 To pre-filter to a specific location (performance optimization), set the <code class="small">WIDGET_LOCATION_ID_FILTER</code> environment variable.
       </p>
     </div>
 
     <h2>Agency Setup</h2>
     <p>Configure agency-level authorization (one-time setup):</p>
-    
+
     <div class="controls">
-      <button id="setupAgencyBtn" onclick="setupAgency()">🔑 Setup Agency OAuth</button>
-      <button onclick="checkAgencyStatus()">Check Agency Status</button>
-      <button class="secondary" onclick="clearAgencyAuth()">Clear Agency Auth</button>
+      <button id="setupAgencyBtn" aria-label="Setup agency OAuth authorization">🔑 Setup Agency OAuth</button>
+      <button id="checkAgencyBtn" aria-label="Check agency authorization status">Check Agency Status</button>
+      <button id="clearAgencyBtn" class="secondary" aria-label="Clear agency authorization">Clear Agency Auth</button>
     </div>
 
     <h2>Widget Testing</h2>
     <p>Test widget behavior and onboarding progress:</p>
-    
+
     <div class="controls">
-      <button onclick="checkInstallation()">Check Installation</button>
-      <button onclick="resetWidget()">Reset Widget State</button>
-      <button class="secondary" onclick="reloadWidget()">Reload Widget</button>
-      <button class="secondary" onclick="clearLocationData()" style="background: #dc3545;">🗑️ Clear Location Data</button>
+      <button id="checkInstallationBtn" aria-label="Check widget installation status">Check Installation</button>
+      <button id="resetWidgetBtn" aria-label="Reset widget local state">Reset Widget State</button>
+      <button id="reloadWidgetBtn" class="secondary" aria-label="Reload the widget">Reload Widget</button>
+      <button id="clearLocationBtn" class="secondary danger" aria-label="Clear all data for current location">🗑️ Clear Location Data</button>
+    </div>
+
+    <h2>Widget Previews</h2>
+    <p>Preview each widget state without needing a real location or OAuth. These trigger the actual widget rendering.</p>
+
+    <div class="preview-grid">
+      <div class="preview-card">
+        <div class="preview-card__label">Checklist (0/4)</div>
+        <p class="preview-card__desc">Fresh start -- no steps completed</p>
+        <button id="previewEmpty" class="preview-card__btn">Show</button>
+      </div>
+      <div class="preview-card">
+        <div class="preview-card__label">Checklist (2/4)</div>
+        <p class="preview-card__desc">Partially complete -- 2 of 4 steps done</p>
+        <button id="previewPartial" class="preview-card__btn">Show</button>
+      </div>
+      <div class="preview-card">
+        <div class="preview-card__label">Checklist (4/4)</div>
+        <p class="preview-card__desc">All steps done -- triggers completion dialog</p>
+        <button id="previewComplete" class="preview-card__btn">Show</button>
+      </div>
+      <div class="preview-card">
+        <div class="preview-card__label">Minimized Pill</div>
+        <p class="preview-card__desc">Collapsed bar in the bottom-right corner</p>
+        <button id="previewMinimized" class="preview-card__btn secondary">Show</button>
+      </div>
+      <div class="preview-card">
+        <div class="preview-card__label">Setup Required</div>
+        <p class="preview-card__desc">Shown when agency OAuth is not configured</p>
+        <button id="previewNotAuth" class="preview-card__btn secondary">Show</button>
+      </div>
+      <div class="preview-card">
+        <div class="preview-card__label">Survey Modal</div>
+        <p class="preview-card__desc">Multi-step onboarding survey form</p>
+        <button id="previewSurvey" class="preview-card__btn secondary">Show</button>
+      </div>
+      <div class="preview-card">
+        <div class="preview-card__label">Booking Modal</div>
+        <p class="preview-card__desc">Onboarding call scheduler with calendar</p>
+        <button id="previewBooking" class="preview-card__btn secondary">Show</button>
+      </div>
+      <div class="preview-card">
+        <div class="preview-card__label">Dismiss Dialog</div>
+        <p class="preview-card__desc">Confirm dismissal of the checklist</p>
+        <button id="previewDismiss" class="preview-card__btn secondary">Show</button>
+      </div>
+    </div>
+
+    <div class="controls" style="margin-top: 16px;">
+      <button id="previewClear" class="secondary" aria-label="Remove all preview widgets">Clear All Previews</button>
     </div>
 
     <h2>Onboarding Progress</h2>
     <p>Test onboarding steps for the current location:</p>
-    
-    <div style="background: linear-gradient(135deg, rgba(255, 47, 0, 0.06) 0%, rgba(226, 255, 0, 0.06) 100%); border-left: 4px solid #FF2F00; padding: 14px; margin-bottom: 16px; border-radius: 8px; box-shadow: 0 2px 8px rgba(255, 47, 0, 0.08);">
-      <label style="display: flex; align-items: center; cursor: pointer;">
-        <input type="checkbox" id="skipApiChecks" style="margin-right: 10px; cursor: pointer; width: 18px; height: 18px; accent-color: #0475FF;" onchange="toggleApiChecks()">
-        <span style="color: #6c4a00; font-size: 14px; font-weight: 500;">
-          <strong style="color: #c41e00;">Skip GHL API checks</strong> - Enable this to test toggles without real API overwriting your changes
+
+    <div class="skip-api-box">
+      <label class="skip-api-label">
+        <input type="checkbox" id="skipApiChecks" class="skip-api-checkbox">
+        <span class="skip-api-text">
+          <strong>Skip GHL API checks</strong> - Enable this to test toggles without real API overwriting your changes
         </span>
       </label>
-      <p style="margin: 10px 0 0 28px; font-size: 12px; color: #6c4a00; line-height: 1.5;">
+      <p class="skip-api-hint">
         When enabled, manual toggles will persist. When disabled, real GHL data will be reflected.
       </p>
     </div>
-    
+
     <div class="controls">
-      <button onclick="toggleStep('locationVerified')">Toggle Location Verified</button>
-      <button onclick="toggleStep('paymentIntegrated')">Toggle Payment</button>
-      <button onclick="toggleStep('courseCreated')">Toggle Course</button>
-      <button onclick="toggleStep('domainConnected')">Toggle Domain</button>
-      <button class="secondary" onclick="resetAll()">Reset All</button>
-      <button class="secondary" onclick="checkStatus()">Check Status</button>
+      <button id="toggleLocationBtn" aria-label="Toggle location verified step">Toggle Location Verified</button>
+      <button id="togglePaymentBtn" aria-label="Toggle payment integrated step">Toggle Payment</button>
+      <button id="toggleCourseBtn" aria-label="Toggle course created step">Toggle Course</button>
+      <button id="toggleDomainBtn" aria-label="Toggle domain connected step">Toggle Domain</button>
+      <button id="resetAllBtn" class="secondary" aria-label="Reset all onboarding progress">Reset All</button>
+      <button id="checkStatusBtn" class="secondary" aria-label="Check current onboarding status">Check Status</button>
     </div>
 
     <div id="status-display" class="status-display">
@@ -302,7 +630,7 @@
     <h2>Available Endpoints</h2>
     <div class="endpoint-list">
       <ul>
-        <li><code>GET /api/status?locationId=...&skipApiChecks=true</code> - Get current checklist status (skipApiChecks prevents real API overwrites)</li>
+        <li><code>GET /api/status?locationId=...&amp;skipApiChecks=true</code> - Get current checklist status (skipApiChecks prevents real API overwrites)</li>
         <li><code>GET /api/events?locationId=...</code> - SSE stream for real-time updates</li>
         <li><code>GET /api/location/validate?locationId=...</code> - Validate if locationId exists in agency</li>
         <li><code>GET /api/onboarding/:locationId/check-products</code> - Check if products exist (polling)</li>
@@ -317,573 +645,409 @@
 
     <h2>How It Works</h2>
     <p>
-      <strong>🎯 Auto-Detection:</strong> The widget now automatically detects the location ID when embedded in the GHL dashboard. 
-      It checks multiple sources including the URL path, query parameters, GHL context objects, and parent window URLs (for iframes). 
+      <strong>🎯 Auto-Detection:</strong> The widget automatically detects the location ID when embedded in the GHL dashboard.
+      It checks multiple sources including the URL path, query parameters, GHL context objects, and parent window URLs (for iframes).
       This eliminates the need for manual configuration in production.
     </p>
     <p>
-      <strong>🔄 Real-Time Updates:</strong> The widget uses Server-Sent Events (SSE) for real-time updates. When you click 
+      <strong>🔄 Real-Time Updates:</strong> The widget uses Server-Sent Events (SSE) for real-time updates. When you click
       the testing buttons above, the widget will automatically update without refreshing the page.
     </p>
     <p>
-      <strong>📦 Product Detection:</strong> The widget uses <strong>fetch interception</strong> to detect 
-      when products/courses are created in GHL's admin dashboard. When the widget is loaded as custom JS 
+      <strong>📦 Product Detection:</strong> The widget uses <strong>fetch interception</strong> to detect
+      when products/courses are created in GHL's admin dashboard. When the widget is loaded as custom JS
       in the agency, it intercepts GHL's API calls and triggers a status check when product creation is detected.
     </p>
-    <p> 
-      <strong>🔗 Webhook Integration:</strong> Other events (domain connection, payment integration, orders) use webhooks from GoHighLevel 
+    <p>
+      <strong>🔗 Webhook Integration:</strong> Other events (domain connection, payment integration, orders) use webhooks from GoHighLevel
       for real-time updates.
     </p>
   </div>
 
-  <!-- Widget loading script -->
   <script>
+    // --- State ---
     let LOCATION_ID = null;
-    let API_BASE = window.location.origin; // Use current origin by default
-
-    // Detect location ID from URL (for demo/testing)
-    function detectLocationFromUrl() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const locationId = urlParams.get('locationId');
-      if (locationId) {
-        LOCATION_ID = locationId;
-        document.getElementById('currentLocationId').textContent = locationId;
-        console.log('Detected location ID from URL:', locationId);
-        validateCurrentLocation();
-        return locationId;
-      }
-      
-      // Check URL path
-      const pathMatch = window.location.pathname.match(/\/location\/([^\/]+)/);
-      if (pathMatch && pathMatch[1]) {
-        LOCATION_ID = pathMatch[1];
-        document.getElementById('currentLocationId').textContent = pathMatch[1];
-        console.log('Detected location ID from path:', pathMatch[1]);
-        validateCurrentLocation();
-        return pathMatch[1];
-      }
-      
-      document.getElementById('currentLocationId').textContent = 'None selected';
-      return null;
-    }
-
-    // Validate the current location ID
-    async function validateCurrentLocation() {
-      if (!LOCATION_ID) return;
-      
-      try {
-        const response = await fetch(`${API_BASE}/api/location/validate?locationId=${LOCATION_ID}`);
-        const data = await response.json();
-        
-        const validationEl = document.getElementById('locationValidation');
-        if (data.valid) {
-          const locationName = data.location?.name || data.locationName || LOCATION_ID;
-          validationEl.innerHTML = `<span style="color: #0475FF; font-weight: 600;">✓ Valid location: ${locationName}</span>`;
-          validationEl.style.display = 'block';
-        } else {
-          validationEl.innerHTML = `<span style="color: #FF2F00; font-weight: 600;">✗ Invalid location ID - not found in agency</span>`;
-          validationEl.style.display = 'block';
-        }
-      } catch (error) {
-        console.error('Error validating location:', error);
-        const validationEl = document.getElementById('locationValidation');
-        validationEl.innerHTML = `<span style="color: #FF2F00; font-weight: 600;">✗ Error validating location</span>`;
-        validationEl.style.display = 'block';
-      }
-    }
-
-    // No longer fetching all locations - user enters location ID manually
-    // This is more efficient and scalable for agencies with many locations
-
-    // Handle location selection
-    function selectLocation() {
-      const input = document.getElementById('locationInput');
-      const locationId = input.value.trim();
-      
-      if (!locationId) {
-        alert('Please enter a location ID');
-        return;
-      }
-      
-      // Basic validation - just check it's not too short
-      if (locationId.length < 10) {
-        alert('Location ID seems too short. Please check the ID and try again.');
-        return;
-      }
-      
-      // Update URL with entered location
-      const newUrl = `${window.location.pathname}?locationId=${locationId}`;
-      window.location.href = newUrl;
-    }
-    
-    // Fetch and display location filter information
-    async function displayLocationFilterInfo() {
-      try {
-        const url = `${API_BASE}/api/config?t=${Date.now()}`;
-        console.log('[FilterInfo] Fetching config from:', url);
-        const response = await fetch(url);
-        const config = await response.json();
-        console.log('[FilterInfo] Config response:', config);
-        
-        const filterInfoBox = document.getElementById('filterInfoBox');
-        const noFilterInfoBox = document.getElementById('noFilterInfoBox');
-        const filteredLocationId = document.getElementById('filteredLocationId');
-        const filterValidationStatus = document.getElementById('filterValidationStatus');
-        
-        if (config.widgetLocationFilter) {
-          // Filter is set
-          filteredLocationId.textContent = config.widgetLocationFilter;
-          
-          // Check if there's a loaded location and if it matches the filter
-          if (LOCATION_ID) {
-            if (LOCATION_ID === config.widgetLocationFilter) {
-              // Location matches the filter - validate it via API
-              if (config.customersApiConfigured) {
-                try {
-                  const validateResponse = await fetch(`${API_BASE}/api/location/validate?locationId=${LOCATION_ID}`);
-                  const validateData = await validateResponse.json();
-                  
-                  if (validateData.valid) {
-                    const locationName = validateData.location?.name || validateData.locationName || LOCATION_ID;
-                    filterValidationStatus.innerHTML = `<span style="color: #4CAF50;">✓ Valid - ${locationName}</span>`;
-                  } else {
-                    filterValidationStatus.innerHTML = `<span style="color: #FF9800;">⚠ Matches filter but NOT in customers API</span>`;
-                  }
-                } catch (err) {
-                  filterValidationStatus.innerHTML = '<span style="color: #FF2F00;">✗ Error validating location</span>';
-                }
-              } else {
-                filterValidationStatus.innerHTML = '<span style="color: #FF2F00;">✗ API Not Configured</span>';
-              }
-            } else {
-              // Location doesn't match the filter
-              filterValidationStatus.innerHTML = `<span style="color: #FF2F00;">✗ Location does NOT match filter</span>`;
-            }
-          } else {
-            // No location loaded yet
-            if (config.customersApiConfigured) {
-              filterValidationStatus.innerHTML = '<span style="color: #4CAF50;">✓ API Configured</span>';
-            } else {
-              filterValidationStatus.innerHTML = '<span style="color: #FF2F00;">✗ API Not Configured</span>';
-            }
-          }
-          
-          filterInfoBox.style.display = 'block';
-          noFilterInfoBox.style.display = 'none';
-          
-          console.log('[FilterInfo] Location pre-filter active:', config.widgetLocationFilter);
-        } else {
-          // No filter set
-          filterInfoBox.style.display = 'none';
-          noFilterInfoBox.style.display = 'block';
-          
-          console.log('[FilterInfo] No location pre-filter configured');
-        }
-      } catch (error) {
-        console.error('[FilterInfo] Error fetching config:', error);
-        // Hide both boxes on error
-        document.getElementById('filterInfoBox').style.display = 'none';
-        document.getElementById('noFilterInfoBox').style.display = 'none';
-      }
-    }
-    
-    // Update agency button status
-    async function updateAgencyButtonStatus() {
-      const button = document.getElementById('setupAgencyBtn');
-      
-      try {
-        // Add cache-busting to ensure fresh data
-        const url = `${API_BASE}/api/agency/status?t=${Date.now()}`;
-        console.log('[UpdateButton] Fetching status from:', url);
-        const response = await fetch(url);
-        const data = await response.json();
-        console.log('[UpdateButton] Status response:', data);
-        
-        if (data.authorized) {
-          console.log('[UpdateButton] Setting button to AUTHORIZED state');
-          button.textContent = '✓ Agency OAuth Connected';
-          button.classList.add('success');
-          button.onclick = () => {
-            if (confirm('Agency OAuth is already set up. Do you want to re-authorize?')) {
-              setupAgency();
-            }
-          };
-        } else {
-          console.log('[UpdateButton] Setting button to NOT AUTHORIZED state');
-          button.textContent = '🔑 Setup Agency OAuth';
-          button.classList.remove('success');
-          button.onclick = setupAgency;
-        }
-      } catch (error) {
-        console.error('[UpdateButton] Error checking agency status:', error);
-        // On error, assume not authorized (safe default)
-        console.log('[UpdateButton] Setting button to NOT AUTHORIZED state (error fallback)');
-        button.textContent = '🔑 Setup Agency OAuth';
-        button.classList.remove('success');
-        button.onclick = setupAgency;
-      }
-    }
-    
-    // Load API base and widget on page load
-    window.addEventListener('DOMContentLoaded', async function() {
-      // Always use current origin for API calls (fixes Vercel preview URL issues)
-      API_BASE = window.location.origin;
-      document.getElementById('apiBaseUrl').textContent = API_BASE;
-      
-      // Detect location ID from URL
-      detectLocationFromUrl();
-      
-      // Display location filter information
-      await displayLocationFilterInfo();
-      
-      // Check agency OAuth status and update button
-      await updateAgencyButtonStatus();
-      
-      // Auto-load widget - it will auto-detect location ID from URL
-      const script = document.createElement('script');
-      script.src = `${API_BASE}/widget.js`;
-      script.setAttribute('data-api', API_BASE);
-      // Note: no data-location attribute - widget will auto-detect from UserContext/URL
-      document.body.appendChild(script);
-      console.log('Widget loaded - will auto-detect location ID');
-    });
-  </script>
-
-  <script>
+    let API_BASE = window.location.origin;
     let currentStatus = {};
     let skipApiChecks = false;
 
-    function toggleApiChecks() {
-      skipApiChecks = document.getElementById('skipApiChecks').checked;
-      console.log('[Demo] Skip API checks:', skipApiChecks);
-      
-      // Reload widget with new setting
-      const existingWidget = document.getElementById('cc360-onboarding-widget');
-      if (existingWidget) existingWidget.remove();
+    // --- Utilities ---
+
+    async function apiFetch(path, options = {}) {
+      const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
+      const response = await fetch(url, options);
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
+      return response.json();
+    }
+
+    function reloadWidgetScript(options = {}) {
+      const existing = document.getElementById('cc360-onboarding-widget');
+      if (existing) existing.remove();
+      document.querySelectorAll('script[data-api]').forEach(s => s.remove());
+
       const script = document.createElement('script');
-      script.src = `${API_BASE}/widget.js`;
+      const cacheBust = options.bustCache ? `?t=${Date.now()}` : '';
+      script.src = `${API_BASE}/widget.js${cacheBust}`;
       script.setAttribute('data-api', API_BASE);
-      if (skipApiChecks) {
+      if (options.skipApiChecks) {
         script.setAttribute('data-skip-api-checks', 'true');
       }
       document.body.appendChild(script);
     }
 
-    async function checkStatus() {
-      if (!LOCATION_ID) {
-        showError('No location selected. Please select a location from the dropdown above or add ?locationId=YOUR_LOCATION_ID to the URL.');
-        return;
-      }
-      try {
-        const skipParam = skipApiChecks ? '&skipApiChecks=true' : '';
-        const response = await fetch(`${API_BASE}/api/status?locationId=${LOCATION_ID}${skipParam}`);
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        currentStatus = await response.json();
-        displayStatus(currentStatus);
-      } catch (error) {
-        console.error('Error fetching status:', error);
-        showError(`Failed to fetch status: ${error.message}`);
-      }
-    }
+    // --- Toast Notifications ---
 
-    async function toggleStep(step) {
-      if (!LOCATION_ID) {
-        showError('No location selected. Please select a location from the dropdown above.');
-        return;
-      }
-      
-      // Show loading indicator
-      const statusDisplay = document.getElementById('status-display');
-      const statusContent = document.getElementById('status-content');
-      statusDisplay.classList.add('show');
-      statusContent.textContent = `Toggling ${step}...`;
-      
-      try {
-        console.log(`[Toggle] Fetching current status for ${LOCATION_ID}...`);
-        
-        // Step 1: Get current status
-        const skipParam = skipApiChecks ? '&skipApiChecks=true' : '';
-        const statusResponse = await fetch(`${API_BASE}/api/status?locationId=${LOCATION_ID}${skipParam}`);
-        if (!statusResponse.ok) {
-          throw new Error(`Failed to fetch status: HTTP ${statusResponse.status}`);
-        }
-        
-        const currentData = await statusResponse.json();
-        console.log('[Toggle] Current status:', currentData);
-        
-        // Step 2: Toggle only the specific field
-        const newValue = !currentData[step];
-        console.log(`[Toggle] Toggling ${step} from ${currentData[step]} to ${newValue}`);
-        
-        const updates = {
-          [step]: newValue
-        };
-        
-        // Step 3: Update only this field via API
-        console.log('[Toggle] Sending update to API...', updates);
-        const updateResponse = await fetch(`${API_BASE}/api/onboarding/update`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            locationId: LOCATION_ID,
-            updates: updates
-          })
-        });
-        
-        if (!updateResponse.ok) {
-          const errorData = await updateResponse.json();
-          throw new Error(errorData.error || `HTTP ${updateResponse.status}: Update failed`);
-        }
-        
-        const updatedStatus = await updateResponse.json();
-        console.log('[Toggle] ✅ Updated status:', updatedStatus);
-        displayStatus(updatedStatus);
-        
-        // Trigger immediate widget refresh with skipApiChecks setting
-        if (window.cc360Widget && typeof window.cc360Widget.refresh === 'function') {
-          console.log('[Toggle] Triggering immediate widget refresh (skipApiChecks:', skipApiChecks, ')...');
-          await window.cc360Widget.refresh(skipApiChecks);
-        } else {
-          console.log('[Toggle] Widget refresh not available, will update on next poll');
-        }
-        
-        // Show success message in the status box instead of alert
-        const stepName = step.replace(/([A-Z])/g, ' $1').toLowerCase();
-        statusContent.textContent = `✅ Successfully toggled ${stepName} to: ${newValue}\n\n${JSON.stringify(updatedStatus, null, 2)}`;
-        
-      } catch (error) {
-        console.error('Error toggling step:', error);
-        showError(`Failed to toggle ${step}: ${error.message}`);
-        statusContent.textContent = `❌ Error: ${error.message}`;
-      }
-    }
+    function showToast(message, type = 'info', duration = 4000) {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `toast toast--${type}`;
+      toast.textContent = message;
+      container.appendChild(toast);
 
-    // Helper to show errors
-    function showError(message) {
-      const statusDisplay = document.getElementById('status-display');
-      const statusContent = document.getElementById('status-content');
-      statusContent.textContent = `❌ ${message}`;
-      statusDisplay.classList.add('show');
-      statusDisplay.style.background = 'linear-gradient(135deg, rgba(255, 47, 0, 0.1) 0%, rgba(226, 255, 0, 0.1) 100%)';
-      statusDisplay.style.borderColor = '#FF2F00';
-      statusDisplay.style.borderWidth = '2px';
-      
-      // Reset background after a moment
       setTimeout(() => {
-        statusDisplay.style.background = '#fff3cd';
-        statusDisplay.style.borderColor = '#ffc107';
-        statusDisplay.style.borderWidth = '1px';
-      }, 3000);
+        toast.classList.add('toast--removing');
+        toast.addEventListener('animationend', () => toast.remove());
+      }, duration);
     }
 
-    async function resetAll() {
-      if (!LOCATION_ID) {
-        showError('No location selected. Please select a location from the dropdown above.');
-        return;
-      }
-      
-      if (!confirm('Reset all onboarding progress for this location?')) {
-        return;
-      }
-      
-      try {
-        const response = await fetch(`${API_BASE}/api/onboarding/update`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            locationId: LOCATION_ID,
-            updates: {
-              locationVerified: false,
-              domainConnected: false,
-              courseCreated: false,
-              paymentIntegrated: false,
-              dismissed: false
-            }
-          })
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: Reset failed`);
+    // --- Confirm Dialog ---
+
+    function showConfirm(message) {
+      return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'confirm-overlay';
+
+        const dialog = document.createElement('div');
+        dialog.className = 'confirm-dialog';
+        dialog.setAttribute('role', 'alertdialog');
+        dialog.setAttribute('aria-modal', 'true');
+
+        const msg = document.createElement('div');
+        msg.className = 'confirm-dialog__message';
+        msg.textContent = message;
+
+        const actions = document.createElement('div');
+        actions.className = 'confirm-dialog__actions';
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'confirm-dialog__cancel';
+        cancelBtn.textContent = 'Cancel';
+
+        const okBtn = document.createElement('button');
+        okBtn.className = 'confirm-dialog__ok';
+        okBtn.textContent = 'Continue';
+
+        function cleanup(result) {
+          overlay.remove();
+          resolve(result);
         }
-        
-        const updatedStatus = await response.json();
-        displayStatus(updatedStatus);
-        
-        // Show success in status box
-        const statusContent = document.getElementById('status-content');
-        statusContent.textContent = `✅ All progress reset successfully\n\n${JSON.stringify(updatedStatus, null, 2)}`;
-      } catch (error) {
-        console.error('Error resetting:', error);
-        showError(`Failed to reset: ${error.message}`);
+
+        cancelBtn.addEventListener('click', () => cleanup(false));
+        okBtn.addEventListener('click', () => cleanup(true));
+        overlay.addEventListener('click', (e) => {
+          if (e.target === overlay) cleanup(false);
+        });
+        document.addEventListener('keydown', function onKey(e) {
+          if (e.key === 'Escape') { cleanup(false); document.removeEventListener('keydown', onKey); }
+        });
+
+        actions.appendChild(cancelBtn);
+        actions.appendChild(okBtn);
+        dialog.appendChild(msg);
+        dialog.appendChild(actions);
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+        okBtn.focus();
+      });
+    }
+
+    // --- Button Loading State ---
+
+    async function withLoading(button, asyncFn) {
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Loading...';
+      try {
+        return await asyncFn();
+      } finally {
+        button.disabled = false;
+        button.textContent = originalText;
       }
     }
+
+    // --- Status Display ---
 
     function displayStatus(status) {
       currentStatus = status;
       const statusDisplay = document.getElementById('status-display');
       const statusContent = document.getElementById('status-content');
       statusContent.textContent = JSON.stringify(status, null, 2);
+      statusDisplay.classList.remove('status-display--error');
       statusDisplay.classList.add('show');
     }
 
-    function setupAgency() {
-      // Option 1: Use same window (no popup)
-      if (confirm('You will be redirected to GoHighLevel for authorization. Continue?')) {
-        // Save current URL to return after OAuth (backup in sessionStorage)
-        const returnUrl = window.location.href;
-        sessionStorage.setItem('oauth_return_url', returnUrl);
-        sessionStorage.setItem('oauth_type', 'agency');
-        
-        // Redirect same window to OAuth with returnUrl parameter
-        const oauthUrl = `${API_BASE}/api/oauth/agency/install?returnUrl=${encodeURIComponent(returnUrl)}`;
-        console.log('[Setup Agency] Redirecting to:', oauthUrl);
-        window.location.href = oauthUrl;
+    function showError(message) {
+      const statusDisplay = document.getElementById('status-display');
+      const statusContent = document.getElementById('status-content');
+      statusContent.textContent = `❌ ${message}`;
+      statusDisplay.classList.add('show', 'status-display--error');
+
+      setTimeout(() => {
+        statusDisplay.classList.remove('status-display--error');
+      }, 3000);
+    }
+
+    function requireLocation() {
+      if (!LOCATION_ID) {
+        showError('No location selected. Please enter a location ID above or add ?locationId=YOUR_LOCATION_ID to the URL.');
+        return false;
+      }
+      return true;
+    }
+
+    // --- Location Detection & Validation ---
+
+    function detectLocationFromUrl() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const locationId = urlParams.get('locationId');
+      if (locationId) {
+        LOCATION_ID = locationId;
+        document.getElementById('currentLocationId').textContent = locationId;
+        validateCurrentLocation();
+        return locationId;
+      }
+
+      const pathMatch = window.location.pathname.match(/\/location\/([^\/]+)/);
+      if (pathMatch && pathMatch[1]) {
+        LOCATION_ID = pathMatch[1];
+        document.getElementById('currentLocationId').textContent = pathMatch[1];
+        validateCurrentLocation();
+        return pathMatch[1];
+      }
+
+      document.getElementById('currentLocationId').textContent = 'None selected';
+      return null;
+    }
+
+    function setValidationStatus(text, isValid) {
+      const el = document.getElementById('locationValidation');
+      el.textContent = text;
+      el.className = `validation-text ${isValid ? 'validation-text--valid' : 'validation-text--invalid'}`;
+      el.style.display = 'block';
+    }
+
+    async function validateCurrentLocation() {
+      if (!LOCATION_ID) return;
+
+      try {
+        const data = await apiFetch(`/api/location/validate?locationId=${LOCATION_ID}`);
+        if (data.valid) {
+          const name = data.location?.name || data.locationName || LOCATION_ID;
+          setValidationStatus(`✓ Valid location: ${name}`, true);
+        } else {
+          setValidationStatus('✗ Invalid location ID - not found in agency', false);
+        }
+      } catch (error) {
+        console.error('Error validating location:', error);
+        setValidationStatus('✗ Error validating location', false);
       }
     }
-    
-    // Check if returning from OAuth
-    window.addEventListener('DOMContentLoaded', async function() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const oauthSuccess = urlParams.get('oauth_success');
-      const oauthType = sessionStorage.getItem('oauth_type');
-      
-      if (oauthSuccess === 'true' && oauthType === 'agency') {
-        sessionStorage.removeItem('oauth_type');
-        sessionStorage.removeItem('oauth_return_url');
-        
-        // Clear minimized state so widget shows full after OAuth
-        localStorage.removeItem('cc360_widget_minimized');
-        
-        alert('Agency authorization successful! Widget will now work for all sub-accounts.');
-        
-        // Clean URL (preserve locationId param if present)
-        const locationIdParam = urlParams.get('locationId');
-        const newUrl = locationIdParam 
-          ? `${window.location.pathname}?locationId=${locationIdParam}`
-          : window.location.pathname;
-        window.history.replaceState({}, document.title, newUrl);
-        
-        // Update button status
-        await updateAgencyButtonStatus();
-        
-        // Reload widget to show checklist (will auto-detect location)
-        const existingWidget = document.getElementById('cc360-onboarding-widget');
-        if (existingWidget) existingWidget.remove();
-        const script = document.createElement('script');
-        script.src = `${API_BASE}/widget.js`;
-        script.setAttribute('data-api', API_BASE);
-        document.body.appendChild(script);
+
+    function selectLocation() {
+      const input = document.getElementById('locationInput');
+      const locationId = input.value.trim();
+
+      if (!locationId) {
+        showToast('Please enter a location ID', 'error');
+        return;
       }
-    });
+      if (locationId.length < 10) {
+        showToast('Location ID seems too short. Please check and try again.', 'error');
+        return;
+      }
+
+      window.location.href = `${window.location.pathname}?locationId=${locationId}`;
+    }
+
+    // --- Filter Info ---
+
+    async function displayLocationFilterInfo() {
+      try {
+        const config = await apiFetch(`/api/config?t=${Date.now()}`);
+
+        const filterInfoBox = document.getElementById('filterInfoBox');
+        const noFilterInfoBox = document.getElementById('noFilterInfoBox');
+        const filteredLocationId = document.getElementById('filteredLocationId');
+        const statusEl = document.getElementById('filterValidationStatus');
+
+        if (config.widgetLocationFilter) {
+          filteredLocationId.textContent = config.widgetLocationFilter;
+
+          if (LOCATION_ID) {
+            if (LOCATION_ID === config.widgetLocationFilter) {
+              if (config.customersApiConfigured) {
+                try {
+                  const validateData = await apiFetch(`/api/location/validate?locationId=${LOCATION_ID}`);
+                  if (validateData.valid) {
+                    const name = validateData.location?.name || validateData.locationName || LOCATION_ID;
+                    statusEl.textContent = `✓ Valid - ${name}`;
+                    statusEl.style.color = '#4CAF50';
+                  } else {
+                    statusEl.textContent = '⚠ Matches filter but NOT in customers API';
+                    statusEl.style.color = '#FF9800';
+                  }
+                } catch (err) {
+                  statusEl.textContent = '✗ Error validating location';
+                  statusEl.style.color = '#FF2F00';
+                }
+              } else {
+                statusEl.textContent = '✗ API Not Configured';
+                statusEl.style.color = '#FF2F00';
+              }
+            } else {
+              statusEl.textContent = '✗ Location does NOT match filter';
+              statusEl.style.color = '#FF2F00';
+            }
+          } else {
+            if (config.customersApiConfigured) {
+              statusEl.textContent = '✓ API Configured';
+              statusEl.style.color = '#4CAF50';
+            } else {
+              statusEl.textContent = '✗ API Not Configured';
+              statusEl.style.color = '#FF2F00';
+            }
+          }
+
+          filterInfoBox.style.display = 'block';
+          noFilterInfoBox.style.display = 'none';
+        } else {
+          filterInfoBox.style.display = 'none';
+          noFilterInfoBox.style.display = 'block';
+        }
+      } catch (error) {
+        console.error('[FilterInfo] Error fetching config:', error);
+        document.getElementById('filterInfoBox').style.display = 'none';
+        document.getElementById('noFilterInfoBox').style.display = 'none';
+      }
+    }
+
+    // --- Agency ---
+
+    async function updateAgencyButtonStatus() {
+      const button = document.getElementById('setupAgencyBtn');
+      try {
+        const data = await apiFetch(`/api/agency/status?t=${Date.now()}`);
+        if (data.authorized) {
+          button.textContent = '✓ Agency OAuth Connected';
+          button.classList.add('success');
+        } else {
+          button.textContent = '🔑 Setup Agency OAuth';
+          button.classList.remove('success');
+        }
+      } catch (error) {
+        console.error('[UpdateButton] Error checking agency status:', error);
+        button.textContent = '🔑 Setup Agency OAuth';
+        button.classList.remove('success');
+      }
+    }
+
+    async function setupAgency() {
+      const button = document.getElementById('setupAgencyBtn');
+      const isReauth = button.classList.contains('success');
+
+      const message = isReauth
+        ? 'Agency OAuth is already set up. Do you want to re-authorize?'
+        : 'You will be redirected to GoHighLevel for authorization. Continue?';
+
+      const confirmed = await showConfirm(message);
+      if (!confirmed) return;
+
+      sessionStorage.setItem('oauth_return_url', window.location.href);
+      sessionStorage.setItem('oauth_type', 'agency');
+      window.location.href = `${API_BASE}/api/oauth/agency/install?returnUrl=${encodeURIComponent(window.location.href)}`;
+    }
 
     async function checkAgencyStatus() {
-      try {
-        // Add cache-busting to ensure fresh data
-        const response = await fetch(`${API_BASE}/api/agency/status?t=${Date.now()}`);
-        const data = await response.json();
-        
-        if (data.authorized) {
-          alert(`Agency Status: ✓ Authorized\n\nAccount ID: ${data.installation?.accountId || 'N/A'}\nCreated: ${data.installation?.createdAt ? new Date(data.installation.createdAt).toLocaleString() : 'N/A'}`);
-        } else {
-          alert('Agency Status: ✗ Not Authorized\n\nClick "Setup Agency OAuth" to authorize.');
+      const button = document.getElementById('checkAgencyBtn');
+      await withLoading(button, async () => {
+        try {
+          const data = await apiFetch(`/api/agency/status?t=${Date.now()}`);
+          if (data.authorized) {
+            const accountId = data.installation?.accountId || 'N/A';
+            const created = data.installation?.createdAt
+              ? new Date(data.installation.createdAt).toLocaleString()
+              : 'N/A';
+            showToast(`Agency Authorized ✓\nAccount: ${accountId}\nCreated: ${created}`, 'success', 6000);
+          } else {
+            showToast('Agency not authorized. Click "Setup Agency OAuth" to authorize.', 'info');
+          }
+          displayStatus(data);
+        } catch (error) {
+          console.error('Error:', error);
+          showToast('Error checking agency status. See console for details.', 'error');
         }
-        displayStatus(data);
-      } catch (error) {
-        console.error('Error:', error);
-        alert('Error checking agency status. See console for details.');
-      }
+      });
     }
 
     async function clearAgencyAuth() {
-      if (!confirm('This will clear the agency authorization. All sub-accounts will lose access until re-authorized. Continue?')) {
-        return;
-      }
-      
-      try {
-        console.log('[ClearAuth] Sending DELETE request...');
-        const response = await fetch(`${API_BASE}/api/installation?locationId=agency`, {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        console.log('[ClearAuth] Response status:', response.status, response.ok);
-        const result = await response.json();
-        console.log('[ClearAuth] Response data:', result);
-        
-        if (response.ok) {
-          console.log('[ClearAuth] Agency auth cleared, updating UI...');
-          
-          // Wait a moment for database to update
+      const confirmed = await showConfirm(
+        'This will clear the agency authorization. All sub-accounts will lose access until re-authorized. Continue?'
+      );
+      if (!confirmed) return;
+
+      const button = document.getElementById('clearAgencyBtn');
+      await withLoading(button, async () => {
+        try {
+          await apiFetch('/api/installation?locationId=agency', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+          });
+
           await new Promise(resolve => setTimeout(resolve, 300));
-          
-          // Update button status (with cache busting)
-          console.log('[ClearAuth] Updating button status...');
           await updateAgencyButtonStatus();
-          
-          // Clear current location input
-          console.log('[ClearAuth] Clearing location input...');
+
           const locationInput = document.getElementById('locationInput');
           if (locationInput) locationInput.value = '';
-          
-          // Clear current location
+
           LOCATION_ID = null;
           document.getElementById('currentLocationId').textContent = 'None selected';
           document.getElementById('locationValidation').style.display = 'none';
-          
-          // Reload widget to show "Setup Required" (will auto-detect location)
-          console.log('[ClearAuth] Reloading widget...');
-          const existingWidget = document.getElementById('cc360-onboarding-widget');
-          if (existingWidget) existingWidget.remove();
-          const script = document.createElement('script');
-          script.src = `${API_BASE}/widget.js?t=${Date.now()}`;
-          script.setAttribute('data-api', API_BASE);
-          document.body.appendChild(script);
-          
-          alert('Agency authorization cleared!');
-        } else {
-          console.error('[ClearAuth] Failed:', result);
-          alert(`Failed to clear agency authorization: ${result.error || 'Unknown error'}`);
+
+          reloadWidgetScript({ bustCache: true });
+          showToast('Agency authorization cleared!', 'success');
+        } catch (error) {
+          console.error('[ClearAuth] Error:', error);
+          showToast(`Failed to clear agency authorization: ${error.message}`, 'error');
         }
-      } catch (error) {
-        console.error('[ClearAuth] Error:', error);
-        alert('Error clearing agency authorization. See console for details.');
-      }
+      });
     }
 
+    // --- Widget Testing ---
+
     async function checkInstallation() {
-      if (!LOCATION_ID) {
-        showError('No location selected. Please select a location from the dropdown above.');
-        return;
-      }
-      try {
-        const response = await fetch(`${API_BASE}/api/installation/check?locationId=${LOCATION_ID}`);
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      if (!requireLocation()) return;
+      const button = document.getElementById('checkInstallationBtn');
+      await withLoading(button, async () => {
+        try {
+          const data = await apiFetch(`/api/installation/check?locationId=${LOCATION_ID}`);
+          const typeLabel = data.tokenType === 'agency' ? '(via Agency)' : '(Location-specific)';
+          const statusContent = document.getElementById('status-content');
+          statusContent.textContent = `Installation Status:\n\nInstalled: ${data.installed}\nHas Token: ${data.hasToken}\nToken Type: ${data.tokenType} ${typeLabel}\n\n${JSON.stringify(data, null, 2)}`;
+          document.getElementById('status-display').classList.add('show');
+        } catch (error) {
+          console.error('Error checking installation:', error);
+          showError(`Failed to check installation: ${error.message}`);
         }
-        
-        const data = await response.json();
-        
-        const typeLabel = data.tokenType === 'agency' ? '(via Agency)' : '(Location-specific)';
-        const statusContent = document.getElementById('status-content');
-        statusContent.textContent = `Installation Status:\n\nInstalled: ${data.installed}\nHas Token: ${data.hasToken}\nToken Type: ${data.tokenType} ${typeLabel}\n\n${JSON.stringify(data, null, 2)}`;
-        
-        const statusDisplay = document.getElementById('status-display');
-        statusDisplay.classList.add('show');
-      } catch (error) {
-        console.error('Error checking installation:', error);
-        showError(`Failed to check installation: ${error.message}`);
-      }
+      });
     }
 
     function resetWidget() {
-      // Clear all widget state from localStorage
       localStorage.removeItem('cc360_widget_minimized');
-      alert('Widget state cleared. Reloading page...');
-      location.reload();
+      showToast('Widget state cleared. Reloading page...', 'info');
+      setTimeout(() => location.reload(), 800);
     }
 
     function reloadWidget() {
@@ -895,47 +1059,392 @@
     }
 
     async function clearLocationData() {
-      if (!LOCATION_ID) {
-        showError('No location selected. Please select a location from the dropdown above.');
-        return;
-      }
-      if (!confirm(`⚠️ This will clear ALL data for location ${LOCATION_ID}:\n\n- All onboarding progress\n- Survey completion status & responses\n- Booking cancellation status\n- Location-specific installation\n- Widget state (including dismissal)\n- Local storage (position, minimized state)\n\n✓ Agency authorization will be preserved\n\nContinue?`)) {
-        return;
-      }
-      
-      try {
-        const response = await fetch(`${API_BASE}/api/test/clear-location`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ locationId: LOCATION_ID })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-          console.log(`✓ ${data.message} - Clearing local storage and reloading...`);
-          
-          // Clear all widget-related localStorage items (especially dismissed state)
+      if (!requireLocation()) return;
+
+      const confirmed = await showConfirm(
+        `This will clear ALL data for location ${LOCATION_ID}:\n\n` +
+        '- All onboarding progress\n' +
+        '- Survey completion status & responses\n' +
+        '- Booking cancellation status\n' +
+        '- Location-specific installation\n' +
+        '- Widget state (including dismissal)\n' +
+        '- Local storage (position, minimized state)\n\n' +
+        'Agency authorization will be preserved.\n\nContinue?'
+      );
+      if (!confirmed) return;
+
+      const button = document.getElementById('clearLocationBtn');
+      await withLoading(button, async () => {
+        try {
+          await apiFetch('/api/test/clear-location', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ locationId: LOCATION_ID })
+          });
+
           try {
             localStorage.removeItem('cc360_widget_minimized');
-            localStorage.removeItem('cc360_widget_dismissed_permanently'); // Legacy, but clear anyway
+            localStorage.removeItem('cc360_widget_dismissed_permanently');
             localStorage.removeItem('cc360_widget_position');
             localStorage.removeItem('cc360_widget_height');
           } catch (e) {
             console.error('Error clearing localStorage:', e);
           }
-          
-          // Reload page
-          setTimeout(() => location.reload(), 500);
-        } else {
-          showError(`${data.error}: ${data.message || 'Unknown error'}`);
+
+          showToast('Location data cleared. Reloading...', 'success');
+          setTimeout(() => location.reload(), 800);
+        } catch (error) {
+          console.error('Error clearing location data:', error);
+          showError(`Failed to clear location data: ${error.message}`);
         }
+      });
+    }
+
+    // --- Onboarding Progress ---
+
+    function toggleApiChecks() {
+      skipApiChecks = document.getElementById('skipApiChecks').checked;
+      reloadWidgetScript({ skipApiChecks });
+    }
+
+    async function checkStatus() {
+      if (!requireLocation()) return;
+      const button = document.getElementById('checkStatusBtn');
+      await withLoading(button, async () => {
+        try {
+          const skipParam = skipApiChecks ? '&skipApiChecks=true' : '';
+          const data = await apiFetch(`/api/status?locationId=${LOCATION_ID}${skipParam}`);
+          currentStatus = data;
+          displayStatus(data);
+        } catch (error) {
+          console.error('Error fetching status:', error);
+          showError(`Failed to fetch status: ${error.message}`);
+        }
+      });
+    }
+
+    async function toggleStep(step) {
+      if (!requireLocation()) return;
+
+      const statusDisplay = document.getElementById('status-display');
+      const statusContent = document.getElementById('status-content');
+      statusDisplay.classList.add('show');
+      statusContent.textContent = `Toggling ${step}...`;
+
+      try {
+        const skipParam = skipApiChecks ? '&skipApiChecks=true' : '';
+        const currentData = await apiFetch(`/api/status?locationId=${LOCATION_ID}${skipParam}`);
+        const newValue = !currentData[step];
+
+        const updatedStatus = await apiFetch('/api/onboarding/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            locationId: LOCATION_ID,
+            updates: { [step]: newValue }
+          })
+        });
+
+        displayStatus(updatedStatus);
+
+        if (window.cc360Widget && typeof window.cc360Widget.refresh === 'function') {
+          await window.cc360Widget.refresh(skipApiChecks);
+        }
+
+        const stepName = step.replace(/([A-Z])/g, ' $1').toLowerCase();
+        statusContent.textContent = `✅ Successfully toggled ${stepName} to: ${newValue}\n\n${JSON.stringify(updatedStatus, null, 2)}`;
       } catch (error) {
-        console.error('Error clearing location data:', error);
-        showError(`Failed to clear location data: ${error.message}`);
+        console.error('Error toggling step:', error);
+        showError(`Failed to toggle ${step}: ${error.message}`);
       }
     }
+
+    async function resetAll() {
+      if (!requireLocation()) return;
+
+      const confirmed = await showConfirm('Reset all onboarding progress for this location?');
+      if (!confirmed) return;
+
+      const button = document.getElementById('resetAllBtn');
+      await withLoading(button, async () => {
+        try {
+          const updatedStatus = await apiFetch('/api/onboarding/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              locationId: LOCATION_ID,
+              updates: {
+                locationVerified: false,
+                domainConnected: false,
+                courseCreated: false,
+                paymentIntegrated: false,
+                dismissed: false
+              }
+            })
+          });
+
+          displayStatus(updatedStatus);
+          document.getElementById('status-content').textContent =
+            `✅ All progress reset successfully\n\n${JSON.stringify(updatedStatus, null, 2)}`;
+        } catch (error) {
+          console.error('Error resetting:', error);
+          showError(`Failed to reset: ${error.message}`);
+        }
+      });
+    }
+
+    // --- Initialization (single DOMContentLoaded handler) ---
+
+    async function handleOAuthReturn() {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('oauth_success') !== 'true' || sessionStorage.getItem('oauth_type') !== 'agency') return;
+
+      sessionStorage.removeItem('oauth_type');
+      sessionStorage.removeItem('oauth_return_url');
+      localStorage.removeItem('cc360_widget_minimized');
+
+      showToast('Agency authorization successful! Widget will now work for all sub-accounts.', 'success', 6000);
+
+      const locationIdParam = urlParams.get('locationId');
+      const newUrl = locationIdParam
+        ? `${window.location.pathname}?locationId=${locationIdParam}`
+        : window.location.pathname;
+      window.history.replaceState({}, document.title, newUrl);
+
+      await updateAgencyButtonStatus();
+      reloadWidgetScript();
+    }
+
+    window.addEventListener('DOMContentLoaded', async function() {
+      API_BASE = window.location.origin;
+      document.getElementById('apiBaseUrl').textContent = API_BASE;
+
+      detectLocationFromUrl();
+
+      await Promise.all([
+        displayLocationFilterInfo(),
+        updateAgencyButtonStatus()
+      ]);
+
+      reloadWidgetScript();
+      await handleOAuthReturn();
+
+      // --- Bind all event listeners ---
+      document.getElementById('loadLocationBtn').addEventListener('click', selectLocation);
+      document.getElementById('locationInput').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') selectLocation();
+      });
+
+      document.getElementById('setupAgencyBtn').addEventListener('click', setupAgency);
+      document.getElementById('checkAgencyBtn').addEventListener('click', checkAgencyStatus);
+      document.getElementById('clearAgencyBtn').addEventListener('click', clearAgencyAuth);
+
+      document.getElementById('checkInstallationBtn').addEventListener('click', checkInstallation);
+      document.getElementById('resetWidgetBtn').addEventListener('click', resetWidget);
+      document.getElementById('reloadWidgetBtn').addEventListener('click', reloadWidget);
+      document.getElementById('clearLocationBtn').addEventListener('click', clearLocationData);
+
+      // --- Preview buttons ---
+      // Saved originals so we can restore after preview mode
+      const _origDismiss = null;
+      const _origInitChecklist = null;
+      let _previewMode = false;
+
+      function enterPreviewMode() {
+        if (_previewMode) return;
+        _previewMode = true;
+        const W = window.CC360Widget;
+        if (!W) return;
+
+        W._origDismiss = W.dismissWidgetPermanently;
+        W._origInitChecklist = W.initChecklistAndAnalytics;
+        W._origTrackSegment = W.trackSegmentEvent;
+
+        W.dismissWidgetPermanently = async function() {
+          console.log('[Preview] dismissWidgetPermanently intercepted (no-op)');
+          const el = document.getElementById('cc360-onboarding-widget');
+          if (el) el.remove();
+        };
+        W.initChecklistAndAnalytics = function() {
+          console.log('[Preview] initChecklistAndAnalytics intercepted (no-op)');
+          return Promise.resolve();
+        };
+        W.trackSegmentEvent = function() {};
+      }
+
+      function exitPreviewMode() {
+        if (!_previewMode) return;
+        _previewMode = false;
+        const W = window.CC360Widget;
+        if (!W) return;
+
+        if (W._origDismiss) W.dismissWidgetPermanently = W._origDismiss;
+        if (W._origInitChecklist) W.initChecklistAndAnalytics = W._origInitChecklist;
+        if (W._origTrackSegment) W.trackSegmentEvent = W._origTrackSegment;
+      }
+
+      function clearPreviews() {
+        const widget = document.getElementById('cc360-onboarding-widget');
+        if (widget) widget.remove();
+        document.querySelectorAll('.cc360-dialog-overlay, #cc360-booking-overlay, #cc360-survey-overlay').forEach(el => el.remove());
+        exitPreviewMode();
+      }
+
+      function ensureWidgetReady() {
+        if (!window.CC360Widget || !window.CC360Widget.createWidget) {
+          showToast('Widget not loaded yet. Wait a moment and try again.', 'error');
+          return false;
+        }
+        return true;
+      }
+
+      function previewChecklist(status) {
+        if (!ensureWidgetReady()) return;
+        clearPreviews();
+        enterPreviewMode();
+
+        const state = window.CC360Widget.state;
+        state.hasShownCompletionDialog = true;
+        state.featureFlags = { connectPaymentsEnabled: true, connectDomainEnabled: true };
+        state.ghlAppBaseUrl = 'https://app.gohighlevel.com';
+        if (!state.locationId) state.locationId = 'preview';
+
+        const container = window.CC360Widget.createWidget();
+        document.body.appendChild(container);
+        state.widgetElement = container;
+        window.CC360Widget.renderChecklist(status);
+
+        if (window.CC360Widget.setupDragAndResize) {
+          window.CC360Widget.setupDragAndResize();
+        }
+        const minBtn = document.getElementById('cc360-minimize-btn');
+        if (minBtn) {
+          minBtn.addEventListener('click', () => window.CC360Widget.minimizeWidget());
+        }
+      }
+
+      document.getElementById('previewEmpty').addEventListener('click', () => {
+        previewChecklist({
+          locationVerified: true,
+          paymentIntegrated: false,
+          courseCreated: false,
+          domainConnected: false,
+          dismissed: false,
+          surveyCompleted: false,
+          bookingCancelled: false
+        });
+      });
+
+      document.getElementById('previewPartial').addEventListener('click', () => {
+        previewChecklist({
+          locationVerified: true,
+          paymentIntegrated: true,
+          courseCreated: true,
+          domainConnected: false,
+          dismissed: false,
+          surveyCompleted: true,
+          bookingCancelled: false
+        });
+      });
+
+      document.getElementById('previewComplete').addEventListener('click', () => {
+        if (!ensureWidgetReady()) return;
+        clearPreviews();
+        enterPreviewMode();
+
+        const state = window.CC360Widget.state;
+        state.hasShownCompletionDialog = true;
+        state.featureFlags = { connectPaymentsEnabled: true, connectDomainEnabled: true };
+        state.ghlAppBaseUrl = 'https://app.gohighlevel.com';
+        if (!state.locationId) state.locationId = 'preview';
+
+        const container = window.CC360Widget.createWidget();
+        document.body.appendChild(container);
+        state.widgetElement = container;
+        window.CC360Widget.renderChecklist({
+          locationVerified: true,
+          paymentIntegrated: true,
+          courseCreated: true,
+          domainConnected: true,
+          dismissed: false,
+          surveyCompleted: true,
+          bookingCancelled: false
+        });
+
+        window.CC360Widget.showCompletionDialog();
+      });
+
+      document.getElementById('previewMinimized').addEventListener('click', () => {
+        if (!ensureWidgetReady()) return;
+        clearPreviews();
+        enterPreviewMode();
+
+        const state = window.CC360Widget.state;
+        state.hasShownCompletionDialog = true;
+        state.featureFlags = { connectPaymentsEnabled: true, connectDomainEnabled: true };
+        state.ghlAppBaseUrl = 'https://app.gohighlevel.com';
+        if (!state.locationId) state.locationId = 'preview';
+
+        const container = window.CC360Widget.createWidget();
+        document.body.appendChild(container);
+        state.widgetElement = container;
+        window.CC360Widget.renderChecklist({
+          locationVerified: true,
+          paymentIntegrated: false,
+          courseCreated: true,
+          domainConnected: false,
+          dismissed: false,
+          surveyCompleted: true,
+          bookingCancelled: false
+        });
+        container.classList.add('minimized');
+        state.isMinimized = true;
+      });
+
+      document.getElementById('previewNotAuth').addEventListener('click', () => {
+        if (!ensureWidgetReady()) return;
+        clearPreviews();
+        enterPreviewMode();
+        window.CC360Widget.showNotAuthorized();
+      });
+
+      document.getElementById('previewSurvey').addEventListener('click', () => {
+        if (!ensureWidgetReady()) return;
+        clearPreviews();
+        enterPreviewMode();
+        const state = window.CC360Widget.state;
+        if (!state.locationId) state.locationId = 'preview';
+        window.CC360Widget.showSurveyModal();
+      });
+
+      document.getElementById('previewBooking').addEventListener('click', () => {
+        if (!ensureWidgetReady()) return;
+        clearPreviews();
+        enterPreviewMode();
+        const state = window.CC360Widget.state;
+        if (!state.locationId) state.locationId = 'preview';
+        window.CC360Widget.showBookingModal();
+      });
+
+      document.getElementById('previewDismiss').addEventListener('click', () => {
+        if (!ensureWidgetReady()) return;
+        enterPreviewMode();
+        window.CC360Widget.showDismissDialog();
+      });
+
+      document.getElementById('previewClear').addEventListener('click', () => {
+        clearPreviews();
+        showToast('All previews cleared', 'info', 2000);
+      });
+
+      document.getElementById('skipApiChecks').addEventListener('change', toggleApiChecks);
+      document.getElementById('toggleLocationBtn').addEventListener('click', () => toggleStep('locationVerified'));
+      document.getElementById('togglePaymentBtn').addEventListener('click', () => toggleStep('paymentIntegrated'));
+      document.getElementById('toggleCourseBtn').addEventListener('click', () => toggleStep('courseCreated'));
+      document.getElementById('toggleDomainBtn').addEventListener('click', () => toggleStep('domainConnected'));
+      document.getElementById('resetAllBtn').addEventListener('click', resetAll);
+      document.getElementById('checkStatusBtn').addEventListener('click', checkStatus);
+    });
   </script>
 </body>
 </html>
-
