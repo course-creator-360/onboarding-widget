@@ -91,7 +91,7 @@ router.get('/booking/check', async (req, res) => {
     const bookingData = await response.json();
     console.log(`[Booking Check] ✅ Booking data received:`, bookingData);
     
-    const hasBookingData = bookingData && Object.keys(bookingData).length > 0 && bookingData.data !== null && bookingData.data !== undefined;
+    const hasBookingData = !!(bookingData?.bookingData && Object.keys(bookingData.bookingData).length > 0);
     
     res.json({ hasBookingData, bookingData });
   } catch (error) {
