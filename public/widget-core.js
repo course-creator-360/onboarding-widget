@@ -1143,9 +1143,6 @@
     };
 
     window.addEventListener('beforeunload', endSession);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') endSession();
-    });
   };
 
   window.addEventListener('beforeunload', () => {
