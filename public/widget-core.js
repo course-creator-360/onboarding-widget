@@ -1019,7 +1019,33 @@
   });
 
   // ── Session tracking ───────────────────────────────────────────────
-  window.CC360Widget.startSessionTracking = function() {
+  async function gatherGHLContext() {
+    var meta = {};
+    try {
+      if (typeof AppUtils !== 'undefined' && AppUtils.Utilities) {
+        var user = await AppUtils.Utilities.getCurrentUser();
+        if (user) {
+          meta.ghlUserId = user.id;
+          meta.userName = user.name || ((user.firstName || '') + ' ' + (user.lastName || '')).trim();
+          meta.userEmail = user.email;
+          meta.userRole = user.role;
+        }
+        var loc = await AppUtils.Utilities.getCurrentLocation();
+        if (loc) {
+          meta.locationName = loc.name;
+          if (loc.address) {
+            meta.city = loc.address.city;
+            meta.country = loc.address.country;
+          }
+        }
+      }
+    } catch (e) {
+      console.log('[CC360 Widget] GHL AppUtils not available, skipping context enrichment');
+    }
+    return Object.keys(meta).length > 0 ? meta : undefined;
+  }
+
+  window.CC360Widget.startSessionTracking = async function() {
     const state = window.CC360Widget.state;
     if (!state.locationId || !state.apiBase) return;
     if (state._sessionActive) return;
@@ -1029,12 +1055,14 @@
     const locationId = state.locationId;
     const HEARTBEAT_INTERVAL = 60000;
 
+    const metadata = await gatherGHLContext();
+
     fetch(`${apiBase}/api/sessions/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ locationId }),
+      body: JSON.stringify({ locationId, metadata }),
     }).then(r => r.json()).then(d => {
-      console.log('[CC360 Widget] Session started', d.session?.id || '');
+      console.log('[CC360 Widget] Session started', d.session?.id || '', metadata ? '(with GHL context)' : '');
     }).catch(e => {
       console.warn('[CC360 Widget] Session login failed:', e.message);
     });

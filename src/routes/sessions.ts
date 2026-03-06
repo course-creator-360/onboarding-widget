@@ -8,7 +8,7 @@ const getAdminConfig = () => ({
 });
 
 router.post('/sessions/login', async (req, res) => {
-  const { locationId } = req.body as { locationId?: string };
+  const { locationId, metadata } = req.body as { locationId?: string; metadata?: Record<string, unknown> };
   if (!locationId) return res.status(400).json({ error: 'locationId is required' });
 
   const { apiKey, baseUrl } = getAdminConfig();
@@ -18,7 +18,7 @@ router.post('/sessions/login', async (req, res) => {
     const resp = await fetch(`${baseUrl}/api/customers/sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
-      body: JSON.stringify({ locationId, event: 'login' }),
+      body: JSON.stringify({ locationId, event: 'login', metadata }),
     });
     const data = await resp.json();
     return res.status(resp.status).json(data);
