@@ -1119,6 +1119,45 @@
     window.addEventListener('routeChangeEvent', onRouteChange);
     console.log('[CC360 Widget] Page tracking enabled (GHL route events)');
 
+    // ── rrweb DOM replay recording ──
+    (function initRrwebRecording() {
+      var rrwebEvents = [];
+      var FLUSH_INTERVAL = 10000;
+
+      function flushEvents() {
+        if (rrwebEvents.length === 0 || !state._currentSessionId) return;
+        var batch = rrwebEvents.splice(0, rrwebEvents.length);
+        fetch(apiBase + '/api/sessions/recording', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: state._currentSessionId, events: batch }),
+        }).catch(function() {});
+      }
+
+      var rrwebScript = document.createElement('script');
+      rrwebScript.src = 'https://cdn.jsdelivr.net/npm/rrweb@2.0.0-alpha.17/dist/rrweb.umd.cjs.js';
+      rrwebScript.onload = function() {
+        if (typeof rrweb === 'undefined' || !rrweb.record) {
+          console.warn('[CC360 Widget] rrweb not available after load');
+          return;
+        }
+        state._stopRrweb = rrweb.record({
+          emit: function(event) { rrwebEvents.push(event); },
+          sampling: { mousemove: 50, mouseInteraction: true, scroll: 150, input: 'last' },
+          blockClass: 'cc360-no-record',
+          maskInputOptions: { password: true },
+        });
+        state._rrwebFlushTimer = setInterval(flushEvents, FLUSH_INTERVAL);
+        console.log('[CC360 Widget] rrweb recording started');
+      };
+      rrwebScript.onerror = function() {
+        console.warn('[CC360 Widget] Failed to load rrweb CDN');
+      };
+      document.head.appendChild(rrwebScript);
+
+      state._flushRrwebEvents = flushEvents;
+    })();
+
     state._heartbeatTimer = setInterval(() => {
       if (document.visibilityState !== 'visible') return;
       fetch(`${apiBase}/api/sessions/heartbeat`, {
@@ -1132,6 +1171,9 @@
       if (!state._sessionActive) return;
       state._sessionActive = false;
       if (state._heartbeatTimer) clearInterval(state._heartbeatTimer);
+      if (state._rrwebFlushTimer) clearInterval(state._rrwebFlushTimer);
+      if (state._stopRrweb) { try { state._stopRrweb(); } catch (e) {} }
+      if (state._flushRrwebEvents) { try { state._flushRrwebEvents(); } catch (e) {} }
       try {
         fetch(`${apiBase}/api/sessions/logout`, {
           method: 'POST',
