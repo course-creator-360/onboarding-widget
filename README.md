@@ -2,6 +2,57 @@
 
 A persistent onboarding checklist widget for CourseCreator360 sub-accounts. Tracks 4 onboarding steps with real-time updates via webhooks and automatic status polling.
 
+---
+
+## Relationship with CC360 Customers Admin
+
+This widget depends on the [CC360 Customers Admin](https://github.com/course-creator-360/cc360-customers-admin) app (`cc360-customers-admin.vercel.app`) as its **backend / source of truth** for customer data, bookings, and surveys.
+
+### Architecture
+
+```
+GHL Dashboard  ──▶  This Widget (beryl)            ──▶  CC360 Customers Admin
+ (browser)           Express API + widget JS              Next.js API + PostgreSQL
+                     onboarding-widget-beryl.vercel.app   cc360-customers-admin.vercel.app
+```
+
+### Authentication
+
+This widget authenticates to cc360-customers-admin using an API key sent as the `x-api-key` header. Configure via:
+- `CC360_CUSTOMERS_API_KEY` (or `CC360_CUSTOMERS_ADMIN_API_KEY`)
+- `CC360_CUSTOMERS_ADMIN_API_BASE_URL` (defaults to `https://cc360-customers-admin.vercel.app`)
+
+These are resolved in `src/cc360-admin.ts`.
+
+### What this widget proxies to cc360-customers-admin
+
+| Widget Route | Admin Endpoint | Purpose |
+|---|---|---|
+| `GET /api/location/verify` | `GET /api/customers?locationId=` | Check if location is a CC360 customer |
+| `GET /api/location/validate` | `GET /api/customers?locationId=` | Validate location for installation |
+| `GET /api/location-context` | `GET /api/customers?locationId=` | Fetch customer context |
+| `GET /api/installation/check` | `GET /api/customers?locationId=` | Background sync of sub-account data |
+| `GET /api/status` | `GET /api/customers?locationId=` | Sync `courseOutlineGenerated` field |
+| `POST /api/survey/complete` | `POST /api/customers/survey` | Submit survey responses |
+| `GET /api/booking/check` | `GET /api/customers/booking?locationId=` | Check if customer already booked |
+| `POST /api/booking/cancel` | `POST /api/customers/survey` | Mark booking as cancelled |
+| `GET /api/booking/calendars` | `GET /api/calendars/free-slots` | List calendars |
+| `GET /api/booking/slots` | `GET /api/calendars/free-slots?calendarId=` | Get free time slots |
+| `POST /api/booking/book` | `POST /api/calendars/book` | Book appointment, then syncs booking data to `POST /api/customers/booking` |
+
+### Reverse notification (admin → widget)
+
+After course outline generation, cc360-customers-admin calls this widget's `POST /api/onboarding/update` with `{ locationId, updates: { courseCreated: true } }`.
+
+### Key data flow: booking
+
+1. Widget UI sends `{ calendarId, selectedSlot, selectedTimezone, locationId }` to widget backend `POST /api/booking/book`
+2. Widget backend forwards to admin `POST /api/calendars/book` (which resolves contactId, creates GHL appointment, creates OnboardingCall record)
+3. Widget backend then syncs booking details to admin `POST /api/customers/booking`
+4. On subsequent page loads, widget checks `GET /api/booking/check` — if `bookingData.bookingData` exists, the booking modal is suppressed
+
+---
+
 ## Features
 
 - ✅ **4-Step Onboarding Checklist**: Domain, Course, Product, Payment
