@@ -70,4 +70,34 @@ router.post('/sessions/logout', async (req, res) => {
   }
 });
 
+router.post('/sessions/pageview', async (req, res) => {
+  const { locationId, path, url, title, source, sessionId, previousPageDuration } = req.body as {
+    locationId?: string;
+    path?: string;
+    url?: string;
+    title?: string;
+    source?: string;
+    sessionId?: string;
+    previousPageDuration?: number;
+  };
+  if (!locationId) return res.status(400).json({ error: 'locationId is required' });
+  if (!path) return res.status(400).json({ error: 'path is required' });
+
+  const { apiKey, baseUrl } = getAdminConfig();
+  if (!apiKey) return res.status(500).json({ error: 'CC360 admin API key not configured' });
+
+  try {
+    const resp = await fetch(`${baseUrl}/api/customers/sessions/pageview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+      body: JSON.stringify({ locationId, path, url, title, source, sessionId, previousPageDuration }),
+    });
+    const data = await resp.json();
+    return res.status(resp.status).json(data);
+  } catch (error) {
+    console.error('[Sessions] Pageview proxy error:', error);
+    return res.status(502).json({ error: 'Failed to reach CC360 admin' });
+  }
+});
+
 export default router;

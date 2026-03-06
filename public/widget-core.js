@@ -1063,9 +1063,61 @@
       body: JSON.stringify({ locationId, metadata }),
     }).then(r => r.json()).then(d => {
       console.log('[CC360 Widget] Session started', d.session?.id || '', metadata ? '(with GHL context)' : '');
+      state._currentSessionId = d.session?.id || null;
     }).catch(e => {
       console.warn('[CC360 Widget] Session login failed:', e.message);
     });
+
+    // ── Page-level tracking via GHL route change events ──
+    var _lastPageEnteredAt = Date.now();
+    var _lastPagePath = window.location.pathname;
+
+    function sendPageView(pagePath, pageUrl, pageTitle, prevDuration) {
+      fetch(`${apiBase}/api/sessions/pageview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          locationId: locationId,
+          path: pagePath,
+          url: pageUrl,
+          title: pageTitle,
+          source: 'ghl',
+          sessionId: state._currentSessionId || undefined,
+          previousPageDuration: prevDuration > 0 ? prevDuration : undefined,
+        }),
+      }).catch(function() {});
+    }
+
+    function onRouteChange() {
+      var now = Date.now();
+      var prevDuration = Math.floor((now - _lastPageEnteredAt) / 1000);
+      var pagePath = window.location.pathname;
+      var pageTitle = document.title;
+
+      try {
+        if (typeof AppUtils !== 'undefined' && AppUtils.RouteHelper) {
+          AppUtils.RouteHelper.getCurrentRoute().then(function(route) {
+            var rPath = (route && (route.path || route.fullPath)) || pagePath;
+            sendPageView(rPath, window.location.href, pageTitle, prevDuration);
+          }).catch(function() {
+            sendPageView(pagePath, window.location.href, pageTitle, prevDuration);
+          });
+        } else {
+          sendPageView(pagePath, window.location.href, pageTitle, prevDuration);
+        }
+      } catch (e) {
+        sendPageView(pagePath, window.location.href, pageTitle, prevDuration);
+      }
+
+      _lastPageEnteredAt = now;
+      _lastPagePath = pagePath;
+    }
+
+    // Record the initial page
+    sendPageView(window.location.pathname, window.location.href, document.title, 0);
+    window.addEventListener('routeLoaded', onRouteChange);
+    window.addEventListener('routeChangeEvent', onRouteChange);
+    console.log('[CC360 Widget] Page tracking enabled (GHL route events)');
 
     state._heartbeatTimer = setInterval(() => {
       if (document.visibilityState !== 'visible') return;
