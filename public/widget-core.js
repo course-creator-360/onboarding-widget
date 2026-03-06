@@ -937,6 +937,8 @@
     
     console.log('[CC360 Widget] ✅ All checks passed - proceeding with initialization');
     
+    window.CC360Widget.startSessionTracking();
+    
     const installed = await window.CC360Widget.checkInstallation();
     
     if (!installed) {
@@ -1015,6 +1017,56 @@
       }
     }, 100);
   });
+
+  // ── Session tracking ───────────────────────────────────────────────
+  window.CC360Widget.startSessionTracking = function() {
+    const state = window.CC360Widget.state;
+    if (!state.locationId || !state.apiBase) return;
+    if (state._sessionActive) return;
+    state._sessionActive = true;
+
+    const apiBase = state.apiBase;
+    const locationId = state.locationId;
+    const HEARTBEAT_INTERVAL = 60000;
+
+    fetch(`${apiBase}/api/sessions/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ locationId }),
+    }).then(r => r.json()).then(d => {
+      console.log('[CC360 Widget] Session started', d.session?.id || '');
+    }).catch(e => {
+      console.warn('[CC360 Widget] Session login failed:', e.message);
+    });
+
+    state._heartbeatTimer = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      fetch(`${apiBase}/api/sessions/heartbeat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locationId }),
+      }).catch(() => {});
+    }, HEARTBEAT_INTERVAL);
+
+    const endSession = () => {
+      if (!state._sessionActive) return;
+      state._sessionActive = false;
+      if (state._heartbeatTimer) clearInterval(state._heartbeatTimer);
+      try {
+        fetch(`${apiBase}/api/sessions/logout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ locationId }),
+          keepalive: true,
+        });
+      } catch (e) {}
+    };
+
+    window.addEventListener('beforeunload', endSession);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') endSession();
+    });
+  };
 
   window.addEventListener('beforeunload', () => {
     const state = window.CC360Widget.state;
