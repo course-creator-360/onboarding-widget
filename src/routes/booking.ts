@@ -187,7 +187,7 @@ router.post('/booking/book', async (req, res) => {
         'x-api-key': apiKey,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ calendarId, contactId, selectedSlot, selectedTimezone, title, notes })
+      body: JSON.stringify({ calendarId, contactId, selectedSlot, selectedTimezone, title, notes, locationId })
     });
 
     if (!response.ok) {
