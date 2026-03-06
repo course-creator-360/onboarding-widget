@@ -201,14 +201,25 @@ router.post('/booking/book', async (req, res) => {
 
     if (locationId) {
       try {
-        const surveyPayload = { locationId, bookingCompleted: true };
-        await fetch(`${apiBaseUrl}/api/customers/survey`, {
+        const bookingPayload = {
+          locationId,
+          bookingData: {
+            appointmentId: data.appointment?.id ?? null,
+            calendarId,
+            selectedSlot,
+            selectedTimezone,
+            title: title || 'CC360 Onboarding Call',
+            bookedAt: new Date().toISOString(),
+          }
+        };
+        await fetch(`${apiBaseUrl}/api/customers/booking`, {
           method: 'POST',
           headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
-          body: JSON.stringify(surveyPayload)
+          body: JSON.stringify(bookingPayload)
         });
+        console.log(`[Booking Book] ✅ Booking data synced to admin for ${locationId}`);
       } catch (syncErr) {
-        console.error('[Booking Book] Failed to sync booking status:', syncErr);
+        console.error('[Booking Book] Failed to sync booking data:', syncErr);
       }
     }
 
