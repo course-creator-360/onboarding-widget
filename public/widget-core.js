@@ -1122,16 +1122,19 @@
     // ── rrweb DOM replay recording ──
     (function initRrwebRecording() {
       var rrwebEvents = [];
-      var FLUSH_INTERVAL = 10000;
+      var FLUSH_INTERVAL = 5000;
+      var MAX_EVENTS_PER_FLUSH = 200;
 
       function flushEvents() {
         if (rrwebEvents.length === 0 || !state._currentSessionId) return;
-        var batch = rrwebEvents.splice(0, rrwebEvents.length);
-        fetch(apiBase + '/api/sessions/recording', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: state._currentSessionId, events: batch }),
-        }).catch(function() {});
+        while (rrwebEvents.length > 0) {
+          var batch = rrwebEvents.splice(0, MAX_EVENTS_PER_FLUSH);
+          fetch(apiBase + '/api/sessions/recording', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId: state._currentSessionId, events: batch }),
+          }).catch(function() {});
+        }
       }
 
       var rrwebScript = document.createElement('script');
@@ -1142,7 +1145,10 @@
           return;
         }
         state._stopRrweb = rrweb.record({
-          emit: function(event) { rrwebEvents.push(event); },
+          emit: function(event) {
+            rrwebEvents.push(event);
+            if (rrwebEvents.length >= MAX_EVENTS_PER_FLUSH) flushEvents();
+          },
           sampling: { mousemove: 50, mouseInteraction: true, scroll: 150, input: 'last' },
           blockClass: 'cc360-no-record',
           maskInputOptions: { password: true },
