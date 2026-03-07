@@ -122,4 +122,26 @@ router.post('/sessions/recording', async (req, res) => {
   }
 });
 
+router.post('/sessions/screenshots', async (req, res) => {
+  const { sessionId, frames } = req.body as { sessionId?: string; frames?: unknown[] };
+  if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
+  if (!Array.isArray(frames) || frames.length === 0) return res.status(400).json({ error: 'frames array is required' });
+
+  const { apiKey, baseUrl } = getAdminConfig();
+  if (!apiKey) return res.status(500).json({ error: 'CC360 admin API key not configured' });
+
+  try {
+    const resp = await fetch(`${baseUrl}/api/customers/sessions/screenshots`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+      body: JSON.stringify({ sessionId, frames }),
+    });
+    const data = await resp.json();
+    return res.status(resp.status).json(data);
+  } catch (error) {
+    console.error('[Sessions] Screenshots proxy error:', error);
+    return res.status(502).json({ error: 'Failed to reach CC360 admin' });
+  }
+});
+
 export default router;

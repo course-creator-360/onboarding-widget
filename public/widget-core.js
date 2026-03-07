@@ -1119,49 +1119,62 @@
     window.addEventListener('routeChangeEvent', onRouteChange);
     console.log('[CC360 Widget] Page tracking enabled (GHL route events)');
 
-    // ── rrweb DOM replay recording ──
-    (function initRrwebRecording() {
-      var rrwebEvents = [];
-      var FLUSH_INTERVAL = 5000;
-      var MAX_EVENTS_PER_FLUSH = 200;
+    // ── Screenshot-based recording (html2canvas) ──
+    (function initScreenshotRecording() {
+      var frameBuffer = [];
+      var CAPTURE_INTERVAL = 2000;
+      var MAX_BUFFER = 5;
+      var capturing = false;
 
-      function flushEvents() {
-        if (rrwebEvents.length === 0 || !state._currentSessionId) return;
-        while (rrwebEvents.length > 0) {
-          var batch = rrwebEvents.splice(0, MAX_EVENTS_PER_FLUSH);
-          fetch(apiBase + '/api/sessions/recording', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionId: state._currentSessionId, events: batch }),
-          }).catch(function() {});
-        }
+      function flushFrames() {
+        if (frameBuffer.length === 0 || !state._currentSessionId) return;
+        var batch = frameBuffer.splice(0, frameBuffer.length);
+        fetch(apiBase + '/api/sessions/screenshots', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: state._currentSessionId, frames: batch }),
+        }).catch(function() {});
       }
 
-      var rrwebScript = document.createElement('script');
-      rrwebScript.src = 'https://cdn.jsdelivr.net/npm/rrweb@latest/dist/rrweb.min.js';
-      rrwebScript.onload = function() {
-        if (typeof rrweb === 'undefined' || !rrweb.record) {
-          console.warn('[CC360 Widget] rrweb not available after load');
+      function captureFrame() {
+        if (document.visibilityState !== 'visible' || capturing) return;
+        if (typeof html2canvas === 'undefined') return;
+        capturing = true;
+        html2canvas(document.body, {
+          logging: false,
+          useCORS: true,
+          allowTaint: true,
+          scale: 0.5,
+          width: window.innerWidth,
+          height: window.innerHeight,
+          x: window.scrollX,
+          y: window.scrollY,
+        }).then(function(canvas) {
+          var data = canvas.toDataURL('image/jpeg', 0.5);
+          frameBuffer.push({ data: data, timestamp: new Date().toISOString() });
+          if (frameBuffer.length >= MAX_BUFFER) flushFrames();
+          capturing = false;
+        }).catch(function() {
+          capturing = false;
+        });
+      }
+
+      var h2cScript = document.createElement('script');
+      h2cScript.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+      h2cScript.onload = function() {
+        if (typeof html2canvas === 'undefined') {
+          console.warn('[CC360 Widget] html2canvas not available');
           return;
         }
-        state._stopRrweb = rrweb.record({
-          emit: function(event) {
-            rrwebEvents.push(event);
-            if (rrwebEvents.length >= MAX_EVENTS_PER_FLUSH) flushEvents();
-          },
-          sampling: { mousemove: 50, mouseInteraction: true, scroll: 150, input: 'last' },
-          blockClass: 'cc360-no-record',
-          maskInputOptions: { password: true },
-        });
-        state._rrwebFlushTimer = setInterval(flushEvents, FLUSH_INTERVAL);
-        console.log('[CC360 Widget] rrweb recording started');
+        state._screenshotTimer = setInterval(captureFrame, CAPTURE_INTERVAL);
+        console.log('[CC360 Widget] Screenshot recording started (every 2s)');
       };
-      rrwebScript.onerror = function() {
-        console.warn('[CC360 Widget] Failed to load rrweb CDN');
+      h2cScript.onerror = function() {
+        console.warn('[CC360 Widget] Failed to load html2canvas CDN');
       };
-      document.head.appendChild(rrwebScript);
+      document.head.appendChild(h2cScript);
 
-      state._flushRrwebEvents = flushEvents;
+      state._flushScreenshots = flushFrames;
     })();
 
     state._heartbeatTimer = setInterval(() => {
@@ -1177,9 +1190,8 @@
       if (!state._sessionActive) return;
       state._sessionActive = false;
       if (state._heartbeatTimer) clearInterval(state._heartbeatTimer);
-      if (state._rrwebFlushTimer) clearInterval(state._rrwebFlushTimer);
-      if (state._stopRrweb) { try { state._stopRrweb(); } catch (e) {} }
-      if (state._flushRrwebEvents) { try { state._flushRrwebEvents(); } catch (e) {} }
+      if (state._screenshotTimer) clearInterval(state._screenshotTimer);
+      if (state._flushScreenshots) { try { state._flushScreenshots(); } catch (e) {} }
       try {
         fetch(`${apiBase}/api/sessions/logout`, {
           method: 'POST',
