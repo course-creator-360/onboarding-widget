@@ -1135,7 +1135,7 @@
       }
 
       var rrwebScript = document.createElement('script');
-      rrwebScript.src = 'https://cdn.jsdelivr.net/npm/rrweb@2.0.0-alpha.17/dist/rrweb.umd.cjs.js';
+      rrwebScript.src = 'https://cdn.jsdelivr.net/npm/rrweb@latest/dist/rrweb.min.js';
       rrwebScript.onload = function() {
         if (typeof rrweb === 'undefined' || !rrweb.record) {
           console.warn('[CC360 Widget] rrweb not available after load');
