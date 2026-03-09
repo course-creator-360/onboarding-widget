@@ -1665,9 +1665,10 @@
       align-items: center;
       justify-content: center;
       transition: all 0.2s ease;
-      z-index: 10;
+      z-index: 99999;
       line-height: 1;
       padding: 0;
+      pointer-events: auto;
     `;
     closeBtn.onmouseover = () => { closeBtn.style.background = '#f3f4f6'; closeBtn.style.color = '#374151'; };
     closeBtn.onmouseout = () => { closeBtn.style.background = 'transparent'; closeBtn.style.color = '#9ca3af'; };
@@ -3192,6 +3193,7 @@
       function captureFrame() {
         if (document.visibilityState !== 'visible' || capturing) return;
         if (typeof html2canvas === 'undefined') return;
+        if (document.getElementById('cc360-survey-overlay') || document.getElementById('cc360-booking-overlay')) return;
         capturing = true;
         html2canvas(document.body, {
           logging: false,

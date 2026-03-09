@@ -1022,6 +1022,7 @@
       function captureFrame() {
         if (document.visibilityState !== 'visible' || capturing) return;
         if (typeof html2canvas === 'undefined') return;
+        if (document.getElementById('cc360-survey-overlay') || document.getElementById('cc360-booking-overlay')) return;
         capturing = true;
         html2canvas(document.body, {
           logging: false,
