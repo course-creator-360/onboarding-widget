@@ -97,13 +97,7 @@ app.get('/widget-core.js', (_req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'widget-core.js'));
 });
 app.get('/widget-bundle.js', (_req, res) => {
-  const bundlePath = path.join(process.cwd(), 'public', 'widget-bundle.js');
-  const fs = require('fs');
-  if (fs.existsSync(bundlePath)) {
-    res.sendFile(bundlePath);
-  } else {
-    res.status(404).send('Bundle not built yet. Run npm run bundle-widget');
-  }
+  res.sendFile(path.join(process.cwd(), 'public', 'widget-bundle.js'));
 });
 
 
