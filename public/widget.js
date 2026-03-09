@@ -48,6 +48,14 @@
   // Set API base in state before modules load
   window.CC360Widget.state.apiBase = detectedApiBase || 'http://localhost:4002';
 
+  // Preconnect to API origin so DNS/TLS is warm before init fires
+  if (detectedApiBase) {
+    var link = document.createElement('link');
+    link.rel = 'preconnect';
+    link.href = detectedApiBase;
+    document.head.appendChild(link);
+  }
+
   const moduleFiles = [
     'widget-styles.js',
     'widget-analytics.js',
@@ -55,22 +63,13 @@
     'widget-core.js'
   ];
 
-  let loadedModules = 0;
-
-  function loadModule(filename) {
+  function loadScript(src) {
     return new Promise((resolve, reject) => {
       const script = document.createElement('script');
-      script.src = scriptBasePath + filename;
+      script.src = src;
       script.async = false;
-      script.onload = () => {
-        loadedModules++;
-        console.log(`[CC360 Widget] Module loaded: ${filename} (${loadedModules}/${moduleFiles.length})`);
-        resolve();
-      };
-      script.onerror = (err) => {
-        console.error(`[CC360 Widget] Failed to load module: ${filename}`, err);
-        reject(err);
-      };
+      script.onload = resolve;
+      script.onerror = reject;
       document.head.appendChild(script);
     });
   }
@@ -78,9 +77,14 @@
   async function loadAllModules() {
     console.log('[CC360 Widget] Loading modules...');
     
-    await Promise.all(moduleFiles.map(file => loadModule(file)));
-    
-    console.log('[CC360 Widget] All modules loaded successfully');
+    try {
+      await loadScript(scriptBasePath + 'widget-bundle.js');
+      console.log('[CC360 Widget] Bundle loaded (1 request)');
+    } catch (e) {
+      console.log('[CC360 Widget] Bundle not available, loading individual modules...');
+      await Promise.all(moduleFiles.map(file => loadScript(scriptBasePath + file)));
+      console.log('[CC360 Widget] All modules loaded (4 requests)');
+    }
   }
 
   async function bootstrap() {

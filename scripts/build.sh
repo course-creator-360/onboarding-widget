@@ -28,6 +28,10 @@ else
   echo "ℹ️ Run migrations via /api/migrate endpoint after deployment"
 fi
 
+# Bundle widget modules
+echo "📦 Bundling widget modules..."
+npm run bundle-widget
+
 # Build the application
 echo "🔨 Building application..."
 npm run build

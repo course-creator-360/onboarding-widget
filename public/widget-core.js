@@ -50,122 +50,65 @@
     return fetch(url, opts).finally(function() { clearTimeout(timer); });
   };
 
-  function tryDetectLocation() {
+  window.CC360Widget.detectLocation = function() {
+    // 1. GHL AppUtils (preferred -- instant, provided by GHL platform)
+    try {
+      if (typeof AppUtils !== 'undefined' && AppUtils.Utilities) {
+        var loc = AppUtils.Utilities.getCurrentLocation();
+        if (loc && typeof loc === 'object' && loc.id) {
+          console.log('[CC360 Widget] Location from AppUtils:', loc.id);
+          return loc.id;
+        }
+        if (loc && loc.then) {
+          // getCurrentLocation may be async in some GHL versions -- handled below
+        }
+      }
+    } catch (e) {}
+
+    // 2. _GHL_CONTEXT (legacy)
     if (typeof window._GHL_CONTEXT !== 'undefined' && window._GHL_CONTEXT?.locationId) {
-      console.log('[CC360 Widget] Detected location ID from _GHL_CONTEXT:', window._GHL_CONTEXT.locationId);
+      console.log('[CC360 Widget] Location from _GHL_CONTEXT:', window._GHL_CONTEXT.locationId);
       return window._GHL_CONTEXT.locationId;
     }
 
-    const urlMatch = window.location.pathname.match(/\/location\/([^\/]+)/) || 
-                     window.location.search.match(/locationId=([^&]+)/);
+    // 3. URL path / query (fallback for demo page & direct links)
+    var urlMatch = window.location.pathname.match(/\/location\/([^\/]+)/) ||
+                   window.location.search.match(/locationId=([^&]+)/);
     if (urlMatch && urlMatch[1]) {
-      console.log('[CC360 Widget] Detected location ID from URL:', urlMatch[1]);
+      console.log('[CC360 Widget] Location from URL:', urlMatch[1]);
       return urlMatch[1];
     }
 
-    try {
-      if (window.parent && window.parent !== window) {
-        const parentUrl = window.parent.location.href;
-        const parentMatch = parentUrl.match(/\/location\/([^\/]+)/) ||
-                          parentUrl.match(/locationId=([^&]+)/);
-        if (parentMatch && parentMatch[1]) {
-          console.log('[CC360 Widget] Detected location ID from parent URL:', parentMatch[1]);
-          return parentMatch[1];
-        }
-        
-        if (window.parent._GHL_CONTEXT?.locationId) {
-          console.log('[CC360 Widget] Detected location ID from parent _GHL_CONTEXT:', window.parent._GHL_CONTEXT.locationId);
-          return window.parent._GHL_CONTEXT.locationId;
-        }
-      }
-    } catch (e) {
-      console.log('[CC360 Widget] Cannot access parent context (cross-origin)');
-    }
-
     return null;
-  }
-
-  window.CC360Widget.detectLocationFromContext = async function() {
-    try {
-      const immediateResult = tryDetectLocation();
-      if (immediateResult) {
-        return immediateResult;
-      }
-
-      console.log('[CC360 Widget] GHL context not immediately available, polling...');
-      
-      const maxRetries = 30;
-      const retryDelay = 100;
-      
-      for (let i = 0; i < maxRetries; i++) {
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
-        
-        const result = tryDetectLocation();
-        if (result) {
-          console.log(`[CC360 Widget] Location ID detected after ${(i + 1) * retryDelay}ms`);
-          return result;
-        }
-      }
-
-      console.warn('[CC360 Widget] Could not detect location ID from GHL context after polling');
-      return null;
-    } catch (error) {
-      console.error('[CC360 Widget] Error detecting location from context:', error);
-      return null;
-    }
   };
 
-  window.CC360Widget.fetchConfig = async function() {
-    const state = window.CC360Widget.state;
+  window.CC360Widget.detectLocationAsync = async function() {
+    var sync = window.CC360Widget.detectLocation();
+    if (sync) return sync;
+
+    // Try async AppUtils.Utilities.getCurrentLocation()
     try {
-      console.log('[CC360 Widget] 🔧 Fetching config from:', `${state.apiBase}/api/config`);
-      const response = await window.CC360Widget.fetchWithTimeout(`${state.apiBase}/api/config`, {}, 8000);
-      if (response.ok) {
-        const config = await response.json();
-        console.log('[CC360 Widget] ✅ Config received:', config);
-        
-        if (config.ghlAppBaseUrl) {
-          state.ghlAppBaseUrl = config.ghlAppBaseUrl;
-          console.log('[CC360 Widget] Using GHL base URL:', state.ghlAppBaseUrl);
-        }
-        
-        if (config.userpilotToken) {
-          state.userpilotToken = config.userpilotToken;
-          console.log('[CC360 Widget] ✅ Userpilot token received from backend');
-        } else {
-          console.log('[CC360 Widget] ⚠️ No Userpilot token in config');
-        }
-        
-        if (config.segmentWriteKey) {
-          state.segmentWriteKey = config.segmentWriteKey;
-          console.log('[CC360 Widget] ✅ Segment write key received from backend');
-        } else {
-          console.log('[CC360 Widget] ⚠️ No Segment write key in config');
-        }
-        
-        if (config.widgetLocationFilter) {
-          state.widgetLocationFilter = config.widgetLocationFilter;
-          console.log('[CC360 Widget] 🎯 Widget location pre-filter enabled:', state.widgetLocationFilter);
-        } else {
-          console.log('[CC360 Widget] 🌍 No location pre-filter - will verify all locations via API');
-        }
-        
-        state.customersApiConfigured = config.customersApiConfigured === true;
-        if (state.customersApiConfigured) {
-          console.log('[CC360 Widget] ✅ CC360 Customers API verification is configured');
-        } else {
-          console.error('[CC360 Widget] ❌ CC360_CUSTOMERS_API_KEY is NOT configured');
-          console.error('[CC360 Widget] ❌ Widget will NOT show anywhere until this is set');
-        }
-        
-        if (config.featureFlags) {
-          state.featureFlags = config.featureFlags;
-          console.log('[CC360 Widget] 🚩 Feature flags received:', state.featureFlags);
+      if (typeof AppUtils !== 'undefined' && AppUtils.Utilities) {
+        var loc = await AppUtils.Utilities.getCurrentLocation();
+        if (loc && loc.id) {
+          console.log('[CC360 Widget] Location from AppUtils (async):', loc.id);
+          return loc.id;
         }
       }
-    } catch (error) {
-      console.warn('[CC360 Widget] ❌ Could not fetch config:', error);
-    }
+    } catch (e) {}
+
+    return null;
+  };
+
+  window.CC360Widget.applyConfig = function(config) {
+    var state = window.CC360Widget.state;
+    if (!config) return;
+    if (config.ghlAppBaseUrl) state.ghlAppBaseUrl = config.ghlAppBaseUrl;
+    if (config.userpilotToken) state.userpilotToken = config.userpilotToken;
+    if (config.segmentWriteKey) state.segmentWriteKey = config.segmentWriteKey;
+    if (config.widgetLocationFilter) state.widgetLocationFilter = config.widgetLocationFilter;
+    state.customersApiConfigured = config.customersApiConfigured === true;
+    if (config.featureFlags) state.featureFlags = config.featureFlags;
   };
 
   window.CC360Widget.buildDashboardUrl = function(path) {
@@ -223,32 +166,8 @@
   };
 
   window.CC360Widget.checkInstallation = async function() {
-    const state = window.CC360Widget.state;
-    if (!state.locationId) {
-      console.log('[CC360 Widget] No location ID - showing setup required');
-      window.cc360WidgetError = 'Agency administrator needs to authorize this app. Please contact your agency admin.';
-      return false;
-    }
-    
-    try {
-      const response = await window.CC360Widget.fetchWithTimeout(
-        `${state.apiBase}/api/installation/check?locationId=${state.locationId}`, {}, 8000
-      );
-      if (!response.ok) throw new Error('Failed to check installation');
-      const data = await response.json();
-      console.log('[CC360 Widget] Installation check:', data);
-      
-      if (data.error) {
-        window.cc360WidgetError = data.error;
-      }
-      
-      state.isInstalled = data.installed && data.hasToken;
-      console.log('[CC360 Widget] Installation result:', state.isInstalled ? 'Authorized' : 'Not authorized');
-      return state.isInstalled;
-    } catch (error) {
-      console.error('[CC360 Widget] Error checking installation:', error);
-      return false;
-    }
+    var state = window.CC360Widget.state;
+    return state.isInstalled;
   };
 
   window.CC360Widget.handleStatusUpdate = async function(newStatus) {
@@ -861,121 +780,81 @@
   };
 
   window.CC360Widget.init = async function() {
-    const state = window.CC360Widget.state;
+    var state = window.CC360Widget.state;
+    var initStart = Date.now();
     console.log('[CC360 Widget] Initializing...');
-    
+
+    try { localStorage.removeItem('cc360_widget_minimized'); } catch (e) {}
+
+    // ── Phase 1: get location ID (instant from GHL context or URL) ──
+    var locationId = window.CC360Widget.detectLocation();
+    if (!locationId) {
+      locationId = await window.CC360Widget.detectLocationAsync();
+    }
+    if (!locationId) {
+      console.error('[CC360 Widget] No location ID found - widget stopped');
+      return;
+    }
+    state.locationId = locationId;
+    console.log('[CC360 Widget] Location:', locationId);
+
+    // ── Phase 2: single /api/init call (config + verify + install + status) ──
     try {
-      localStorage.removeItem('cc360_widget_minimized');
-    } catch (e) {}
-    
-    // ── Phase 1: detect location (must be first) ──
-    const detectedLocationId = await window.CC360Widget.detectLocationFromContext();
-    if (detectedLocationId) {
-      state.locationId = detectedLocationId;
-      console.log('[CC360 Widget] Using auto-detected location ID:', state.locationId);
-    } else {
-      console.error('[CC360 Widget] ❌ Could not auto-detect location ID from GHL UserContext');
-      console.error('[CC360 Widget] ❌ Widget initialization STOPPED - no location ID');
-      return;
-    }
-    
-    // ── Phase 2: fetch config (needed for gate checks) ──
-    await window.CC360Widget.fetchConfig();
-    
-    if (!state.customersApiConfigured) {
-      console.error('[CC360 Widget] ❌ CC360_CUSTOMERS_API_KEY is NOT configured');
-      console.error('[CC360 Widget] ❌ Widget initialization STOPPED - API key required');
-      return;
-    }
-    
-    if (state.widgetLocationFilter) {
-      if (state.locationId !== state.widgetLocationFilter) {
-        console.log('[CC360 Widget] 🚫 Location pre-filter mismatch - widget will not show');
+      var response = await window.CC360Widget.fetchWithTimeout(
+        state.apiBase + '/api/init?locationId=' + locationId, {}, 8000
+      );
+      if (!response.ok) {
+        console.error('[CC360 Widget] /api/init failed:', response.status);
         return;
       }
-      console.log('[CC360 Widget] ✅ Location pre-filter check passed');
-    }
-    
-    // ── Phase 3: run verify + install + status in PARALLEL ──
-    console.log('[CC360 Widget] 🔍 Running verify + install + status checks in parallel...');
-    var parallelStart = Date.now();
-    
-    var results = await Promise.allSettled([
-      window.CC360Widget.fetchWithTimeout(
-        state.apiBase + '/api/location/verify?locationId=' + state.locationId, {}, 8000
-      ).then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); }),
-      window.CC360Widget.checkInstallation(),
-      window.CC360Widget.fetchStatus()
-    ]);
-    
-    console.log('[CC360 Widget] Parallel phase completed in', Date.now() - parallelStart, 'ms');
-    
-    var verifyResult = results[0];
-    var installResult = results[1];
-    var statusResult = results[2];
-    
-    // ── Process verify result ──
-    if (verifyResult.status !== 'fulfilled' || !verifyResult.value) {
-      var reason = verifyResult.status === 'rejected' ? verifyResult.reason.message : 'No data';
-      console.error('[CC360 Widget] ❌ API verification failed:', reason);
-      console.error('[CC360 Widget] ❌ Widget initialization STOPPED');
+      var data = await response.json();
+      console.log('[CC360 Widget] Init completed in', Date.now() - initStart, 'ms');
+    } catch (err) {
+      console.error('[CC360 Widget] Init request failed:', err.message);
       return;
     }
-    
-    var verify = verifyResult.value;
-    if (verify.authorized !== true) {
-      console.log('[CC360 Widget] ❌ Location NOT authorized by API');
-      console.log('[CC360 Widget] Reason:', verify.error || 'Location not found');
+
+    // ── Apply config ──
+    window.CC360Widget.applyConfig(data.config);
+
+    // ── Check gates ──
+    if (data.show === false) {
+      console.log('[CC360 Widget] Widget not shown:', data.reason);
       return;
     }
-    
-    console.log('[CC360 Widget] ✅ Location authorized by API');
-    if (verify.customer) {
-      console.log('[CC360 Widget] Customer:', verify.customer.name || verify.customer.locationId);
-      
-      var subscriptionStatus = verify.customer.subscriptionStatus;
-      var customerCreatedAt = verify.customer.createdAt ? new Date(verify.customer.createdAt) : null;
-      var daysSinceCreation = customerCreatedAt ? (Date.now() - customerCreatedAt.getTime()) / (1000 * 60 * 60 * 24) : Infinity;
-      var isTrialing = subscriptionStatus === 'trialing';
-      
-      console.log('[CC360 Widget] Subscription status:', subscriptionStatus, '| Days since creation:', Math.round(daysSinceCreation));
-      
-      if (!isTrialing || daysSinceCreation > 30) {
-        console.log('[CC360 Widget] Widget NOT shown - subscription is not trialing or account is older than 30 days');
-        return;
-      }
+
+    // ── Process status ──
+    if (data.status) {
+      state.currentStatus = data.status;
+      state.shouldShowWidget = data.status.shouldShowWidget !== false;
     }
-    
-    console.log('[CC360 Widget] ✅ All checks passed - proceeding with initialization');
-    
-    // ── Process install + status results and render ──
-    var installed = installResult.status === 'fulfilled' && installResult.value === true;
-    var shouldShow = statusResult.status === 'fulfilled' && statusResult.value === true;
-    
-    if (!installed) {
-      console.log('[CC360 Widget] Not authorized or token expired');
-      var errorMessage = window.cc360WidgetError || null;
-      window.CC360Widget.showNotAuthorized(errorMessage);
-    } else if (shouldShow && state.currentStatus) {
-      console.log('[CC360 Widget] Decision logic - surveyCompleted:', state.currentStatus.surveyCompleted);
+
+    state.isInstalled = !!data.installed;
+
+    if (data.customer) {
+      console.log('[CC360 Widget] Customer:', data.customer.name, '| Status:', data.customer.subscriptionStatus);
+    }
+
+    // ── Render ──
+    if (!data.installed) {
+      console.log('[CC360 Widget] Not authorized');
+      window.cc360WidgetError = data.installError || null;
+      window.CC360Widget.showNotAuthorized(data.installError || null);
+    } else if (state.currentStatus && state.shouldShowWidget) {
       if (!state.currentStatus.surveyCompleted) {
-        console.log('[CC360 Widget] Survey not completed - showing survey modal first');
+        console.log('[CC360 Widget] Showing survey');
         window.CC360Widget.showSurveyModal();
       } else {
-        console.log('[CC360 Widget] Survey completed - showing checklist');
+        console.log('[CC360 Widget] Showing checklist');
         await window.CC360Widget.initializeChecklist();
       }
     } else if (state.currentStatus && state.currentStatus.allTasksCompleted && !state.currentStatus.bookingCancelled) {
-      console.log('[CC360 Widget] All tasks completed - checking if booking modal should show');
       await window.CC360Widget.checkAndShowBookingModal();
-    } else {
-      console.log('[CC360 Widget] Could not fetch status or widget should not be shown');
     }
-    
-    // ── Phase 4: deferred non-critical work (after UI is rendered) ──
+
+    // ── Deferred non-critical work ──
     window.CC360Widget.startSessionTracking();
-    
-    if (installed && shouldShow && state.currentStatus && state.currentStatus.surveyCompleted) {
+    if (data.installed && state.currentStatus && state.currentStatus.surveyCompleted) {
       window.CC360Widget.initUserpilot().catch(function() {});
       window.CC360Widget.initSegment().catch(function() {});
     }

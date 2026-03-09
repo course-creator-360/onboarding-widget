@@ -15,7 +15,8 @@ import {
   bookingRouter,
   surveyRouter,
   subaccountsRouter,
-  sessionsRouter
+  sessionsRouter,
+  initRouter
 } from './routes';
 
 const app = express();
@@ -54,6 +55,7 @@ app.use('/api/webhooks', webhookRouter);
 app.use('/oauth', oauthRouter);
 app.use('/install', oauthRouter);
 
+app.use('/api', initRouter);
 app.use('/api', configRouter);
 app.use('/api', statusRouter);
 app.use('/api', locationRouter);
@@ -94,6 +96,16 @@ app.get('/widget-ui.js', (_req, res) => {
 app.get('/widget-core.js', (_req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'widget-core.js'));
 });
+app.get('/widget-bundle.js', (_req, res) => {
+  const bundlePath = path.join(process.cwd(), 'public', 'widget-bundle.js');
+  const fs = require('fs');
+  if (fs.existsSync(bundlePath)) {
+    res.sendFile(bundlePath);
+  } else {
+    res.status(404).send('Bundle not built yet. Run npm run bundle-widget');
+  }
+});
+
 
 app.get('/', (_req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'index.html'));

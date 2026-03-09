@@ -5,7 +5,8 @@
   "type": "commonjs",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc -p tsconfig.json && mkdir -p dist && cp -r public dist/",
+    "bundle-widget": "node -e \"const fs=require('fs'),p='public/';fs.writeFileSync(p+'widget-bundle.js',['widget-styles.js','widget-analytics.js','widget-ui.js','widget-core.js'].map(f=>fs.readFileSync(p+f,'utf8')).join('\\n'));console.log('widget-bundle.js created')\"",
+    "build": "tsc -p tsconfig.json && mkdir -p dist && cp -r public dist/ && npm run bundle-widget && cp public/widget-bundle.js dist/public/widget-bundle.js",
     "vercel-build": "./scripts/build.sh",
     "start": "node dist/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
