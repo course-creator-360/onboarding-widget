@@ -27,40 +27,27 @@ router.post('/survey/complete', async (req, res) => {
   }
   
   try {
-    console.log(`[Survey Complete] Sending survey data to external API for ${locationId}`);
-    
-    const surveyPayload = {
-      locationId: locationId,
-      surveyCompleted: true,
-      surveyResponses: surveyResponses
-    };
-    
-    const externalApiResponse = await fetch(`${apiBaseUrl}/api/customers/survey`, {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(surveyPayload)
-    });
-    
-    if (!externalApiResponse.ok) {
-      const errorText = await externalApiResponse.text();
-      console.error(`[Survey Complete] ❌ External API error: ${externalApiResponse.status} - ${errorText}`);
-      throw new Error(`External API error: ${externalApiResponse.status} - ${errorText}`);
-    }
-    
-    const externalApiResult = await externalApiResponse.json();
-    console.log(`[Survey Complete] ✅ Survey data sent to external API successfully`);
-    
-    console.log(`[Survey Complete] Marking survey complete flag in local database for ${locationId}`);
+    console.log(`[Survey Complete] Saving survey to local DB for ${locationId}`);
     const status = await updateSurveyCompletion(locationId);
     await sseBroker.broadcastStatus(locationId);
-    console.log(`[Survey Complete] Survey completed successfully for ${locationId}`);
-    
+    console.log(`[Survey Complete] ✅ Survey saved locally for ${locationId}`);
+
     res.json(status);
+
+    // Sync to CC360 admin API in background (non-blocking)
+    if (apiKey) {
+      fetch(`${apiBaseUrl}/api/customers/survey`, {
+        method: 'POST',
+        headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locationId, surveyCompleted: true, surveyResponses }),
+      }).then(() => {
+        console.log(`[Survey Complete] ✅ Synced to external API for ${locationId}`);
+      }).catch((err) => {
+        console.warn(`[Survey Complete] External API sync failed (non-critical):`, err.message);
+      });
+    }
   } catch (error) {
-    console.error('[Survey Complete] Error completing survey:', error);
+    console.error('[Survey Complete] Error saving survey:', error);
     res.status(500).json({ 
       error: 'Failed to complete survey',
       message: error instanceof Error ? error.message : 'Unknown error'
