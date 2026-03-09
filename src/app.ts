@@ -16,7 +16,6 @@ import {
   surveyRouter,
   subaccountsRouter,
   sessionsRouter,
-  initRouter
 } from './routes';
 
 const app = express();
@@ -55,7 +54,8 @@ app.use('/api/webhooks', webhookRouter);
 app.use('/oauth', oauthRouter);
 app.use('/install', oauthRouter);
 
-// app.use('/api', initRouter); // temporarily disabled for debugging
+import initRouter from './routes/init';
+app.use('/api', initRouter);
 app.use('/api', configRouter);
 app.use('/api', statusRouter);
 app.use('/api', locationRouter);
