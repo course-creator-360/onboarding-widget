@@ -3,7 +3,7 @@ import { getOnboardingStatus, updateOnboardingStatus, hasAgencyAuthorization, ge
 import { sseBroker } from '../sse';
 import { getAuthToken } from '../ghl-api';
 import { getCC360AdminConfig } from '../cc360-admin';
-import { getBaseUrl, getEnvironment, getGhlAppBaseUrl } from '../config';
+import { getGhlAppBaseUrl } from '../config';
 
 const router = Router();
 
@@ -41,24 +41,25 @@ router.get('/init', async (req, res) => {
 
   try {
     const initPromise = (async () => {
-      const [status, hasAgency, customer] = await Promise.all([
+      const results = await Promise.all([
         getOnboardingStatus(locationId),
         hasAgencyAuthorization(),
         fetchCustomerData(locationId),
       ]);
+      let status = results[0];
+      const hasAgency = results[1];
+      const customer = results[2];
 
       console.log(`[Init] Parallel DB+API calls completed in ${Date.now() - startTime}ms`);
 
       if (hasAgency && !status.locationVerified) {
-        await updateOnboardingStatus(locationId, { locationVerified: true });
+        status = await updateOnboardingStatus(locationId, { locationVerified: true });
         await sseBroker.broadcastStatus(locationId);
-        status.locationVerified = true;
       }
 
       if (!status.courseCreated && customer?.courseOutlineGenerated === true) {
-        await updateOnboardingStatus(locationId, { courseCreated: true });
+        status = await updateOnboardingStatus(locationId, { courseCreated: true });
         await sseBroker.broadcastStatus(locationId);
-        status.courseCreated = true;
       }
 
       let installed = false;
