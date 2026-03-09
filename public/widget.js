@@ -78,9 +78,7 @@
   async function loadAllModules() {
     console.log('[CC360 Widget] Loading modules...');
     
-    for (const file of moduleFiles) {
-      await loadModule(file);
-    }
+    await Promise.all(moduleFiles.map(file => loadModule(file)));
     
     console.log('[CC360 Widget] All modules loaded successfully');
   }

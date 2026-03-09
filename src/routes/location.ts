@@ -47,12 +47,15 @@ router.get('/location/verify', async (req, res) => {
       if (customer && customer.locationId === locationId) {
         console.log(`[Location Verify] ✅ Location authorized: ${customer.name || locationId}`);
         return res.json({ 
-          authorized: true, 
+          authorized: true,
+          valid: true,
+          locationName: customer.name || locationId,
           customer: {
             id: customer.id,
             locationId: customer.locationId,
             name: customer.name,
             email: customer.email,
+            companyId: customer.companyId || '',
             subscriptionStatus: customer.subscriptionStatus || null,
             createdAt: customer.createdAt || null,
             surveyCompleted: customer.surveyCompleted ?? null,

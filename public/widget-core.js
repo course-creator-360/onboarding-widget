@@ -42,6 +42,14 @@
     console.log('[CC360 Widget] ⚠️ API checks disabled - manual toggles will persist');
   }
 
+  window.CC360Widget.fetchWithTimeout = function(url, options, timeoutMs) {
+    timeoutMs = timeoutMs || 8000;
+    var controller = new AbortController();
+    var timer = setTimeout(function() { controller.abort(); }, timeoutMs);
+    var opts = Object.assign({}, options || {}, { signal: controller.signal });
+    return fetch(url, opts).finally(function() { clearTimeout(timer); });
+  };
+
   function tryDetectLocation() {
     if (typeof window._GHL_CONTEXT !== 'undefined' && window._GHL_CONTEXT?.locationId) {
       console.log('[CC360 Widget] Detected location ID from _GHL_CONTEXT:', window._GHL_CONTEXT.locationId);
@@ -111,7 +119,7 @@
     const state = window.CC360Widget.state;
     try {
       console.log('[CC360 Widget] 🔧 Fetching config from:', `${state.apiBase}/api/config`);
-      const response = await fetch(`${state.apiBase}/api/config`);
+      const response = await window.CC360Widget.fetchWithTimeout(`${state.apiBase}/api/config`, {}, 8000);
       if (response.ok) {
         const config = await response.json();
         console.log('[CC360 Widget] ✅ Config received:', config);
@@ -178,7 +186,7 @@
       const url = `${state.apiBase}/api/status?locationId=${state.locationId}${skipParam}`;
       console.log('[CC360 Widget] Fetching status from:', url);
       
-      const response = await fetch(url);
+      const response = await window.CC360Widget.fetchWithTimeout(url, {}, 8000);
       console.log('[CC360 Widget] Status response status:', response.status, response.ok);
       
       if (!response.ok) {
@@ -223,19 +231,9 @@
     }
     
     try {
-      console.log('[CC360 Widget] Validating locationId with agency...');
-      const validationResponse = await fetch(`${state.apiBase}/api/location/validate?locationId=${state.locationId}`);
-      const validationData = await validationResponse.json();
-      
-      if (!validationData.valid) {
-        console.error('[CC360 Widget] Location validation failed:', validationData.error);
-        window.cc360WidgetError = validationData.error || 'This location is not accessible. Please contact your agency administrator.';
-        return false;
-      }
-      
-      console.log('[CC360 Widget] Location validated successfully:', validationData.locationName || state.locationId);
-      
-      const response = await fetch(`${state.apiBase}/api/installation/check?locationId=${state.locationId}`);
+      const response = await window.CC360Widget.fetchWithTimeout(
+        `${state.apiBase}/api/installation/check?locationId=${state.locationId}`, {}, 8000
+      );
       if (!response.ok) throw new Error('Failed to check installation');
       const data = await response.json();
       console.log('[CC360 Widget] Installation check:', data);
@@ -811,11 +809,15 @@
     console.log('[CC360 Widget] Initializing checklist...');
     
     try {
-      console.log('[CC360 Widget] Fetching status from API...');
-      const shouldShow = await window.CC360Widget.fetchStatus();
-      console.log('[CC360 Widget] fetchStatus returned:', shouldShow);
-      console.log('[CC360 Widget] currentStatus:', state.currentStatus);
-      console.log('[CC360 Widget] shouldShowWidget:', state.shouldShowWidget);
+      var shouldShow;
+      if (state.currentStatus && state.shouldShowWidget) {
+        console.log('[CC360 Widget] Using already-fetched status');
+        shouldShow = true;
+      } else {
+        console.log('[CC360 Widget] Fetching status from API...');
+        shouldShow = await window.CC360Widget.fetchStatus();
+      }
+      console.log('[CC360 Widget] shouldShow:', shouldShow, 'currentStatus:', !!state.currentStatus, 'shouldShowWidget:', state.shouldShowWidget);
       
       if (!shouldShow || !state.currentStatus || !state.shouldShowWidget) {
         console.log('[CC360 Widget] Not showing widget - eligibility check failed');
@@ -866,6 +868,7 @@
       localStorage.removeItem('cc360_widget_minimized');
     } catch (e) {}
     
+    // ── Phase 1: detect location (must be first) ──
     const detectedLocationId = await window.CC360Widget.detectLocationFromContext();
     if (detectedLocationId) {
       state.locationId = detectedLocationId;
@@ -876,6 +879,7 @@
       return;
     }
     
+    // ── Phase 2: fetch config (needed for gate checks) ──
     await window.CC360Widget.fetchConfig();
     
     if (!state.customersApiConfigured) {
@@ -887,93 +891,93 @@
     if (state.widgetLocationFilter) {
       if (state.locationId !== state.widgetLocationFilter) {
         console.log('[CC360 Widget] 🚫 Location pre-filter mismatch - widget will not show');
-        console.log('[CC360 Widget] Current location:', state.locationId);
-        console.log('[CC360 Widget] Allowed location:', state.widgetLocationFilter);
-        console.log('[CC360 Widget] Widget initialization STOPPED (skipping API call)');
         return;
       }
       console.log('[CC360 Widget] ✅ Location pre-filter check passed');
     }
     
-    console.log('[CC360 Widget] 🔍 Verifying location authorization via API...');
-    try {
-      const response = await fetch(`${state.apiBase}/api/location/verify?locationId=${state.locationId}`);
-      if (!response.ok) {
-        console.error('[CC360 Widget] ❌ API verification request failed (HTTP', response.status, ')');
-        console.error('[CC360 Widget] ❌ Widget initialization STOPPED');
-        return;
-      }
-      
-      const result = await response.json();
-      
-      if (result.authorized === true) {
-        console.log('[CC360 Widget] ✅ Location authorized by API');
-        if (result.customer) {
-          console.log('[CC360 Widget] Customer:', result.customer.name || result.customer.locationId);
-          
-          const subscriptionStatus = result.customer.subscriptionStatus;
-          const customerCreatedAt = result.customer.createdAt ? new Date(result.customer.createdAt) : null;
-          const daysSinceCreation = customerCreatedAt ? (Date.now() - customerCreatedAt.getTime()) / (1000 * 60 * 60 * 24) : Infinity;
-          const isTrialing = subscriptionStatus === 'trialing';
-          
-          console.log('[CC360 Widget] Subscription status:', subscriptionStatus, '| Days since creation:', Math.round(daysSinceCreation));
-          
-          if (!isTrialing || daysSinceCreation > 30) {
-            console.log('[CC360 Widget] Widget NOT shown - subscription is not trialing or account is older than 30 days');
-            return;
-          }
-        }
-      } else {
-        console.log('[CC360 Widget] ❌ Location NOT authorized by API');
-        console.log('[CC360 Widget] Reason:', result.error || 'Location not found');
-        console.log('[CC360 Widget] Widget initialization STOPPED');
-        return;
-      }
-    } catch (error) {
-      console.error('[CC360 Widget] ❌ API verification failed:', error.message);
+    // ── Phase 3: run verify + install + status in PARALLEL ──
+    console.log('[CC360 Widget] 🔍 Running verify + install + status checks in parallel...');
+    var parallelStart = Date.now();
+    
+    var results = await Promise.allSettled([
+      window.CC360Widget.fetchWithTimeout(
+        state.apiBase + '/api/location/verify?locationId=' + state.locationId, {}, 8000
+      ).then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); }),
+      window.CC360Widget.checkInstallation(),
+      window.CC360Widget.fetchStatus()
+    ]);
+    
+    console.log('[CC360 Widget] Parallel phase completed in', Date.now() - parallelStart, 'ms');
+    
+    var verifyResult = results[0];
+    var installResult = results[1];
+    var statusResult = results[2];
+    
+    // ── Process verify result ──
+    if (verifyResult.status !== 'fulfilled' || !verifyResult.value) {
+      var reason = verifyResult.status === 'rejected' ? verifyResult.reason.message : 'No data';
+      console.error('[CC360 Widget] ❌ API verification failed:', reason);
       console.error('[CC360 Widget] ❌ Widget initialization STOPPED');
       return;
     }
     
+    var verify = verifyResult.value;
+    if (verify.authorized !== true) {
+      console.log('[CC360 Widget] ❌ Location NOT authorized by API');
+      console.log('[CC360 Widget] Reason:', verify.error || 'Location not found');
+      return;
+    }
+    
+    console.log('[CC360 Widget] ✅ Location authorized by API');
+    if (verify.customer) {
+      console.log('[CC360 Widget] Customer:', verify.customer.name || verify.customer.locationId);
+      
+      var subscriptionStatus = verify.customer.subscriptionStatus;
+      var customerCreatedAt = verify.customer.createdAt ? new Date(verify.customer.createdAt) : null;
+      var daysSinceCreation = customerCreatedAt ? (Date.now() - customerCreatedAt.getTime()) / (1000 * 60 * 60 * 24) : Infinity;
+      var isTrialing = subscriptionStatus === 'trialing';
+      
+      console.log('[CC360 Widget] Subscription status:', subscriptionStatus, '| Days since creation:', Math.round(daysSinceCreation));
+      
+      if (!isTrialing || daysSinceCreation > 30) {
+        console.log('[CC360 Widget] Widget NOT shown - subscription is not trialing or account is older than 30 days');
+        return;
+      }
+    }
+    
     console.log('[CC360 Widget] ✅ All checks passed - proceeding with initialization');
     
-    window.CC360Widget.startSessionTracking();
-    
-    const installed = await window.CC360Widget.checkInstallation();
+    // ── Process install + status results and render ──
+    var installed = installResult.status === 'fulfilled' && installResult.value === true;
+    var shouldShow = statusResult.status === 'fulfilled' && statusResult.value === true;
     
     if (!installed) {
       console.log('[CC360 Widget] Not authorized or token expired');
-      const errorMessage = window.cc360WidgetError || null;
+      var errorMessage = window.cc360WidgetError || null;
       window.CC360Widget.showNotAuthorized(errorMessage);
-    } else {
-      console.log('[CC360 Widget] Authorized, checking survey completion status...');
-      
-      const shouldShow = await window.CC360Widget.fetchStatus();
-      if (shouldShow && state.currentStatus) {
-        console.log('[CC360 Widget] Decision logic - surveyCompleted:', state.currentStatus.surveyCompleted);
-        if (!state.currentStatus.surveyCompleted) {
-          console.log('[CC360 Widget] Survey not completed - showing survey modal first');
-          window.CC360Widget.showSurveyModal();
-        } else {
-          console.log('[CC360 Widget] Survey completed - showing checklist');
-          await window.CC360Widget.initializeChecklist();
-          
-          console.log('[CC360 Widget] 🎯 Calling initUserpilot...');
-          await window.CC360Widget.initUserpilot();
-          console.log('[CC360 Widget] ✅ initUserpilot completed');
-          
-          console.log('[CC360 Widget] 🎯 Calling initSegment...');
-          await window.CC360Widget.initSegment();
-          console.log('[CC360 Widget] ✅ initSegment completed');
-        }
+    } else if (shouldShow && state.currentStatus) {
+      console.log('[CC360 Widget] Decision logic - surveyCompleted:', state.currentStatus.surveyCompleted);
+      if (!state.currentStatus.surveyCompleted) {
+        console.log('[CC360 Widget] Survey not completed - showing survey modal first');
+        window.CC360Widget.showSurveyModal();
       } else {
-        console.log('[CC360 Widget] Could not fetch status or widget should not be shown');
-        
-        if (state.currentStatus && state.currentStatus.allTasksCompleted && !state.currentStatus.bookingCancelled) {
-          console.log('[CC360 Widget] All tasks completed - checking if booking modal should show');
-          await window.CC360Widget.checkAndShowBookingModal();
-        }
+        console.log('[CC360 Widget] Survey completed - showing checklist');
+        await window.CC360Widget.initializeChecklist();
       }
+    } else if (state.currentStatus && state.currentStatus.allTasksCompleted && !state.currentStatus.bookingCancelled) {
+      console.log('[CC360 Widget] All tasks completed - checking if booking modal should show');
+      await window.CC360Widget.checkAndShowBookingModal();
+    } else {
+      console.log('[CC360 Widget] Could not fetch status or widget should not be shown');
+    }
+    
+    // ── Phase 4: deferred non-critical work (after UI is rendered) ──
+    window.CC360Widget.startSessionTracking();
+    
+    if (installed && shouldShow && state.currentStatus && state.currentStatus.surveyCompleted) {
+      window.CC360Widget.initUserpilot().catch(function() {});
+      window.CC360Widget.initSegment().catch(function() {});
     }
   };
 
