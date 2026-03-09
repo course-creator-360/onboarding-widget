@@ -1359,5 +1359,180 @@
     return adjusted;
   };
 
+  // ── Course Outline Notification Popup ──────────────────────────────
+
+  window.CC360Widget.showCourseOutlineNotification = function(outlineUrl) {
+    try {
+      if (localStorage.getItem('cc360_course_outline_notif_dismissed')) {
+        console.log('[CC360 Widget] Course outline notification already dismissed');
+        return;
+      }
+    } catch (e) {}
+
+    const existing = document.getElementById('cc360-outline-notif');
+    if (existing) existing.remove();
+
+    const notif = document.createElement('div');
+    notif.id = 'cc360-outline-notif';
+    notif.className = 'cc360-outline-notif';
+    notif.innerHTML = `
+      <div class="cc360-outline-notif-header">
+        <div class="cc360-outline-notif-brand">
+          <img src="https://cc360-pages.s3.us-west-2.amazonaws.com/course-creator-360-logo.webp" alt="Course Creator 360" class="cc360-outline-notif-logo">
+          <span class="cc360-outline-notif-badge"><span class="cc360-outline-notif-dot"></span>New</span>
+        </div>
+        <button class="cc360-outline-notif-close" id="cc360-outline-notif-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="cc360-outline-notif-body">
+        <h3 class="cc360-outline-notif-title">Your AI Course Outline is Ready!</h3>
+        <p class="cc360-outline-notif-desc">We built your full course curriculum. Watch the 2-min walkthrough to see how to use it.</p>
+        <div class="cc360-outline-notif-actions">
+          <button class="cc360-outline-notif-btn-primary" id="cc360-outline-watch-btn">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            Watch Now
+          </button>
+          <button class="cc360-outline-notif-btn-secondary" id="cc360-outline-later-btn">Later</button>
+        </div>
+      </div>
+      <div class="cc360-outline-notif-progress"><div class="cc360-outline-notif-progress-bar"></div></div>
+    `;
+    document.body.appendChild(notif);
+
+    function dismissNotif() {
+      notif.style.transition = 'opacity .3s, transform .3s';
+      notif.style.opacity = '0';
+      notif.style.transform = 'translateY(12px) scale(.96)';
+      setTimeout(() => notif.remove(), 300);
+      try { localStorage.setItem('cc360_course_outline_notif_dismissed', 'true'); } catch (e) {}
+    }
+
+    document.getElementById('cc360-outline-watch-btn').addEventListener('click', () => {
+      try { localStorage.setItem('cc360_course_outline_video', 'true'); } catch (e) {}
+      notif.remove();
+      window.location.href = outlineUrl;
+    });
+
+    document.getElementById('cc360-outline-later-btn').addEventListener('click', dismissNotif);
+    document.getElementById('cc360-outline-notif-close').addEventListener('click', dismissNotif);
+  };
+
+  // ── Course Outline Video Player (PiP + Fullscreen) ────────────────
+
+  window.CC360Widget.showCourseOutlineVideo = function() {
+    const existing = document.getElementById('cc360-video-panel');
+    if (existing) return;
+
+    const VIDEO_SRC = 'https://cc360-pages.s3-website-us-west-2.amazonaws.com/dashboard-screenshots/2026-03-04/course-outline-introduction.mp4';
+    const VTT_SRC = 'https://cc360-pages.s3-website-us-west-2.amazonaws.com/dashboard-screenshots/2026-03-04/course-outline-introduction.vtt';
+
+    const panel = document.createElement('div');
+    panel.id = 'cc360-video-panel';
+    panel.className = 'cc360-video-panel';
+    panel.innerHTML = `
+      <div class="cc360-video-panel-header">
+        <div class="cc360-video-panel-left">
+          <img src="https://cc360-pages.s3.us-west-2.amazonaws.com/course-creator-360-logo.webp" alt="CC360" class="cc360-video-panel-logo">
+          <span class="cc360-video-panel-divider"></span>
+          <span class="cc360-video-panel-title">Course Outline</span>
+        </div>
+        <div class="cc360-video-panel-actions">
+          <button class="cc360-video-panel-btn" id="cc360-video-expand-btn" aria-label="Expand" title="Expand">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="14" height="14">
+              <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+              <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+            </svg>
+          </button>
+          <button class="cc360-video-panel-btn" id="cc360-video-close-btn" aria-label="Close">&times;</button>
+        </div>
+      </div>
+      <video id="cc360-mini-player" controls preload="metadata" crossorigin="anonymous">
+        <source src="${VIDEO_SRC}" type="video/mp4">
+        <track label="English" kind="captions" srclang="en" src="${VTT_SRC}" default>
+      </video>
+    `;
+    document.body.appendChild(panel);
+
+    const modalOverlay = document.createElement('div');
+    modalOverlay.id = 'cc360-video-modal-overlay';
+    modalOverlay.className = 'cc360-video-modal-overlay';
+    modalOverlay.innerHTML = `
+      <div class="cc360-video-modal">
+        <div class="cc360-video-modal-header">
+          <div class="cc360-video-panel-left">
+            <img src="https://cc360-pages.s3.us-west-2.amazonaws.com/course-creator-360-logo.webp" alt="CC360" class="cc360-video-panel-logo">
+            <span class="cc360-video-panel-divider"></span>
+            <span class="cc360-video-panel-title">Course Outline Introduction</span>
+          </div>
+          <div class="cc360-video-panel-actions">
+            <button class="cc360-video-panel-btn" id="cc360-video-minimize-btn" aria-label="Minimize" title="Minimize to corner">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="14" height="14">
+                <polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/>
+                <line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/>
+              </svg>
+            </button>
+            <button class="cc360-video-modal-close" id="cc360-video-modal-close-btn" aria-label="Close">&times;</button>
+          </div>
+        </div>
+        <video id="cc360-full-player" controls preload="metadata" crossorigin="anonymous">
+          <source src="${VIDEO_SRC}" type="video/mp4">
+          <track label="English" kind="captions" srclang="en" src="${VTT_SRC}" default>
+        </video>
+      </div>
+    `;
+    document.body.appendChild(modalOverlay);
+
+    const miniPlayer = document.getElementById('cc360-mini-player');
+    const fullPlayer = document.getElementById('cc360-full-player');
+
+    function expandToFullscreen() {
+      const time = miniPlayer.currentTime;
+      const wasPlaying = !miniPlayer.paused;
+      miniPlayer.pause();
+      panel.style.display = 'none';
+      modalOverlay.classList.add('cc360-open');
+      fullPlayer.currentTime = time;
+      if (wasPlaying) fullPlayer.play();
+    }
+
+    function minimizeToPanel() {
+      const time = fullPlayer.currentTime;
+      const wasPlaying = !fullPlayer.paused;
+      fullPlayer.pause();
+      modalOverlay.classList.remove('cc360-open');
+      panel.style.display = '';
+      miniPlayer.currentTime = time;
+      if (wasPlaying) miniPlayer.play();
+    }
+
+    function closeAll() {
+      miniPlayer.pause();
+      fullPlayer.pause();
+      panel.remove();
+      modalOverlay.remove();
+      try { localStorage.removeItem('cc360_course_outline_video'); } catch (e) {}
+    }
+
+    document.getElementById('cc360-video-expand-btn').addEventListener('click', expandToFullscreen);
+    document.getElementById('cc360-video-minimize-btn').addEventListener('click', minimizeToPanel);
+    document.getElementById('cc360-video-close-btn').addEventListener('click', closeAll);
+    document.getElementById('cc360-video-modal-close-btn').addEventListener('click', closeAll);
+
+    modalOverlay.addEventListener('click', (e) => {
+      if (e.target === modalOverlay) minimizeToPanel();
+    });
+
+    document.addEventListener('keydown', function cc360VideoEsc(e) {
+      if (e.key !== 'Escape') return;
+      if (modalOverlay.classList.contains('cc360-open')) {
+        minimizeToPanel();
+      } else if (document.getElementById('cc360-video-panel')) {
+        closeAll();
+        document.removeEventListener('keydown', cc360VideoEsc);
+      }
+    });
+
+    requestAnimationFrame(() => panel.classList.add('cc360-visible'));
+  };
+
   console.log('[CC360 Widget] UI module loaded');
 })();

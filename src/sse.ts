@@ -46,6 +46,18 @@ class SSEBroker {
       } catch {}
     }
   }
+
+  broadcastEvent(locationId: string, eventType: string, data: Record<string, any>): void {
+    const clients = this.locationIdToClients.get(locationId);
+    if (!clients || clients.size === 0) return;
+    const payload = JSON.stringify({ type: eventType, ...data });
+    for (const client of clients) {
+      try {
+        client.res.write(`event: message\n`);
+        client.res.write(`data: ${payload}\n\n`);
+      } catch {}
+    }
+  }
 }
 
 export const sseBroker = new SSEBroker();

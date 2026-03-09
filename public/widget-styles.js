@@ -578,6 +578,321 @@
       .cc360-start-button:active {
         transform: translateY(0);
       }
+
+      /* ── Course Outline Notification Popup ── */
+
+      .cc360-outline-notif {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        width: 380px;
+        background: #fff;
+        border-radius: 16px;
+        box-shadow: 0 20px 60px rgba(0,0,0,.15), 0 4px 16px rgba(0,0,0,.08), 0 0 0 1px rgba(0,0,0,.04);
+        overflow: hidden;
+        z-index: 100000;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        animation: cc360SlideIn .6s cubic-bezier(.16,1,.3,1) .3s both;
+      }
+      @keyframes cc360SlideIn {
+        from { opacity: 0; transform: translateY(20px) scale(.96); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      .cc360-outline-notif-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 16px;
+        background: #FAFBFC;
+        border-bottom: 1px solid #F0F1F3;
+      }
+      .cc360-outline-notif-brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .cc360-outline-notif-logo {
+        height: 22px;
+        width: auto;
+      }
+      .cc360-outline-notif-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        font-weight: 600;
+        color: #059669;
+        background: #ECFDF5;
+        padding: 3px 10px;
+        border-radius: 100px;
+      }
+      .cc360-outline-notif-dot {
+        width: 5px;
+        height: 5px;
+        background: #059669;
+        border-radius: 50%;
+        animation: cc360Pulse 2s infinite;
+      }
+      @keyframes cc360Pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+      .cc360-outline-notif-close {
+        width: 28px;
+        height: 28px;
+        background: none;
+        border: none;
+        color: #9CA3AF;
+        font-size: 16px;
+        cursor: pointer;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background .15s, color .15s;
+        flex-shrink: 0;
+      }
+      .cc360-outline-notif-close:hover {
+        background: #F3F4F6;
+        color: #111827;
+      }
+
+      .cc360-outline-notif-body {
+        padding: 20px 20px 18px;
+      }
+      .cc360-outline-notif-title {
+        font-size: 17px;
+        font-weight: 800;
+        color: #111827;
+        line-height: 1.3;
+        margin-bottom: 6px;
+        letter-spacing: -.2px;
+      }
+      .cc360-outline-notif-desc {
+        font-size: 13.5px;
+        color: #6B7280;
+        line-height: 1.5;
+        margin-bottom: 16px;
+      }
+      .cc360-outline-notif-actions {
+        display: flex;
+        gap: 8px;
+      }
+
+      .cc360-outline-notif-btn-primary {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        background: #3B5BDB;
+        color: #fff;
+        font-family: inherit;
+        font-size: 13.5px;
+        font-weight: 600;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: background .15s, transform .1s, box-shadow .2s;
+        box-shadow: 0 1px 4px rgba(59,91,219,.2);
+      }
+      .cc360-outline-notif-btn-primary:hover {
+        background: #2B4BC8;
+        box-shadow: 0 3px 12px rgba(59,91,219,.3);
+      }
+      .cc360-outline-notif-btn-primary:active {
+        transform: scale(.97);
+      }
+
+      .cc360-outline-notif-btn-secondary {
+        display: inline-flex;
+        align-items: center;
+        background: none;
+        color: #6B7280;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 500;
+        padding: 10px 14px;
+        border: 1px solid #E5E7EB;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: background .15s, color .15s, border-color .15s;
+      }
+      .cc360-outline-notif-btn-secondary:hover {
+        background: #F9FAFB;
+        color: #111827;
+        border-color: #D1D5DB;
+      }
+
+      .cc360-outline-notif-progress {
+        height: 3px;
+        background: #F3F4F6;
+        position: relative;
+        overflow: hidden;
+      }
+      .cc360-outline-notif-progress-bar {
+        position: absolute;
+        left: 0;
+        top: 0;
+        height: 100%;
+        width: 0;
+        background: linear-gradient(90deg, #3B5BDB, #818CF8);
+        border-radius: 0 3px 3px 0;
+        animation: cc360ProgressFill 8s linear .9s forwards;
+      }
+      @keyframes cc360ProgressFill { to { width: 100%; } }
+
+      /* ── Video Panel (PiP) ── */
+
+      .cc360-video-panel {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        width: 460px;
+        background: #fff;
+        border-radius: 16px;
+        box-shadow: 0 20px 60px rgba(0,0,0,.25), 0 4px 16px rgba(0,0,0,.1);
+        overflow: hidden;
+        z-index: 100000;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        opacity: 0;
+        transform: translateY(12px) scale(.96);
+        transition: opacity .4s, transform .4s cubic-bezier(.16,1,.3,1);
+      }
+      .cc360-video-panel.cc360-visible {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+
+      .cc360-video-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 14px;
+        border-bottom: 1px solid #F0F1F3;
+        background: #FAFBFC;
+      }
+      .cc360-video-panel-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .cc360-video-panel-logo {
+        height: 18px;
+        width: auto;
+      }
+      .cc360-video-panel-divider {
+        width: 1px;
+        height: 16px;
+        background: #E5E7EB;
+      }
+      .cc360-video-panel-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #111827;
+      }
+      .cc360-video-panel-actions {
+        display: flex;
+        gap: 4px;
+      }
+      .cc360-video-panel-btn {
+        width: 28px;
+        height: 28px;
+        background: none;
+        border: none;
+        color: #9CA3AF;
+        font-size: 16px;
+        cursor: pointer;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background .15s, color .15s;
+        flex-shrink: 0;
+      }
+      .cc360-video-panel-btn:hover {
+        background: #F3F4F6;
+        color: #111827;
+      }
+
+      .cc360-video-panel video {
+        display: block;
+        width: 100%;
+        background: #000;
+      }
+
+      /* ── Video Fullscreen Modal ── */
+
+      .cc360-video-modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.65);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 100001;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .25s;
+        padding: 24px;
+      }
+      .cc360-video-modal-overlay.cc360-open {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .cc360-video-modal {
+        position: relative;
+        width: 100%;
+        max-width: 820px;
+        background: #fff;
+        border-radius: 20px;
+        overflow: hidden;
+        transform: scale(.92) translateY(16px);
+        transition: transform .4s cubic-bezier(.16,1,.3,1);
+        box-shadow: 0 24px 80px rgba(0,0,0,.35);
+      }
+      .cc360-video-modal-overlay.cc360-open .cc360-video-modal {
+        transform: scale(1) translateY(0);
+      }
+
+      .cc360-video-modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 22px;
+        border-bottom: 1px solid #F3F4F6;
+      }
+
+      .cc360-video-modal-close {
+        width: 34px;
+        height: 34px;
+        background: #F3F4F6;
+        border: none;
+        border-radius: 10px;
+        color: #6B7280;
+        font-size: 18px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background .15s, color .15s;
+      }
+      .cc360-video-modal-close:hover {
+        background: #E5E7EB;
+        color: #111827;
+      }
+
+      .cc360-video-modal video {
+        display: block;
+        width: 100%;
+        background: #000;
+      }
+
+      @media (max-width: 520px) {
+        .cc360-outline-notif { width: calc(100% - 32px); right: 16px; bottom: 16px; }
+        .cc360-video-panel { width: calc(100% - 32px); right: 16px; bottom: 16px; }
+      }
     `;
   };
 

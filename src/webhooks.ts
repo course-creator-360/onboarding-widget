@@ -97,7 +97,43 @@ router.post('/ghl', async (req, res) => {
   res.status(200).json({ ok: true });
 });
 
+router.post('/course-outline-complete', async (req, res) => {
+  const payload = req.body || {};
+  const locationId: string = payload.location_id || payload.locationId || '';
+
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('📥 COURSE OUTLINE COMPLETE WEBHOOK');
+  console.log('Location ID:', locationId || 'NONE');
+  console.log('Outline URL:', payload.outline_url || 'NONE');
+  console.log('Module Count:', payload.module_count || 'NONE');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+  if (!locationId) {
+    console.log('⚠️  No locationId found - ignoring course outline webhook');
+    return res.status(200).json({ ok: true });
+  }
+
+  logEvent(locationId, 'course_outline_complete', payload);
+
+  try {
+    const currentStatus = await getOnboardingStatus(locationId);
+    if (!currentStatus.courseCreated) {
+      await updateOnboardingStatus(locationId, { courseCreated: true });
+      await sendUserpilotEvent('locationId', locationId, 'course_outline_completed');
+    }
+
+    await sseBroker.broadcastEvent(locationId, 'course_outline_complete', {
+      outlineUrl: payload.outline_url || '',
+      moduleCount: payload.module_count || 0,
+    });
+
+    await sseBroker.broadcastStatus(locationId);
+  } catch (error) {
+    console.error('❌ Error processing course outline webhook:', error);
+  }
+
+  console.log('✓ Course outline webhook processed\n');
+  res.status(200).json({ ok: true });
+});
+
 export default router;
-
-
-

@@ -224,6 +224,15 @@
         try {
           const data = JSON.parse(event.data);
           console.log('[CC360 Widget] 📨 SSE update received:', data);
+
+          if (data.type === 'course_outline_complete') {
+            console.log('[CC360 Widget] Course outline complete! URL:', data.outlineUrl);
+            if (window.CC360Widget.showCourseOutlineNotification) {
+              window.CC360Widget.showCourseOutlineNotification(data.outlineUrl);
+            }
+            return;
+          }
+
           const status = data.payload || data;
           window.CC360Widget.handleStatusUpdate(status);
         } catch (error) {
@@ -856,6 +865,15 @@
     } else if (state.currentStatus && state.currentStatus.allTasksCompleted && !state.currentStatus.bookingCancelled) {
       await window.CC360Widget.checkAndShowBookingModal();
     }
+
+    // ── Check for pending course outline video (persists across page navigations) ──
+    try {
+      const pendingVideo = localStorage.getItem('cc360_course_outline_video');
+      if (pendingVideo && window.CC360Widget.showCourseOutlineVideo) {
+        console.log('[CC360 Widget] Pending course outline video found, showing player');
+        window.CC360Widget.showCourseOutlineVideo();
+      }
+    } catch (e) {}
 
     // ── Deferred non-critical work ──
     window.CC360Widget.startSessionTracking();
