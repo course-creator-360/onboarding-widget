@@ -55,7 +55,7 @@ app.use('/api/webhooks', webhookRouter);
 app.use('/oauth', oauthRouter);
 app.use('/install', oauthRouter);
 
-app.use('/api', initRouter);
+// app.use('/api', initRouter); // temporarily disabled for debugging
 app.use('/api', configRouter);
 app.use('/api', statusRouter);
 app.use('/api', locationRouter);
