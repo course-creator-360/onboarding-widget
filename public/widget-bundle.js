@@ -2148,6 +2148,10 @@
                 completed_at: new Date().toISOString()
               });
               
+              if (window.CC360Widget.state.currentStatus) {
+                window.CC360Widget.state.currentStatus.surveyCompleted = true;
+              }
+
               setTimeout(() => {
                 if (surveyOverlay._escKeyHandler) {
                   document.removeEventListener('keydown', surveyOverlay._escKeyHandler);
