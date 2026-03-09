@@ -590,101 +590,91 @@
   window.CC360Widget = window.CC360Widget || {};
 
   window.CC360Widget.initUserpilot = async function() {
-    const state = window.CC360Widget.state;
+    var state = window.CC360Widget.state;
     if (!state.userpilotToken) {
-      console.log('[Userpilot] ⏭️ Skipping - no token available');
+      console.log('[Userpilot] Skipping - no token available');
       return;
     }
-    
+
     if (!state.locationId) {
-      console.log('[Userpilot] ⏭️ Skipping - no location ID');
+      console.log('[Userpilot] Skipping - no location ID');
       return;
     }
-    
-    console.log('[Userpilot] 🚀 Initializing with token:', state.userpilotToken.substring(0, 8) + '...');
-    
+
+    console.log('[Userpilot] Initializing with token:', state.userpilotToken.substring(0, 8) + '...');
+
     try {
       if (typeof window.userpilot !== 'undefined') {
-        console.log('[Userpilot] ✅ SDK already loaded');
+        console.log('[Userpilot] SDK already loaded');
       } else {
-        console.log('[Userpilot] 📥 Loading SDK...');
-        await new Promise((resolve, reject) => {
-          const script = document.createElement('script');
+        console.log('[Userpilot] Loading SDK...');
+        await new Promise(function(resolve, reject) {
+          var script = document.createElement('script');
           script.src = 'https://js.userpilot.io/sdk/latest.js';
           script.async = true;
-          script.onload = () => {
-            console.log('[Userpilot] ✅ SDK loaded successfully');
+          script.onload = function() {
+            console.log('[Userpilot] SDK loaded successfully');
             resolve();
           };
-          script.onerror = (e) => {
-            console.error('[Userpilot] ❌ SDK load failed:', e);
+          script.onerror = function(e) {
+            console.error('[Userpilot] SDK load failed:', e);
             reject(e);
           };
           document.head.appendChild(script);
         });
-        
-        await new Promise(resolve => setTimeout(resolve, 100));
+
+        await new Promise(function(resolve) { setTimeout(resolve, 100); });
       }
-      
+
       if (typeof window.userpilot === 'undefined') {
-        console.error('[Userpilot] ❌ SDK not available after loading');
+        console.error('[Userpilot] SDK not available after loading');
         return;
       }
-      
-      console.log('[Userpilot] 🔧 Calling userpilot.init()...');
+
       window.userpilot.init(state.userpilotToken);
-      console.log('[Userpilot] ✅ init() called');
-      
-      let context = {};
-      if (typeof window._GHL_CONTEXT !== 'undefined') {
-        context = window._GHL_CONTEXT;
-        console.log('[Userpilot] Using GHL context:', context);
-      }
-      
-      const userData = {
+
+      var ghlUser = state.ghlUser || {};
+      var customer = state.customer || {};
+
+      var userData = {
         id: state.locationId,
-        email: context.email || `${state.locationId}@placeholder.com`,
-        name: context.name || state.locationId,
-        company: context.companyId || state.locationId,
+        email: ghlUser.email || customer.email || (state.locationId + '@placeholder.com'),
+        name: ghlUser.name || customer.name || state.locationId,
+        company: customer.locationId || state.locationId,
         location_id: state.locationId,
         onboarding_status: state.currentStatus?.allTasksCompleted ? 'completed' : 'active',
         domain_connected: state.currentStatus?.domainConnected || false,
         course_created: state.currentStatus?.courseCreated || false,
         payment_integrated: state.currentStatus?.paymentIntegrated || false
       };
-      
-      console.log('[Userpilot] 👤 Identifying user:', userData.id);
-      console.log('[Userpilot] User data:', userData);
-      
+
+      console.log('[Userpilot] Identifying user:', userData.id);
       window.userpilot.identify(userData.id, userData);
-      console.log('[Userpilot] ✅ identify() called successfully');
-      
+      console.log('[Userpilot] identify() called successfully');
+
     } catch (error) {
-      console.error('[Userpilot] ❌ Failed to initialize:', error);
-      console.error('[Userpilot] Error details:', error.message || error);
+      console.error('[Userpilot] Failed to initialize:', error);
     }
   };
 
   window.CC360Widget.initSegment = async function() {
-    const state = window.CC360Widget.state;
+    var state = window.CC360Widget.state;
     if (!state.segmentWriteKey) {
-      console.log('[Segment] ⏭️ Skipping - no write key available');
+      console.log('[Segment] Skipping - no write key available');
       return;
     }
-    
+
     if (!state.locationId) {
-      console.log('[Segment] ⏭️ Skipping - no location ID');
+      console.log('[Segment] Skipping - no location ID');
       return;
     }
-    
-    console.log('[Segment] 🚀 Initializing with write key:', state.segmentWriteKey.substring(0, 8) + '...');
-    
+
+    console.log('[Segment] Initializing with write key:', state.segmentWriteKey.substring(0, 8) + '...');
+
     try {
       if (typeof window.analytics !== 'undefined' && window.analytics.initialized) {
-        console.log('[Segment] ✅ Analytics already initialized');
+        console.log('[Segment] Analytics already initialized');
       } else {
-        console.log('[Segment] 📥 Loading Analytics.js...');
-        
         var analytics = window.analytics = window.analytics || [];
         if (!analytics.initialize) {
           if (analytics.invoked) {
@@ -716,91 +706,122 @@
             analytics._writeKey = state.segmentWriteKey;
             analytics.SNIPPET_VERSION = "4.15.3";
             analytics.load(state.segmentWriteKey);
-            console.log('[Segment] ✅ Analytics.js loading...');
+            console.log('[Segment] Analytics.js loading...');
           }
         }
-        
-        await new Promise(resolve => setTimeout(resolve, 500));
+
+        await new Promise(function(resolve) { setTimeout(resolve, 500); });
       }
-      
-      let context = {};
-      if (typeof window._GHL_CONTEXT !== 'undefined') {
-        context = window._GHL_CONTEXT;
-        console.log('[Segment] Using GHL context:', context);
-      }
-      
-      const userTraits = {
-        name: context.name,
-        email: context.email,
-        phone: context.phone,
-        website: context.website,
-        address: {
-          city: context.city,
-          state: context.state,
-          country: context.country
-        },
-        company: {
-          id: context.companyId,
-          name: context.name
-        },
-        onboardingStatus: state.currentStatus?.allTasksCompleted ? 'completed' : 'active',
-        domainConnected: state.currentStatus?.domainConnected || false,
-        courseCreated: state.currentStatus?.courseCreated || false,
-        paymentIntegrated: state.currentStatus?.paymentIntegrated || false,
-        timezone: context.timezone
-      };
-      
-      console.log('[Segment] 👤 Identifying user:', state.locationId);
-      console.log('[Segment] User traits:', userTraits);
-      
+
+      var ghlUser = state.ghlUser || {};
+      var customer = state.customer || {};
+
+      var userId = ghlUser.id || state.locationId;
+      var userEmail = ghlUser.email || customer.email || '';
+      var userName = ghlUser.name || customer.name || '';
+      var firstName = ghlUser.firstName || '';
+      var lastName = ghlUser.lastName || '';
+      var userRole = ghlUser.role || '';
+      var locationId = state.locationId;
+      var customerName = customer.name || '';
+      var subscriptionStatus = customer.subscriptionStatus || '';
+      var customerCreatedAt = customer.createdAt || '';
+
       if (window.analytics && typeof window.analytics.identify === 'function') {
-        window.analytics.identify(state.locationId, userTraits);
-        console.log('[Segment] ✅ Called analytics.identify()');
-      }
-      
-      if (window.analytics && typeof window.analytics.group === 'function' && context.companyId) {
-        const groupTraits = {
-          name: context.name,
-          website: context.website,
-          address: {
-            city: context.city,
-            state: context.state,
-            country: context.country
+        window.analytics.identify(userId, {
+          user_id: userId,
+          email: userEmail,
+          name: userName,
+          first_name: firstName,
+          last_name: lastName,
+          company: {
+            id: locationId,
+            name: customerName,
+            subscription_status: subscriptionStatus,
+            created_at: customerCreatedAt
           },
-          timezone: context.timezone
-        };
-        window.analytics.group(context.companyId, groupTraits);
-        console.log('[Segment] ✅ Called analytics.group() with companyId:', context.companyId);
+          platform: 'cc360-app',
+          environment: 'production',
+          role: userRole
+        });
+        console.log('[Segment] Called analytics.identify() for', userId);
       }
-      
+
       if (window.analytics && typeof window.analytics.page === 'function') {
         window.analytics.page('Onboarding Widget', {
-          locationId: state.locationId,
+          locationId: locationId,
           onboardingStatus: state.currentStatus?.allTasksCompleted ? 'completed' : 'active'
         });
-        console.log('[Segment] ✅ Tracked page view');
+        console.log('[Segment] Tracked page view');
       }
-      
+
     } catch (error) {
-      console.error('[Segment] ❌ Failed to initialize:', error);
-      console.error('[Segment] Error details:', error.message || error);
+      console.error('[Segment] Failed to initialize:', error);
     }
   };
 
-  window.CC360Widget.trackSegmentEvent = function(eventName, properties = {}) {
-    const state = window.CC360Widget.state;
-    if (!window.analytics || typeof window.analytics.track !== 'function') {
-      console.warn('[Segment] ⚠️ Analytics not available for tracking:', eventName);
+  window.CC360Widget.initProfitWell = async function() {
+    var state = window.CC360Widget.state;
+    if (!state.profitWellAuthToken) {
+      console.log('[ProfitWell] Skipping - no auth token available');
       return;
     }
-    
-    const eventProperties = {
-      location_id: state.locationId,
-      ...properties
-    };
-    
+
+    var stripeCustomerId = state.customer && state.customer.stripeCustomerId;
+    if (!stripeCustomerId) {
+      console.log('[ProfitWell] Skipping - no Stripe customer ID available');
+      return;
+    }
+
+    console.log('[ProfitWell] Initializing...');
+
+    try {
+      if (typeof window.profitwell !== 'undefined') {
+        console.log('[ProfitWell] SDK already loaded');
+      } else {
+        await new Promise(function(resolve, reject) {
+          var script = document.createElement('script');
+          script.id = 'profitwell-js';
+          script.src = 'https://public.profitwell.com/js/profitwell.js?auth=' + state.profitWellAuthToken;
+          script.async = true;
+          script.setAttribute('data-pw-auth', state.profitWellAuthToken);
+          script.onload = function() {
+            console.log('[ProfitWell] SDK loaded successfully');
+            resolve();
+          };
+          script.onerror = function(e) {
+            console.error('[ProfitWell] SDK load failed:', e);
+            reject(e);
+          };
+          document.head.appendChild(script);
+        });
+
+        await new Promise(function(resolve) { setTimeout(resolve, 200); });
+      }
+
+      if (typeof window.profitwell === 'undefined') {
+        console.error('[ProfitWell] SDK not available after loading');
+        return;
+      }
+
+      window.profitwell('start', { user_id: stripeCustomerId });
+      console.log('[ProfitWell] Started with Stripe customer:', stripeCustomerId);
+
+    } catch (error) {
+      console.error('[ProfitWell] Failed to initialize:', error);
+    }
+  };
+
+  window.CC360Widget.trackSegmentEvent = function(eventName, properties) {
+    var state = window.CC360Widget.state;
+    if (!window.analytics || typeof window.analytics.track !== 'function') {
+      console.warn('[Segment] Analytics not available for tracking:', eventName);
+      return;
+    }
+
+    var eventProperties = Object.assign({ location_id: state.locationId }, properties || {});
     window.analytics.track(eventName, eventProperties);
-    console.log('[Segment] 📊 Tracked event:', eventName, eventProperties);
+    console.log('[Segment] Tracked event:', eventName, eventProperties);
   };
 
   console.log('[CC360 Widget] Analytics module loaded');
@@ -1001,9 +1022,10 @@
   };
 
   window.CC360Widget.initChecklistAndAnalytics = function() {
-    return window.CC360Widget.initializeChecklist().then(() => {
-      window.CC360Widget.initUserpilot();
-      window.CC360Widget.initSegment();
+    return window.CC360Widget.initializeChecklist().then(function() {
+      window.CC360Widget.initUserpilot().catch(function() {});
+      window.CC360Widget.initSegment().catch(function() {});
+      window.CC360Widget.initProfitWell().catch(function() {});
     });
   };
 
@@ -2190,9 +2212,12 @@
     ghlAppBaseUrl: 'https://app.gohighlevel.com',
     userpilotToken: null,
     segmentWriteKey: null,
+    profitWellAuthToken: null,
     widgetLocationFilter: null,
     customersApiConfigured: false,
     featureFlags: { connectPaymentsEnabled: true, connectDomainEnabled: true },
+    ghlUser: null,
+    customer: null,
     isMinimized: false,
     isDragging: false,
     dragStartX: 0,
@@ -2277,6 +2302,7 @@
     if (config.ghlAppBaseUrl) state.ghlAppBaseUrl = config.ghlAppBaseUrl;
     if (config.userpilotToken) state.userpilotToken = config.userpilotToken;
     if (config.segmentWriteKey) state.segmentWriteKey = config.segmentWriteKey;
+    if (config.profitWellAuthToken) state.profitWellAuthToken = config.profitWellAuthToken;
     if (config.widgetLocationFilter) state.widgetLocationFilter = config.widgetLocationFilter;
     state.customersApiConfigured = config.customersApiConfigured === true;
     if (config.featureFlags) state.featureFlags = config.featureFlags;
@@ -3003,6 +3029,7 @@
     state.isInstalled = !!data.installed;
 
     if (data.customer) {
+      state.customer = data.customer;
       console.log('[CC360 Widget] Customer:', data.customer.name, '| Status:', data.customer.subscriptionStatus);
     }
 
@@ -3026,8 +3053,28 @@
     // ── Deferred non-critical work ──
     window.CC360Widget.startSessionTracking();
     if (data.installed && state.currentStatus && state.currentStatus.surveyCompleted) {
+      try {
+        if (typeof AppUtils !== 'undefined' && AppUtils.Utilities && AppUtils.Utilities.getCurrentUser) {
+          var ghlUser = await AppUtils.Utilities.getCurrentUser();
+          if (ghlUser) {
+            state.ghlUser = {
+              id: ghlUser.id,
+              name: ghlUser.name || ((ghlUser.firstName || '') + ' ' + (ghlUser.lastName || '')).trim(),
+              firstName: ghlUser.firstName || '',
+              lastName: ghlUser.lastName || '',
+              email: ghlUser.email || '',
+              role: ghlUser.role || '',
+              type: ghlUser.type || ''
+            };
+            console.log('[CC360 Widget] GHL user context gathered for analytics');
+          }
+        }
+      } catch (e) {
+        console.log('[CC360 Widget] GHL AppUtils not available for analytics context');
+      }
       window.CC360Widget.initUserpilot().catch(function() {});
       window.CC360Widget.initSegment().catch(function() {});
+      window.CC360Widget.initProfitWell().catch(function() {});
     }
   };
 

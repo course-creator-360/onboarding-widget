@@ -19,9 +19,12 @@
     ghlAppBaseUrl: 'https://app.gohighlevel.com',
     userpilotToken: null,
     segmentWriteKey: null,
+    profitWellAuthToken: null,
     widgetLocationFilter: null,
     customersApiConfigured: false,
     featureFlags: { connectPaymentsEnabled: true, connectDomainEnabled: true },
+    ghlUser: null,
+    customer: null,
     isMinimized: false,
     isDragging: false,
     dragStartX: 0,
@@ -106,6 +109,7 @@
     if (config.ghlAppBaseUrl) state.ghlAppBaseUrl = config.ghlAppBaseUrl;
     if (config.userpilotToken) state.userpilotToken = config.userpilotToken;
     if (config.segmentWriteKey) state.segmentWriteKey = config.segmentWriteKey;
+    if (config.profitWellAuthToken) state.profitWellAuthToken = config.profitWellAuthToken;
     if (config.widgetLocationFilter) state.widgetLocationFilter = config.widgetLocationFilter;
     state.customersApiConfigured = config.customersApiConfigured === true;
     if (config.featureFlags) state.featureFlags = config.featureFlags;
@@ -832,6 +836,7 @@
     state.isInstalled = !!data.installed;
 
     if (data.customer) {
+      state.customer = data.customer;
       console.log('[CC360 Widget] Customer:', data.customer.name, '| Status:', data.customer.subscriptionStatus);
     }
 
@@ -855,8 +860,28 @@
     // ── Deferred non-critical work ──
     window.CC360Widget.startSessionTracking();
     if (data.installed && state.currentStatus && state.currentStatus.surveyCompleted) {
+      try {
+        if (typeof AppUtils !== 'undefined' && AppUtils.Utilities && AppUtils.Utilities.getCurrentUser) {
+          var ghlUser = await AppUtils.Utilities.getCurrentUser();
+          if (ghlUser) {
+            state.ghlUser = {
+              id: ghlUser.id,
+              name: ghlUser.name || ((ghlUser.firstName || '') + ' ' + (ghlUser.lastName || '')).trim(),
+              firstName: ghlUser.firstName || '',
+              lastName: ghlUser.lastName || '',
+              email: ghlUser.email || '',
+              role: ghlUser.role || '',
+              type: ghlUser.type || ''
+            };
+            console.log('[CC360 Widget] GHL user context gathered for analytics');
+          }
+        }
+      } catch (e) {
+        console.log('[CC360 Widget] GHL AppUtils not available for analytics context');
+      }
       window.CC360Widget.initUserpilot().catch(function() {});
       window.CC360Widget.initSegment().catch(function() {});
+      window.CC360Widget.initProfitWell().catch(function() {});
     }
   };
 

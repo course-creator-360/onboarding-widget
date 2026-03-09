@@ -15,6 +15,7 @@ function buildConfig() {
     ghlAppBaseUrl: getGhlAppBaseUrl(),
     userpilotToken: userpilotToken || null,
     segmentWriteKey: process.env.SEGMENT_WRITE_KEY || null,
+    profitWellAuthToken: process.env.PROFITWELL_AUTH_TOKEN || null,
     widgetLocationFilter: process.env.WIDGET_LOCATION_ID_FILTER || null,
     customersApiConfigured: !!process.env.CC360_CUSTOMERS_API_KEY,
     featureFlags: {
@@ -124,7 +125,14 @@ router.get('/init', async (req: Request, res: Response) => {
       installed,
       installError,
       status: currentStatus || { locationId, surveyCompleted: false, bookingCancelled: false, shouldShowWidget: true, allTasksCompleted: false },
-      customer: customer ? { name: customer.name, subscriptionStatus: customer.subscriptionStatus, createdAt: customer.createdAt } : null,
+      customer: customer ? {
+        name: customer.name,
+        email: customer.email,
+        subscriptionStatus: customer.subscriptionStatus,
+        createdAt: customer.createdAt,
+        locationId: customer.locationId,
+        stripeCustomerId: customer.stripeCustomerId || null,
+      } : null,
     });
   } catch (error: any) {
     console.error(`[Init] Error after ${Date.now() - startTime}ms:`, error?.message || error);

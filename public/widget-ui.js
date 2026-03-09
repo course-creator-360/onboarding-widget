@@ -193,9 +193,10 @@
   };
 
   window.CC360Widget.initChecklistAndAnalytics = function() {
-    return window.CC360Widget.initializeChecklist().then(() => {
-      window.CC360Widget.initUserpilot();
-      window.CC360Widget.initSegment();
+    return window.CC360Widget.initializeChecklist().then(function() {
+      window.CC360Widget.initUserpilot().catch(function() {});
+      window.CC360Widget.initSegment().catch(function() {});
+      window.CC360Widget.initProfitWell().catch(function() {});
     });
   };
 
