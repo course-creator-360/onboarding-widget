@@ -6,6 +6,7 @@ import path from 'path';
 import oauthRouter from './oauth';
 import webhookRouter from './webhooks';
 import { getBaseUrl, isProduction } from './config';
+import initRouter from './routes/init';
 import {
   configRouter,
   statusRouter,
@@ -15,7 +16,7 @@ import {
   bookingRouter,
   surveyRouter,
   subaccountsRouter,
-  sessionsRouter,
+  sessionsRouter
 } from './routes';
 
 const app = express();
@@ -54,7 +55,6 @@ app.use('/api/webhooks', webhookRouter);
 app.use('/oauth', oauthRouter);
 app.use('/install', oauthRouter);
 
-import initRouter from './routes/init';
 app.use('/api', initRouter);
 app.use('/api', configRouter);
 app.use('/api', statusRouter);
@@ -99,7 +99,6 @@ app.get('/widget-core.js', (_req, res) => {
 app.get('/widget-bundle.js', (_req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'widget-bundle.js'));
 });
-
 
 app.get('/', (_req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
