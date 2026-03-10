@@ -7,6 +7,7 @@ import bookingRouter from './booking';
 import surveyRouter from './survey';
 import subaccountsRouter from './subaccounts';
 import sessionsRouter from './sessions';
+import guidesRouter from './guides';
 
 export {
   configRouter,
@@ -17,5 +18,6 @@ export {
   bookingRouter,
   surveyRouter,
   subaccountsRouter,
-  sessionsRouter
+  sessionsRouter,
+  guidesRouter
 };

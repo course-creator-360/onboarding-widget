@@ -16,7 +16,8 @@ import {
   bookingRouter,
   surveyRouter,
   subaccountsRouter,
-  sessionsRouter
+  sessionsRouter,
+  guidesRouter
 } from './routes';
 
 const app = express();
@@ -65,6 +66,7 @@ app.use('/api', bookingRouter);
 app.use('/api', surveyRouter);
 app.use('/api', subaccountsRouter);
 app.use('/api', sessionsRouter);
+app.use('/api', guidesRouter);
 
 app.use((req, res, next) => {
   const host = req.get('host') || '';
