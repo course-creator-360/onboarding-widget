@@ -638,13 +638,14 @@
           state.widgetElement.innerHTML = `
             <div class="cc360-start-screen">
               <div class="cc360-start-icon">⏳</div>
-              <h3 class="cc360-start-title">Loading your checklist...</h3>
+              <h3 class="cc360-start-title">Preparing your onboarding flow...</h3>
             </div>
           `;
         }
         
         setTimeout(() => {
-          window.CC360Widget.initializeChecklist();
+          window.CC360Widget.hideOnboardingWidget();
+          window.CC360Widget.init();
         }, 500);
       }
     };
@@ -784,29 +785,19 @@
       console.log('[CC360 Widget] Customer:', data.customer.name, '| Status:', data.customer.subscriptionStatus);
     }
 
-    // ── Render: Survey -> Booking -> Checklist ──
+    // ── Render: Survey -> Booking ──
     if (!data.installed) {
       console.log('[CC360 Widget] Not authorized');
       window.cc360WidgetError = data.installError || null;
       window.CC360Widget.showNotAuthorized(data.installError || null);
     } else if (state.currentStatus && state.shouldShowWidget) {
+      window.CC360Widget.hideOnboardingWidget();
       if (!state.currentStatus.surveyCompleted) {
         console.log('[CC360 Widget] Showing survey');
         window.CC360Widget.showSurveyModal();
-      } else if (!state.currentStatus.bookingCancelled) {
-        console.log('[CC360 Widget] Survey done - checking booking status');
-        var bookingResp = await fetch(state.apiBase + '/api/booking/check?locationId=' + state.locationId).catch(function() { return null; });
-        var bookingResult = bookingResp && bookingResp.ok ? await bookingResp.json() : null;
-        if (bookingResult && bookingResult.hasBookingData) {
-          console.log('[CC360 Widget] Booking exists - showing checklist');
-          await window.CC360Widget.initializeChecklist();
-        } else {
-          console.log('[CC360 Widget] No booking yet - showing booking modal');
-          window.CC360Widget.showBookingModal();
-        }
       } else {
-        console.log('[CC360 Widget] Booking cancelled - showing checklist');
-        await window.CC360Widget.initializeChecklist();
+        console.log('[CC360 Widget] Survey done - routing to booking flow');
+        await window.CC360Widget.showBookingOrChecklist();
       }
     }
 

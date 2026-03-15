@@ -1346,12 +1346,64 @@
     });
   };
 
+  window.CC360Widget.hideOnboardingWidget = function() {
+    const state = window.CC360Widget.state || {};
+    if (typeof window.CC360Widget.stopStatusUpdates === 'function') {
+      window.CC360Widget.stopStatusUpdates();
+    }
+    if (state.widgetElement) {
+      state.widgetElement.remove();
+      state.widgetElement = null;
+    }
+  };
+
   window.CC360Widget.initChecklistAndAnalytics = function() {
-    return window.CC360Widget.initializeChecklist().then(function() {
-      window.CC360Widget.initUserpilot().catch(function() {});
-      window.CC360Widget.initSegment().catch(function() {});
-      window.CC360Widget.initProfitWell().catch(function() {});
-    });
+    window.CC360Widget.hideOnboardingWidget();
+    return Promise.resolve();
+  };
+
+  window.CC360Widget.showBookingOrChecklist = async function() {
+    const state = window.CC360Widget.state || {};
+
+    if (document.getElementById('cc360-booking-overlay')) {
+      console.log('[CC360 Widget] Booking modal already open');
+      return;
+    }
+
+    window.CC360Widget.hideOnboardingWidget();
+
+    if (state.currentStatus && state.currentStatus.bookingCancelled) {
+      console.log('[CC360 Widget] Booking reminder was removed - nothing else to show');
+      return;
+    }
+
+    if (!state.apiBase || !state.locationId) {
+      console.warn('[CC360 Widget] Missing booking context - showing booking modal');
+      window.CC360Widget.showBookingModal();
+      return;
+    }
+
+    try {
+      console.log('[CC360 Widget] Checking booking status before next step');
+      const response = await fetch(`${state.apiBase}/api/booking/check?locationId=${state.locationId}`);
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result && result.hasBookingData) {
+        console.log('[CC360 Widget] Booking already exists - nothing else to show');
+        return;
+      }
+
+      console.log('[CC360 Widget] No booking found - showing booking modal');
+      window.CC360Widget.showBookingModal();
+    } catch (error) {
+      console.error('[CC360 Widget] Error checking booking status:', error);
+      window.CC360Widget.showBookingModal();
+    }
   };
 
   window.CC360Widget.showStartScreen = function() {
@@ -1481,8 +1533,8 @@
     closeBtn.onclick = () => {
       confirmOverlay.remove();
       bookingOverlay.remove();
-      console.log('[CC360 Widget] Booking modal dismissed (X button) - showing widget (will show again on refresh)');
-      window.CC360Widget.initChecklistAndAnalytics();
+      console.log('[CC360 Widget] Booking modal dismissed (X button) - closing without checklist');
+      window.CC360Widget.hideOnboardingWidget();
     };
     
     dialogContent.appendChild(closeBtn);
@@ -1496,8 +1548,8 @@
         permanentRemoval: false,
         reason: 'temporary_dismiss'
       });
-      console.log('[CC360 Widget] Booking modal dismissed - showing widget (will show again on refresh)');
-      window.CC360Widget.initChecklistAndAnalytics();
+      console.log('[CC360 Widget] Booking modal dismissed - closing without checklist');
+      window.CC360Widget.hideOnboardingWidget();
     });
     
     document.getElementById('cc360-booking-cancel-remove').addEventListener('click', async () => {
@@ -1526,11 +1578,11 @@
         
         state.currentStatus = updatedStatus;
         
-        console.log('[CC360 Widget] Showing onboarding widget...');
-        window.CC360Widget.initChecklistAndAnalytics();
+        console.log('[CC360 Widget] Booking reminder removed - no checklist will be shown');
+        window.CC360Widget.hideOnboardingWidget();
       } catch (error) {
         console.error('[CC360 Widget] ❌ Error cancelling booking:', error);
-        window.CC360Widget.initChecklistAndAnalytics();
+        window.CC360Widget.hideOnboardingWidget();
       }
     });
     
@@ -1538,14 +1590,15 @@
       if (e.target === confirmOverlay) {
         confirmOverlay.remove();
         bookingOverlay.remove();
-        console.log('[CC360 Widget] Booking modal dismissed (overlay click) - showing widget (will show again on refresh)');
-        window.CC360Widget.initChecklistAndAnalytics();
+        console.log('[CC360 Widget] Booking modal dismissed (overlay click) - closing without checklist');
+        window.CC360Widget.hideOnboardingWidget();
       }
     });
   };
 
   window.CC360Widget.checkAndShowBookingModal = async function() {
     const state = window.CC360Widget.state;
+    window.CC360Widget.hideOnboardingWidget();
     try {
       console.log('[CC360 Widget] Checking if booking data exists...');
       const response = await fetch(`${state.apiBase}/api/booking/check?locationId=${state.locationId}`);
@@ -1563,7 +1616,7 @@
         console.log('[CC360 Widget] ✅ No booking data found, showing booking modal');
         window.CC360Widget.showBookingModal();
       } else {
-        console.log('[CC360 Widget] ⚠️ Booking data already exists, skipping booking modal');
+        console.log('[CC360 Widget] Booking data already exists - nothing else to show');
       }
     } catch (error) {
       console.error('[CC360 Widget] ❌ Error checking booking data:', error);
@@ -1964,7 +2017,7 @@
 
         setTimeout(() => {
           bookingOverlay.remove();
-          window.CC360Widget.initChecklistAndAnalytics();
+          window.CC360Widget.hideOnboardingWidget();
         }, 3000);
       } catch (e) {
         console.error('[CC360 Widget] ❌ Booking failed:', e);
@@ -3378,13 +3431,14 @@
           state.widgetElement.innerHTML = `
             <div class="cc360-start-screen">
               <div class="cc360-start-icon">⏳</div>
-              <h3 class="cc360-start-title">Loading your checklist...</h3>
+              <h3 class="cc360-start-title">Preparing your onboarding flow...</h3>
             </div>
           `;
         }
         
         setTimeout(() => {
-          window.CC360Widget.initializeChecklist();
+          window.CC360Widget.hideOnboardingWidget();
+          window.CC360Widget.init();
         }, 500);
       }
     };
@@ -3524,29 +3578,19 @@
       console.log('[CC360 Widget] Customer:', data.customer.name, '| Status:', data.customer.subscriptionStatus);
     }
 
-    // ── Render: Survey -> Booking -> Checklist ──
+    // ── Render: Survey -> Booking ──
     if (!data.installed) {
       console.log('[CC360 Widget] Not authorized');
       window.cc360WidgetError = data.installError || null;
       window.CC360Widget.showNotAuthorized(data.installError || null);
     } else if (state.currentStatus && state.shouldShowWidget) {
+      window.CC360Widget.hideOnboardingWidget();
       if (!state.currentStatus.surveyCompleted) {
         console.log('[CC360 Widget] Showing survey');
         window.CC360Widget.showSurveyModal();
-      } else if (!state.currentStatus.bookingCancelled) {
-        console.log('[CC360 Widget] Survey done - checking booking status');
-        var bookingResp = await fetch(state.apiBase + '/api/booking/check?locationId=' + state.locationId).catch(function() { return null; });
-        var bookingResult = bookingResp && bookingResp.ok ? await bookingResp.json() : null;
-        if (bookingResult && bookingResult.hasBookingData) {
-          console.log('[CC360 Widget] Booking exists - showing checklist');
-          await window.CC360Widget.initializeChecklist();
-        } else {
-          console.log('[CC360 Widget] No booking yet - showing booking modal');
-          window.CC360Widget.showBookingModal();
-        }
       } else {
-        console.log('[CC360 Widget] Booking cancelled - showing checklist');
-        await window.CC360Widget.initializeChecklist();
+        console.log('[CC360 Widget] Survey done - routing to booking flow');
+        await window.CC360Widget.showBookingOrChecklist();
       }
     }
 
