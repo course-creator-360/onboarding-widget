@@ -1683,7 +1683,29 @@
       initialContent.style.display = 'none';
       calendarContent.style.display = 'block';
       header.style.display = 'none';
-      window.CC360Widget.loadSlotPicker(calendarContent, bookingOverlay);
+      calendarContent.innerHTML = '';
+
+      var backBtn = document.createElement('button');
+      backBtn.innerHTML = '← Back';
+      backBtn.style.cssText = 'position:sticky;top:0;left:0;background:#f3f4f6;border:none;padding:8px 16px;border-radius:6px;font-size:0.9rem;color:#374151;cursor:pointer;transition:all 0.2s;z-index:10;margin:16px;';
+      backBtn.onmouseover = function() { backBtn.style.background = '#e5e7eb'; };
+      backBtn.onmouseout = function() { backBtn.style.background = '#f3f4f6'; };
+      backBtn.onclick = function() {
+        calendarContent.style.display = 'none';
+        initialContent.style.display = 'block';
+        header.style.display = 'block';
+      };
+      calendarContent.appendChild(backBtn);
+
+      var iframe = document.createElement('iframe');
+      iframe.src = 'https://link.mycrmsupport.com/widget/booking/jQxt2PWaO7YlA2Hvn1zx?agency_name=CourseCreator360&agency_owner_email=support@coursecreator360.com&relationship_id=0-040-232';
+      iframe.style.cssText = 'width:100%;min-height:600px;border:none;';
+      iframe.scrolling = 'no';
+      calendarContent.appendChild(iframe);
+
+      var embedScript = document.createElement('script');
+      embedScript.src = 'https://link.mycrmsupport.com/js/form_embed.js';
+      calendarContent.appendChild(embedScript);
     };
     
     const skipBtn = document.createElement('button');
