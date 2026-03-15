@@ -8,14 +8,17 @@ declare global {
   var prisma: PrismaClient | undefined;
 }
 
-// Initialize Prisma Client with serverless-optimized settings
+function buildDatasourceUrl(): string {
+  const base = process.env.DATABASE_URL || process.env.POSTGRES_PRISMA_URL || '';
+  if (!base) return base;
+  const sep = base.includes('?') ? '&' : '?';
+  return `${base}${sep}connection_limit=3&pool_timeout=5`;
+}
+
 const prisma = global.prisma || new PrismaClient({
   log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-  // Optimize for serverless - shorter timeouts and fewer connections
   datasources: {
-    db: {
-      url: process.env.DATABASE_URL || process.env.POSTGRES_PRISMA_URL,
-    },
+    db: { url: buildDatasourceUrl() },
   },
 });
 

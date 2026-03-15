@@ -33,8 +33,8 @@
     widgetStartY: 0,
     hasDragged: false,
     pollInterval: null,
-    eventSource: null,
-    sseConnected: false
+    eventSource: null,  // deprecated (SSE removed)
+    sseConnected: false  // deprecated (SSE removed)
   }, existingState, {
     // Ensure apiBase and skipApiChecks from script attributes take precedence
     apiBase: apiBase,
@@ -194,76 +194,8 @@
   };
 
   window.CC360Widget.startSSE = function() {
-    const state = window.CC360Widget.state;
-    if (!state.locationId) {
-      console.warn('[CC360 Widget] Cannot start SSE without location ID');
-      return;
-    }
-    
-    if (state.eventSource) {
-      state.eventSource.close();
-    }
-    
-    try {
-      const sseUrl = `${state.apiBase}/api/events?locationId=${state.locationId}`;
-      console.log('[CC360 Widget] 🔌 Connecting to SSE:', sseUrl);
-      
-      state.eventSource = new EventSource(sseUrl);
-      
-      state.eventSource.onopen = () => {
-        state.sseConnected = true;
-        console.log('[CC360 Widget] ✅ SSE connected - instant updates enabled');
-        if (state.pollInterval) {
-          clearInterval(state.pollInterval);
-          state.pollInterval = setInterval(window.CC360Widget.pollForStatus, 30000);
-          console.log('[CC360 Widget] 📉 Reduced polling to 30s (SSE active)');
-        }
-      };
-      
-      state.eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          console.log('[CC360 Widget] 📨 SSE update received:', data);
-
-          if (data.type === 'course_outline_complete') {
-            console.log('[CC360 Widget] Course outline complete! URL:', data.outlineUrl);
-            if (window.CC360Widget.showCourseOutlineNotification) {
-              window.CC360Widget.showCourseOutlineNotification(data.outlineUrl);
-            }
-            return;
-          }
-
-          const status = data.payload || data;
-          window.CC360Widget.handleStatusUpdate(status);
-        } catch (error) {
-          console.error('[CC360 Widget] Error parsing SSE message:', error);
-        }
-      };
-      
-      state.eventSource.onerror = (error) => {
-        console.warn('[CC360 Widget] ⚠️ SSE error/disconnected:', error);
-        state.sseConnected = false;
-        state.eventSource.close();
-        state.eventSource = null;
-        
-        if (state.pollInterval) {
-          clearInterval(state.pollInterval);
-        }
-        state.pollInterval = setInterval(window.CC360Widget.pollForStatus, 5000);
-        console.log('[CC360 Widget] 📈 Increased polling to 5s (SSE fallback)');
-        
-        setTimeout(() => {
-          if (!state.sseConnected && state.locationId) {
-            console.log('[CC360 Widget] 🔄 Attempting SSE reconnect...');
-            window.CC360Widget.startSSE();
-          }
-        }, 10000);
-      };
-      
-    } catch (error) {
-      console.error('[CC360 Widget] Failed to create SSE connection:', error);
-      state.sseConnected = false;
-    }
+    // SSE removed: incompatible with Vercel serverless (60s timeout).
+    // Polling is the primary update mechanism now.
   };
 
   window.CC360Widget.pollForStatus = async function() {
@@ -298,10 +230,8 @@
       clearInterval(state.pollInterval);
     }
     
-    state.pollInterval = setInterval(window.CC360Widget.pollForStatus, 5000);
-    console.log('[CC360 Widget] ✅ Status polling started (every 5 seconds)');
-    
-    window.CC360Widget.startSSE();
+    state.pollInterval = setInterval(window.CC360Widget.pollForStatus, 15000);
+    console.log('[CC360 Widget] Status polling started (every 15 seconds)');
   };
 
   window.CC360Widget.stopStatusUpdates = function() {
@@ -310,12 +240,6 @@
       clearInterval(state.pollInterval);
       state.pollInterval = null;
       console.log('[CC360 Widget] Status polling stopped');
-    }
-    if (state.eventSource) {
-      state.eventSource.close();
-      state.eventSource = null;
-      state.sseConnected = false;
-      console.log('[CC360 Widget] SSE connection closed');
     }
   };
 
@@ -836,6 +760,17 @@
       return;
     }
 
+    // ── Inject styles (needed by dialogs even if createWidget isn't called) ──
+    if (!document.getElementById('cc360-widget-styles')) {
+      var styleEl = document.createElement('style');
+      styleEl.id = 'cc360-widget-styles';
+      styleEl.textContent = window.CC360Widget.getWidgetStyles() + '\n' + window.CC360Widget.getStartScreenStyles();
+      document.head.appendChild(styleEl);
+    }
+
+    // ── Clean up stale overlays from prior renders ──
+    document.querySelectorAll('.cc360-dialog-overlay, #cc360-booking-overlay, #cc360-outline-notif, #cc360-video-panel, #cc360-video-modal-overlay').forEach(function(el) { el.remove(); });
+
     // ── Process status ──
     if (data.status) {
       state.currentStatus = data.status;
@@ -1133,10 +1068,7 @@
   };
 
   window.addEventListener('beforeunload', () => {
-    const state = window.CC360Widget.state;
-    if (state.eventSource) {
-      state.eventSource.close();
-    }
+    window.CC360Widget.stopStatusUpdates();
   });
 
   console.log('[CC360 Widget] Core module loaded');

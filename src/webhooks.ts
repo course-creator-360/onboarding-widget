@@ -31,7 +31,9 @@ router.post('/ghl', async (req, res) => {
     return res.status(200).json({ ok: true });
   }
 
-  logEvent(locationId, eventType || 'unknown', payload);
+  logEvent(locationId, eventType || 'unknown', payload).catch(err =>
+    console.error('[logEvent] Failed (non-critical):', err.message)
+  );
 
   let updated = false;
   try {
@@ -113,7 +115,9 @@ router.post('/course-outline-complete', async (req, res) => {
     return res.status(200).json({ ok: true });
   }
 
-  logEvent(locationId, 'course_outline_complete', payload);
+  logEvent(locationId, 'course_outline_complete', payload).catch(err =>
+    console.error('[logEvent] Failed (non-critical):', err.message)
+  );
 
   try {
     const currentStatus = await getOnboardingStatus(locationId);

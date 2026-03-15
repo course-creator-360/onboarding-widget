@@ -37,7 +37,7 @@ These are resolved in `src/cc360-admin.ts`.
 | `GET /api/booking/check` | `GET /api/customers/booking?locationId=` | Check if customer already booked |
 | `POST /api/booking/cancel` | `POST /api/customers/survey` | Mark booking as cancelled |
 | `GET /api/booking/calendars` | `GET /api/calendars/free-slots` | List calendars |
-| `GET /api/booking/slots` | `GET /api/calendars/free-slots?calendarId=` | Get free time slots |
+| `GET /api/booking/slots` | `GET /api/calendars/free-slots?calendarId=` | Get free time slots. With `overflow=1` and onboarding primary calendar, merges internal (9–5 MT) + Extendly overflow/after-hours and returns `slotMeta` (calendarId/source per slot). |
 | `POST /api/booking/book` | `POST /api/calendars/book` | Book appointment, then syncs booking data to `POST /api/customers/booking` |
 
 ### Reverse notification (admin → widget)
@@ -50,6 +50,17 @@ After course outline generation, cc360-customers-admin calls this widget's `POST
 2. Widget backend forwards to admin `POST /api/calendars/book` (which resolves contactId, creates GHL appointment, creates OnboardingCall record)
 3. Widget backend then syncs booking details to admin `POST /api/customers/booking`
 4. On subsequent page loads, widget checks `GET /api/booking/check` — if `bookingData.bookingData` exists, the booking modal is suppressed
+
+### Extendly overflow routing (onboarding calendar)
+
+When the widget requests slots with `overflow=1` for the primary onboarding calendar and `ONBOARDING_EXTENDLY_CALENDAR_ID` is set, the backend:
+
+- **9:00 AM–5:00 PM Mountain Time**: Shows only internal (primary) calendar slots; if none, shows Extendly slots as overflow.
+- **Outside 9–5 MT**: Shows only Extendly calendar slots (after-hours).
+
+Each slot is returned with `slotMeta` (calendarId and source: `internal` | `extendly`) so the widget books on the correct calendar and can label slots (e.g. “(Extendly)”). Booking ownership is visible via the calendarId stored in `bookingData` (admin can map calendarId to Internal vs Extendly).
+
+Env: `ONBOARDING_PRIMARY_CALENDAR_ID` (defaults to current onboarding calendar), `ONBOARDING_EXTENDLY_CALENDAR_ID` (set to Extendly GHL calendar ID to enable).
 
 ---
 

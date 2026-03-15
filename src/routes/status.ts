@@ -193,8 +193,15 @@ router.post('/onboarding/toggle', async (req, res) => {
 router.get('/events', async (req, res) => {
   const locationId = (req.query.locationId as string) || '';
   if (!locationId) return res.status(400).end();
-  sseBroker.addClient(locationId, res);
-  await sseBroker.broadcastStatus(locationId);
+  // SSE is incompatible with Vercel serverless (60s max duration).
+  // Return current status as a single JSON response instead.
+  // The widget now uses polling as its primary update mechanism.
+  try {
+    const status = await getOnboardingStatus(locationId);
+    res.json(status);
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch status' });
+  }
 });
 
 export default router;

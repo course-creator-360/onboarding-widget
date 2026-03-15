@@ -1223,10 +1223,20 @@
     const completedCount = items.filter(item => item.completed).length;
     const progressPercent = (completedCount / items.length) * 100;
     
+    var courseNotifPending = false;
+    try {
+      courseNotifPending = status.courseCreated && !localStorage.getItem('cc360_course_outline_notif_dismissed');
+    } catch (e) {}
+
+    if (courseNotifPending && !document.getElementById('cc360-outline-notif')) {
+      console.log('[CC360 Widget] Course outline ready — showing notification');
+      window.CC360Widget.showCourseOutlineNotification();
+    }
+
     const allCompleted = status.courseCreated && 
       (!state.featureFlags.connectPaymentsEnabled || status.paymentIntegrated) &&
       (!state.featureFlags.connectDomainEnabled || status.domainConnected);
-    if (allCompleted && !state.hasShownCompletionDialog) {
+    if (allCompleted && !state.hasShownCompletionDialog && !courseNotifPending) {
       console.log('[CC360 Widget] All tasks completed! Showing completion dialog...');
       
       window.CC360Widget.trackSegmentEvent('Onboarding Completed', {
@@ -1752,6 +1762,7 @@
 
     let selectedCalendarId = ONBOARDING_CALENDAR_ID;
     let selectedSlot = null;
+    let slotMetaByDate = null;
 
     wrap.innerHTML = '';
 
@@ -1770,6 +1781,7 @@
       slotsWrap.innerHTML = '<p style="text-align:center;color:#6b7280;padding:16px 0;">Loading available times...</p>';
       confirmWrap.style.display = 'none';
       selectedSlot = null;
+      slotMetaByDate = null;
 
       try {
         const qs = new URLSearchParams({
@@ -1778,9 +1790,11 @@
           endDate: fmtDate(twoWeeksOut),
           timezone: tz
         });
+        qs.set('overflow', '1');
         const resp = await fetch(`${state.apiBase}/api/booking/slots?${qs}`);
         const data = await resp.json();
         const slots = data.slots || data;
+        slotMetaByDate = data.slotMeta || null;
         renderSlots(slots);
       } catch (e) {
         console.error('[CC360 Widget] Failed to fetch slots:', e);
@@ -1834,19 +1848,24 @@
         const grid = document.createElement('div');
         grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
 
-        timeslots.forEach(isoStr => {
+        timeslots.forEach((isoStr, i) => {
           const t = new Date(isoStr);
           const label = t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz });
+          const meta = slotMetaByDate && slotMetaByDate[dateStr] && slotMetaByDate[dateStr][i];
+          const calendarIdForSlot = meta ? meta.calendarId : selectedCalendarId;
+          const sourceLabel = meta && meta.source === 'extendly' ? ' (Extendly)' : '';
 
           const btn = document.createElement('button');
           btn.type = 'button';
-          btn.textContent = label;
+          btn.textContent = label + sourceLabel;
           btn.dataset.slot = isoStr;
+          btn.dataset.calendarId = calendarIdForSlot;
           btn.style.cssText = 'border-radius:6px;padding:6px 10px;font-size:0.75rem;font-weight:500;border:1px solid #e5e7eb;background:#fff;color:#374151;cursor:pointer;transition:all 0.15s;';
           btn.onmouseover = () => { if (selectedSlot !== isoStr) { btn.style.borderColor = '#818cf8'; btn.style.background = '#eef2ff'; } };
           btn.onmouseout = () => { if (selectedSlot !== isoStr) { btn.style.borderColor = '#e5e7eb'; btn.style.background = '#fff'; } };
           btn.onclick = () => {
             selectedSlot = isoStr;
+            selectedCalendarId = calendarIdForSlot;
             scrollArea.querySelectorAll('button[data-slot]').forEach(b => {
               b.style.borderColor = '#e5e7eb'; b.style.background = '#fff'; b.style.color = '#374151';
             });
@@ -2509,7 +2528,7 @@
 
   // ── Course Outline Notification Popup ──────────────────────────────
 
-  window.CC360Widget.showCourseOutlineNotification = function(outlineUrl) {
+  window.CC360Widget.showCourseOutlineNotification = function() {
     try {
       if (localStorage.getItem('cc360_course_outline_notif_dismissed')) {
         console.log('[CC360 Widget] Course outline notification already dismissed');
@@ -2519,6 +2538,13 @@
 
     const existing = document.getElementById('cc360-outline-notif');
     if (existing) existing.remove();
+
+    if (!document.getElementById('cc360-outline-notif-styles')) {
+      const styleEl = document.createElement('style');
+      styleEl.id = 'cc360-outline-notif-styles';
+      styleEl.textContent = window.CC360Widget.getStartScreenStyles();
+      document.head.appendChild(styleEl);
+    }
 
     const notif = document.createElement('div');
     notif.id = 'cc360-outline-notif';
@@ -2550,14 +2576,18 @@
       notif.style.transition = 'opacity .3s, transform .3s';
       notif.style.opacity = '0';
       notif.style.transform = 'translateY(12px) scale(.96)';
-      setTimeout(() => notif.remove(), 300);
       try { localStorage.setItem('cc360_course_outline_notif_dismissed', 'true'); } catch (e) {}
+      setTimeout(() => {
+        notif.remove();
+        var s = window.CC360Widget.state;
+        if (s.currentStatus) window.CC360Widget.renderChecklist(s.currentStatus);
+      }, 300);
     }
 
     document.getElementById('cc360-outline-watch-btn').addEventListener('click', () => {
-      try { localStorage.setItem('cc360_course_outline_video', 'true'); } catch (e) {}
+      try { localStorage.setItem('cc360_course_outline_notif_dismissed', 'true'); } catch (e) {}
       notif.remove();
-      window.location.href = outlineUrl;
+      window.CC360Widget.showCourseOutlineVideo();
     });
 
     document.getElementById('cc360-outline-later-btn').addEventListener('click', dismissNotif);
@@ -2569,6 +2599,13 @@
   window.CC360Widget.showCourseOutlineVideo = function() {
     const existing = document.getElementById('cc360-video-panel');
     if (existing) return;
+
+    if (!document.getElementById('cc360-outline-notif-styles')) {
+      const styleEl = document.createElement('style');
+      styleEl.id = 'cc360-outline-notif-styles';
+      styleEl.textContent = window.CC360Widget.getStartScreenStyles();
+      document.head.appendChild(styleEl);
+    }
 
     const VIDEO_SRC = 'https://cc360-pages.s3-website-us-west-2.amazonaws.com/dashboard-screenshots/2026-03-04/course-outline-introduction.mp4';
     const VTT_SRC = 'https://cc360-pages.s3-website-us-west-2.amazonaws.com/dashboard-screenshots/2026-03-04/course-outline-introduction.vtt';
@@ -2720,8 +2757,8 @@
     widgetStartY: 0,
     hasDragged: false,
     pollInterval: null,
-    eventSource: null,
-    sseConnected: false
+    eventSource: null,  // deprecated (SSE removed)
+    sseConnected: false  // deprecated (SSE removed)
   }, existingState, {
     // Ensure apiBase and skipApiChecks from script attributes take precedence
     apiBase: apiBase,
@@ -2881,76 +2918,8 @@
   };
 
   window.CC360Widget.startSSE = function() {
-    const state = window.CC360Widget.state;
-    if (!state.locationId) {
-      console.warn('[CC360 Widget] Cannot start SSE without location ID');
-      return;
-    }
-    
-    if (state.eventSource) {
-      state.eventSource.close();
-    }
-    
-    try {
-      const sseUrl = `${state.apiBase}/api/events?locationId=${state.locationId}`;
-      console.log('[CC360 Widget] 🔌 Connecting to SSE:', sseUrl);
-      
-      state.eventSource = new EventSource(sseUrl);
-      
-      state.eventSource.onopen = () => {
-        state.sseConnected = true;
-        console.log('[CC360 Widget] ✅ SSE connected - instant updates enabled');
-        if (state.pollInterval) {
-          clearInterval(state.pollInterval);
-          state.pollInterval = setInterval(window.CC360Widget.pollForStatus, 30000);
-          console.log('[CC360 Widget] 📉 Reduced polling to 30s (SSE active)');
-        }
-      };
-      
-      state.eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          console.log('[CC360 Widget] 📨 SSE update received:', data);
-
-          if (data.type === 'course_outline_complete') {
-            console.log('[CC360 Widget] Course outline complete! URL:', data.outlineUrl);
-            if (window.CC360Widget.showCourseOutlineNotification) {
-              window.CC360Widget.showCourseOutlineNotification(data.outlineUrl);
-            }
-            return;
-          }
-
-          const status = data.payload || data;
-          window.CC360Widget.handleStatusUpdate(status);
-        } catch (error) {
-          console.error('[CC360 Widget] Error parsing SSE message:', error);
-        }
-      };
-      
-      state.eventSource.onerror = (error) => {
-        console.warn('[CC360 Widget] ⚠️ SSE error/disconnected:', error);
-        state.sseConnected = false;
-        state.eventSource.close();
-        state.eventSource = null;
-        
-        if (state.pollInterval) {
-          clearInterval(state.pollInterval);
-        }
-        state.pollInterval = setInterval(window.CC360Widget.pollForStatus, 5000);
-        console.log('[CC360 Widget] 📈 Increased polling to 5s (SSE fallback)');
-        
-        setTimeout(() => {
-          if (!state.sseConnected && state.locationId) {
-            console.log('[CC360 Widget] 🔄 Attempting SSE reconnect...');
-            window.CC360Widget.startSSE();
-          }
-        }, 10000);
-      };
-      
-    } catch (error) {
-      console.error('[CC360 Widget] Failed to create SSE connection:', error);
-      state.sseConnected = false;
-    }
+    // SSE removed: incompatible with Vercel serverless (60s timeout).
+    // Polling is the primary update mechanism now.
   };
 
   window.CC360Widget.pollForStatus = async function() {
@@ -2985,10 +2954,8 @@
       clearInterval(state.pollInterval);
     }
     
-    state.pollInterval = setInterval(window.CC360Widget.pollForStatus, 5000);
-    console.log('[CC360 Widget] ✅ Status polling started (every 5 seconds)');
-    
-    window.CC360Widget.startSSE();
+    state.pollInterval = setInterval(window.CC360Widget.pollForStatus, 15000);
+    console.log('[CC360 Widget] Status polling started (every 15 seconds)');
   };
 
   window.CC360Widget.stopStatusUpdates = function() {
@@ -2997,12 +2964,6 @@
       clearInterval(state.pollInterval);
       state.pollInterval = null;
       console.log('[CC360 Widget] Status polling stopped');
-    }
-    if (state.eventSource) {
-      state.eventSource.close();
-      state.eventSource = null;
-      state.sseConnected = false;
-      console.log('[CC360 Widget] SSE connection closed');
     }
   };
 
@@ -3523,6 +3484,17 @@
       return;
     }
 
+    // ── Inject styles (needed by dialogs even if createWidget isn't called) ──
+    if (!document.getElementById('cc360-widget-styles')) {
+      var styleEl = document.createElement('style');
+      styleEl.id = 'cc360-widget-styles';
+      styleEl.textContent = window.CC360Widget.getWidgetStyles() + '\n' + window.CC360Widget.getStartScreenStyles();
+      document.head.appendChild(styleEl);
+    }
+
+    // ── Clean up stale overlays from prior renders ──
+    document.querySelectorAll('.cc360-dialog-overlay, #cc360-booking-overlay, #cc360-outline-notif, #cc360-video-panel, #cc360-video-modal-overlay').forEach(function(el) { el.remove(); });
+
     // ── Process status ──
     if (data.status) {
       state.currentStatus = data.status;
@@ -3820,10 +3792,7 @@
   };
 
   window.addEventListener('beforeunload', () => {
-    const state = window.CC360Widget.state;
-    if (state.eventSource) {
-      state.eventSource.close();
-    }
+    window.CC360Widget.stopStatusUpdates();
   });
 
   console.log('[CC360 Widget] Core module loaded');
