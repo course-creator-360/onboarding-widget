@@ -3508,7 +3508,7 @@
       console.log('[CC360 Widget] Customer:', data.customer.name, '| Status:', data.customer.subscriptionStatus);
     }
 
-    // ── Render ──
+    // ── Render: Survey -> Booking -> Checklist ──
     if (!data.installed) {
       console.log('[CC360 Widget] Not authorized');
       window.cc360WidgetError = data.installError || null;
@@ -3517,12 +3517,21 @@
       if (!state.currentStatus.surveyCompleted) {
         console.log('[CC360 Widget] Showing survey');
         window.CC360Widget.showSurveyModal();
+      } else if (!state.currentStatus.bookingCancelled) {
+        console.log('[CC360 Widget] Survey done - checking booking status');
+        var bookingResp = await fetch(state.apiBase + '/api/booking/check?locationId=' + state.locationId).catch(function() { return null; });
+        var bookingResult = bookingResp && bookingResp.ok ? await bookingResp.json() : null;
+        if (bookingResult && bookingResult.hasBookingData) {
+          console.log('[CC360 Widget] Booking exists - showing checklist');
+          await window.CC360Widget.initializeChecklist();
+        } else {
+          console.log('[CC360 Widget] No booking yet - showing booking modal');
+          window.CC360Widget.showBookingModal();
+        }
       } else {
-        console.log('[CC360 Widget] Showing checklist');
+        console.log('[CC360 Widget] Booking cancelled - showing checklist');
         await window.CC360Widget.initializeChecklist();
       }
-    } else if (state.currentStatus && state.currentStatus.allTasksCompleted && !state.currentStatus.bookingCancelled) {
-      await window.CC360Widget.checkAndShowBookingModal();
     }
 
     // ── Check for pending course outline video (persists across page navigations) ──
