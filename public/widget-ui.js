@@ -1033,8 +1033,8 @@
                 }
                 surveyOverlay.remove();
                 
-                console.log('[CC360 Widget] Survey completed - showing widget checklist');
-                window.CC360Widget.initChecklistAndAnalytics();
+                console.log('[CC360 Widget] Survey completed - checking booking status');
+                window.CC360Widget.showBookingOrChecklist();
               }, 2000);
             } catch (error) {
               console.error('[CC360 Widget] ❌ Error submitting survey:', error);
