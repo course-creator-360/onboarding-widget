@@ -953,14 +953,9 @@
     ]).then(() => {
       renderSurvey();
     }).catch(err => {
-      console.error('[CC360 Widget] Failed to load survey dependencies:', err);
-      surveyContent.innerHTML = `
-        <div style="text-align: center; padding: 40px;">
-          <h2 style="color: #dc2626; margin-bottom: 16px;">Error Loading Survey</h2>
-          <p style="color: #6b7280; margin-bottom: 24px;">Failed to load survey dependencies. Please refresh the page.</p>
-          <button onclick="window.location.reload()" style="padding: 12px 24px; background: #0475FF; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">Refresh Page</button>
-        </div>
-      `;
+      console.warn('[CC360 Widget] Survey deps failed, skipping survey:', err.message);
+      surveyOverlay.remove();
+      window.CC360Widget.showBookingOrChecklist();
     });
     
     function renderSurvey() {
