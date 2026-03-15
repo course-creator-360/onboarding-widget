@@ -81,24 +81,16 @@ app.use((req, res, next) => {
 });
 
 app.use('/public', express.static(path.join(process.cwd(), 'public')));
-app.get('/widget.js', (_req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'widget.js'));
-});
-app.get('/widget-styles.js', (_req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'widget-styles.js'));
-});
-app.get('/widget-analytics.js', (_req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'widget-analytics.js'));
-});
-app.get('/widget-ui.js', (_req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'widget-ui.js'));
-});
-app.get('/widget-core.js', (_req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'widget-core.js'));
-});
-app.get('/widget-bundle.js', (_req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'widget-bundle.js'));
-});
+
+const widgetFiles = ['widget.js', 'widget-styles.js', 'widget-analytics.js', 'widget-ui.js', 'widget-core.js', 'widget-bundle.js'];
+for (const file of widgetFiles) {
+  app.get(`/${file}`, (_req, res) => {
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.sendFile(path.join(process.cwd(), 'public', file));
+  });
+}
 
 app.get('/', (_req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
