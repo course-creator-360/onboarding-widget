@@ -15,6 +15,11 @@ npx prisma generate
 if [ -n "$DATABASE_URL" ] || [ -n "$POSTGRES_PRISMA_URL" ]; then
   echo "🗄️ Running database migrations..."
   
+  # Schema uses EXTERNAL_DATABASE_URL; map from Vercel's env vars if not set
+  if [ -z "$EXTERNAL_DATABASE_URL" ]; then
+    export EXTERNAL_DATABASE_URL="${DATABASE_URL:-$POSTGRES_PRISMA_URL}"
+  fi
+  
   # Use locally installed prisma binary to avoid npm home directory issues
   ./node_modules/.bin/prisma migrate deploy 2>&1 || {
     echo "⚠️ Migration failed - continuing with build"
