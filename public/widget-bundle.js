@@ -2022,7 +2022,7 @@
         document.removeEventListener('keydown', surveyOverlay._escKeyHandler);
       }
       surveyOverlay.remove();
-      window.CC360Widget.initChecklistAndAnalytics();
+      window.CC360Widget.showBookingOrChecklist();
     };
     
     const closeBtn = document.createElement('button');
