@@ -53,54 +53,60 @@
     return fetch(url, opts).finally(function() { clearTimeout(timer); });
   };
 
-  window.CC360Widget.detectLocation = function() {
-    // 1. GHL AppUtils (preferred -- instant, provided by GHL platform)
+  window.CC360Widget._getLocationFromAppUtils = async function() {
     try {
-      if (typeof AppUtils !== 'undefined' && AppUtils.Utilities) {
-        var loc = AppUtils.Utilities.getCurrentLocation();
-        if (loc && typeof loc === 'object' && loc.id) {
-          console.log('[CC360 Widget] Location from AppUtils:', loc.id);
-          return loc.id;
-        }
-        if (loc && loc.then) {
-          // getCurrentLocation may be async in some GHL versions -- handled below
-        }
+      if (typeof AppUtils === 'undefined' || !AppUtils.Utilities || !AppUtils.Utilities.getCurrentLocation) {
+        return null;
       }
-    } catch (e) {}
+      var loc = AppUtils.Utilities.getCurrentLocation();
+      if (loc && typeof loc.then === 'function') {
+        loc = await loc;
+      }
+      return (loc && loc.id) ? loc.id : null;
+    } catch (e) {
+      return null;
+    }
+  };
 
-    // 2. _GHL_CONTEXT (legacy)
-    if (typeof window._GHL_CONTEXT !== 'undefined' && window._GHL_CONTEXT?.locationId) {
-      console.log('[CC360 Widget] Location from _GHL_CONTEXT:', window._GHL_CONTEXT.locationId);
+  window.CC360Widget._getLocationFromContext = function() {
+    if (typeof window._GHL_CONTEXT !== 'undefined' && window._GHL_CONTEXT && window._GHL_CONTEXT.locationId) {
       return window._GHL_CONTEXT.locationId;
     }
-
-    // 3. URL path / query (fallback for demo page & direct links)
-    var urlMatch = window.location.pathname.match(/\/location\/([^\/]+)/) ||
-                   window.location.search.match(/locationId=([^&]+)/);
-    if (urlMatch && urlMatch[1]) {
-      console.log('[CC360 Widget] Location from URL:', urlMatch[1]);
-      return urlMatch[1];
-    }
-
     return null;
   };
 
-  window.CC360Widget.detectLocationAsync = async function() {
-    var sync = window.CC360Widget.detectLocation();
-    if (sync) return sync;
+  window.CC360Widget._getLocationFromUrl = function() {
+    var urlMatch = window.location.pathname.match(/\/location\/([^\/]+)/) ||
+                   window.location.search.match(/locationId=([^&]+)/);
+    return (urlMatch && urlMatch[1]) ? urlMatch[1] : null;
+  };
 
-    // Try async AppUtils.Utilities.getCurrentLocation()
-    try {
-      if (typeof AppUtils !== 'undefined' && AppUtils.Utilities) {
-        var loc = await AppUtils.Utilities.getCurrentLocation();
-        if (loc && loc.id) {
-          console.log('[CC360 Widget] Location from AppUtils (async):', loc.id);
-          return loc.id;
-        }
+  window.CC360Widget.resolveLocationId = async function() {
+    var TIMEOUT_MS = 2500;
+    var POLL_MS = 150;
+    var startedAt = Date.now();
+
+    while (Date.now() - startedAt < TIMEOUT_MS) {
+      var appUtilsId = await window.CC360Widget._getLocationFromAppUtils();
+      if (appUtilsId) {
+        console.log('[CC360 Widget] Location from AppUtils:', appUtilsId);
+        return appUtilsId;
       }
-    } catch (e) {}
 
-    return null;
+      var contextId = window.CC360Widget._getLocationFromContext();
+      if (contextId) {
+        console.log('[CC360 Widget] Location from _GHL_CONTEXT:', contextId);
+        return contextId;
+      }
+
+      await new Promise(function(r) { setTimeout(r, POLL_MS); });
+    }
+
+    var urlId = window.CC360Widget._getLocationFromUrl();
+    if (urlId) {
+      console.warn('[CC360 Widget] AppUtils not available after ' + TIMEOUT_MS + 'ms, falling back to URL:', urlId);
+    }
+    return urlId;
   };
 
   window.CC360Widget.applyConfig = function(config) {
@@ -724,17 +730,13 @@
 
     try { localStorage.removeItem('cc360_widget_minimized'); } catch (e) {}
 
-    // ── Phase 1: get location ID (instant from GHL context or URL) ──
-    var locationId = window.CC360Widget.detectLocation();
-    if (!locationId) {
-      locationId = await window.CC360Widget.detectLocationAsync();
-    }
+    // ── Phase 1: get location ID (waits for GHL AppUtils, then _GHL_CONTEXT, URL as last resort) ──
+    var locationId = await window.CC360Widget.resolveLocationId();
     if (!locationId) {
       console.error('[CC360 Widget] No location ID found - widget stopped');
       return;
     }
     state.locationId = locationId;
-    console.log('[CC360 Widget] Location:', locationId);
 
     // ── Phase 2: single /api/init call (config + verify + install + status) ──
     try {
