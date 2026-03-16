@@ -896,7 +896,6 @@
     `;
   };
 
-  console.log('[CC360 Widget] Styles module loaded');
 })();
 
 (function() {
@@ -905,53 +904,30 @@
   window.CC360Widget = window.CC360Widget || {};
 
   window.CC360Widget.initUserpilot = async function() {
-    var state = window.CC360Widget.state;
-    if (!state.userpilotToken) {
-      console.log('[Userpilot] Skipping - no token available');
-      return;
-    }
-
-    if (!state.locationId) {
-      console.log('[Userpilot] Skipping - no location ID');
-      return;
-    }
-
-    console.log('[Userpilot] Initializing with token:', state.userpilotToken.substring(0, 8) + '...');
+    const state = window.CC360Widget.state;
+    if (!state.userpilotToken || !state.locationId) return;
 
     try {
-      if (typeof window.userpilot !== 'undefined') {
-        console.log('[Userpilot] SDK already loaded');
-      } else {
-        console.log('[Userpilot] Loading SDK...');
+      if (typeof window.userpilot === 'undefined') {
         await new Promise(function(resolve, reject) {
-          var script = document.createElement('script');
+          const script = document.createElement('script');
           script.src = 'https://js.userpilot.io/sdk/latest.js';
           script.async = true;
-          script.onload = function() {
-            console.log('[Userpilot] SDK loaded successfully');
-            resolve();
-          };
-          script.onerror = function(e) {
-            console.error('[Userpilot] SDK load failed:', e);
-            reject(e);
-          };
+          script.onload = resolve;
+          script.onerror = reject;
           document.head.appendChild(script);
         });
-
         await new Promise(function(resolve) { setTimeout(resolve, 100); });
       }
 
-      if (typeof window.userpilot === 'undefined') {
-        console.error('[Userpilot] SDK not available after loading');
-        return;
-      }
+      if (typeof window.userpilot === 'undefined') return;
 
       window.userpilot.init(state.userpilotToken);
 
-      var ghlUser = state.ghlUser || {};
-      var customer = state.customer || {};
+      const ghlUser = state.ghlUser || {};
+      const customer = state.customer || {};
 
-      var userData = {
+      const userData = {
         id: state.locationId,
         email: ghlUser.email || customer.email || (state.locationId + '@placeholder.com'),
         name: ghlUser.name || customer.name || state.locationId,
@@ -963,37 +939,22 @@
         payment_integrated: state.currentStatus?.paymentIntegrated || false
       };
 
-      console.log('[Userpilot] Identifying user:', userData.id);
       window.userpilot.identify(userData.id, userData);
-      console.log('[Userpilot] identify() called successfully');
-
     } catch (error) {
-      console.error('[Userpilot] Failed to initialize:', error);
+      console.error('[Userpilot] Init failed:', error.message);
     }
   };
 
   window.CC360Widget.initSegment = async function() {
-    var state = window.CC360Widget.state;
-    if (!state.segmentWriteKey) {
-      console.log('[Segment] Skipping - no write key available');
-      return;
-    }
-
-    if (!state.locationId) {
-      console.log('[Segment] Skipping - no location ID');
-      return;
-    }
-
-    console.log('[Segment] Initializing with write key:', state.segmentWriteKey.substring(0, 8) + '...');
+    const state = window.CC360Widget.state;
+    if (!state.segmentWriteKey || !state.locationId) return;
 
     try {
       if (typeof window.analytics !== 'undefined' && window.analytics.initialized) {
-        console.log('[Segment] Analytics already initialized');
       } else {
-        var analytics = window.analytics = window.analytics || [];
+        const analytics = window.analytics = window.analytics || [];
         if (!analytics.initialize) {
           if (analytics.invoked) {
-            console.error('[Segment] Snippet included twice');
           } else {
             analytics.invoked = true;
             analytics.methods = ["trackSubmit","trackClick","trackLink","trackForm","pageview","identify","reset","group","track","ready","alias","debug","page","once","off","on","addSourceMiddleware","addIntegrationMiddleware","setAnonymousId","addDestinationMiddleware"];
@@ -1021,26 +982,25 @@
             analytics._writeKey = state.segmentWriteKey;
             analytics.SNIPPET_VERSION = "4.15.3";
             analytics.load(state.segmentWriteKey);
-            console.log('[Segment] Analytics.js loading...');
           }
         }
 
         await new Promise(function(resolve) { setTimeout(resolve, 500); });
       }
 
-      var ghlUser = state.ghlUser || {};
-      var customer = state.customer || {};
+      const ghlUser = state.ghlUser || {};
+      const customer = state.customer || {};
 
-      var userId = ghlUser.id || state.locationId;
-      var userEmail = ghlUser.email || customer.email || '';
-      var userName = ghlUser.name || customer.name || '';
-      var firstName = ghlUser.firstName || '';
-      var lastName = ghlUser.lastName || '';
-      var userRole = ghlUser.role || '';
-      var locationId = state.locationId;
-      var customerName = customer.name || '';
-      var subscriptionStatus = customer.subscriptionStatus || '';
-      var customerCreatedAt = customer.createdAt || '';
+      const userId = ghlUser.id || state.locationId;
+      const userEmail = ghlUser.email || customer.email || '';
+      const userName = ghlUser.name || customer.name || '';
+      const firstName = ghlUser.firstName || '';
+      const lastName = ghlUser.lastName || '';
+      const userRole = ghlUser.role || '';
+      const locationId = state.locationId;
+      const customerName = customer.name || '';
+      const subscriptionStatus = customer.subscriptionStatus || '';
+      const customerCreatedAt = customer.createdAt || '';
 
       if (window.analytics && typeof window.analytics.identify === 'function') {
         window.analytics.identify(userId, {
@@ -1059,7 +1019,6 @@
           environment: 'production',
           role: userRole
         });
-        console.log('[Segment] Called analytics.identify() for', userId);
       }
 
       if (window.analytics && typeof window.analytics.page === 'function') {
@@ -1067,79 +1026,50 @@
           locationId: locationId,
           onboardingStatus: state.currentStatus?.allTasksCompleted ? 'completed' : 'active'
         });
-        console.log('[Segment] Tracked page view');
       }
-
     } catch (error) {
-      console.error('[Segment] Failed to initialize:', error);
+      console.error('[Segment] Init failed:', error.message);
     }
   };
 
   window.CC360Widget.initProfitWell = async function() {
-    var state = window.CC360Widget.state;
-    if (!state.profitWellAuthToken) {
-      console.log('[ProfitWell] Skipping - no auth token available');
-      return;
-    }
+    const state = window.CC360Widget.state;
+    if (!state.profitWellAuthToken) return;
 
-    var stripeCustomerId = state.customer && state.customer.stripeCustomerId;
-    if (!stripeCustomerId) {
-      console.log('[ProfitWell] Skipping - no Stripe customer ID available');
-      return;
-    }
-
-    console.log('[ProfitWell] Initializing...');
+    const stripeCustomerId = state.customer && state.customer.stripeCustomerId;
+    if (!stripeCustomerId) return;
 
     try {
-      if (typeof window.profitwell !== 'undefined') {
-        console.log('[ProfitWell] SDK already loaded');
-      } else {
+      if (typeof window.profitwell === 'undefined') {
         await new Promise(function(resolve, reject) {
-          var script = document.createElement('script');
+          const script = document.createElement('script');
           script.id = 'profitwell-js';
           script.src = 'https://public.profitwell.com/js/profitwell.js?auth=' + state.profitWellAuthToken;
           script.async = true;
           script.setAttribute('data-pw-auth', state.profitWellAuthToken);
-          script.onload = function() {
-            console.log('[ProfitWell] SDK loaded successfully');
-            resolve();
-          };
-          script.onerror = function(e) {
-            console.error('[ProfitWell] SDK load failed:', e);
-            reject(e);
-          };
+          script.onload = resolve;
+          script.onerror = reject;
           document.head.appendChild(script);
         });
-
         await new Promise(function(resolve) { setTimeout(resolve, 200); });
       }
 
-      if (typeof window.profitwell === 'undefined') {
-        console.error('[ProfitWell] SDK not available after loading');
-        return;
-      }
+      if (typeof window.profitwell === 'undefined') return;
 
       window.profitwell('start', { user_id: stripeCustomerId });
-      console.log('[ProfitWell] Started with Stripe customer:', stripeCustomerId);
-
     } catch (error) {
-      console.error('[ProfitWell] Failed to initialize:', error);
+      console.error('[ProfitWell] Init failed:', error.message);
     }
   };
 
   window.CC360Widget.trackSegmentEvent = function(eventName, properties) {
-    var state = window.CC360Widget.state;
-    if (!window.analytics || typeof window.analytics.track !== 'function') {
-      console.warn('[Segment] Analytics not available for tracking:', eventName);
-      return;
-    }
+    const state = window.CC360Widget.state;
+    if (!window.analytics || typeof window.analytics.track !== 'function') return;
 
-    var eventProperties = Object.assign({ location_id: state.locationId }, properties || {});
+    const eventProperties = Object.assign({ location_id: state.locationId }, properties || {});
     window.analytics.track(eventName, eventProperties);
-    console.log('[Segment] Tracked event:', eventName, eventProperties);
   };
 
-  console.log('[CC360 Widget] Analytics module loaded');
 })();
 
 (function() {
@@ -1223,13 +1153,12 @@
     const completedCount = items.filter(item => item.completed).length;
     const progressPercent = (completedCount / items.length) * 100;
     
-    var courseNotifPending = false;
+    let courseNotifPending = false;
     try {
       courseNotifPending = status.courseCreated && !localStorage.getItem('cc360_course_outline_notif_dismissed');
     } catch (e) {}
 
     if (courseNotifPending && !document.getElementById('cc360-outline-notif')) {
-      console.log('[CC360 Widget] Course outline ready — showing notification');
       window.CC360Widget.showCourseOutlineNotification();
     }
 
@@ -1237,8 +1166,6 @@
       (!state.featureFlags.connectPaymentsEnabled || status.paymentIntegrated) &&
       (!state.featureFlags.connectDomainEnabled || status.domainConnected);
     if (allCompleted && !state.hasShownCompletionDialog && !courseNotifPending) {
-      console.log('[CC360 Widget] All tasks completed! Showing completion dialog...');
-      
       window.CC360Widget.trackSegmentEvent('Onboarding Completed', {
         completedSteps: [
           status.courseCreated && 'course_created',
@@ -1365,43 +1292,29 @@
   window.CC360Widget.showBookingOrChecklist = async function() {
     const state = window.CC360Widget.state || {};
 
-    if (document.getElementById('cc360-booking-overlay')) {
-      console.log('[CC360 Widget] Booking modal already open');
-      return;
-    }
+    if (document.getElementById('cc360-booking-overlay')) return;
 
     window.CC360Widget.hideOnboardingWidget();
 
-    if (state.currentStatus && state.currentStatus.bookingCancelled) {
-      console.log('[CC360 Widget] Booking reminder was removed - nothing else to show');
-      return;
-    }
+    if (state.currentStatus && state.currentStatus.bookingCancelled) return;
 
     if (!state.apiBase || !state.locationId) {
-      console.warn('[CC360 Widget] Missing booking context - showing booking modal');
       window.CC360Widget.showBookingModal();
       return;
     }
 
     try {
-      console.log('[CC360 Widget] Checking booking status before next step');
       const response = await fetch(`${state.apiBase}/api/booking/check?locationId=${state.locationId}`);
-
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`API error: ${response.status}`);
 
       const result = await response.json();
-
       if (result && result.hasBookingData) {
-        console.log('[CC360 Widget] Booking already exists - nothing else to show');
+        window.CC360Widget.initializeChecklist();
         return;
       }
 
-      console.log('[CC360 Widget] No booking found - showing booking modal');
       window.CC360Widget.showBookingModal();
     } catch (error) {
-      console.error('[CC360 Widget] Error checking booking status:', error);
       window.CC360Widget.showBookingModal();
     }
   };
@@ -1447,30 +1360,18 @@
     
     document.body.appendChild(overlay);
     
-    document.getElementById('cc360-dialog-ok').addEventListener('click', async () => {
+    const dismissAndCheckBooking = async () => {
       overlay.remove();
-      
-      console.log('[CC360 Widget] All tasks completed - dismissing widget permanently');
       await window.CC360Widget.dismissWidgetPermanently();
-      
       const state = window.CC360Widget.state;
       if (state.currentStatus && !state.currentStatus.bookingCancelled) {
         await window.CC360Widget.checkAndShowBookingModal();
       }
-    });
+    };
     
-    overlay.addEventListener('click', async (e) => {
-      if (e.target === overlay) {
-        overlay.remove();
-        
-        console.log('[CC360 Widget] All tasks completed (overlay click) - dismissing widget permanently');
-        await window.CC360Widget.dismissWidgetPermanently();
-        
-        const state = window.CC360Widget.state;
-        if (state.currentStatus && !state.currentStatus.bookingCancelled) {
-          await window.CC360Widget.checkAndShowBookingModal();
-        }
-      }
+    document.getElementById('cc360-dialog-ok').addEventListener('click', dismissAndCheckBooking);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) dismissAndCheckBooking();
     });
   };
 
@@ -1533,10 +1434,9 @@
     closeBtn.onclick = () => {
       confirmOverlay.remove();
       bookingOverlay.remove();
-      console.log('[CC360 Widget] Booking modal dismissed (X button) - closing without checklist');
-      window.CC360Widget.hideOnboardingWidget();
+      window.CC360Widget.initializeChecklist();
     };
-    
+
     dialogContent.appendChild(closeBtn);
     confirmOverlay.appendChild(dialogContent);
     document.body.appendChild(confirmOverlay);
@@ -1544,12 +1444,11 @@
     document.getElementById('cc360-booking-cancel-dismiss').addEventListener('click', () => {
       confirmOverlay.remove();
       bookingOverlay.remove();
-      window.CC360Widget.trackSegmentEvent('Booking Modal Dismissed', { 
+      window.CC360Widget.trackSegmentEvent('Booking Modal Dismissed', {
         permanentRemoval: false,
         reason: 'temporary_dismiss'
       });
-      console.log('[CC360 Widget] Booking modal dismissed - closing without checklist');
-      window.CC360Widget.hideOnboardingWidget();
+      window.CC360Widget.initializeChecklist();
     });
     
     document.getElementById('cc360-booking-cancel-remove').addEventListener('click', async () => {
@@ -1562,26 +1461,18 @@
       });
       
       try {
-        console.log('[CC360 Widget] Cancelling booking permanently...');
         const response = await fetch(`${state.apiBase}/api/booking/cancel`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ locationId: state.locationId })
         });
         
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`API error: ${response.status}`);
         
-        const updatedStatus = await response.json();
-        console.log('[CC360 Widget] ✅ Booking cancelled permanently');
-        
-        state.currentStatus = updatedStatus;
-        
-        console.log('[CC360 Widget] Booking reminder removed - no checklist will be shown');
+        state.currentStatus = await response.json();
         window.CC360Widget.hideOnboardingWidget();
       } catch (error) {
-        console.error('[CC360 Widget] ❌ Error cancelling booking:', error);
+        console.error('[CC360 Widget] Booking cancel error:', error.message);
         window.CC360Widget.hideOnboardingWidget();
       }
     });
@@ -1590,8 +1481,7 @@
       if (e.target === confirmOverlay) {
         confirmOverlay.remove();
         bookingOverlay.remove();
-        console.log('[CC360 Widget] Booking modal dismissed (overlay click) - closing without checklist');
-        window.CC360Widget.hideOnboardingWidget();
+        window.CC360Widget.initializeChecklist();
       }
     });
   };
@@ -1600,26 +1490,16 @@
     const state = window.CC360Widget.state;
     window.CC360Widget.hideOnboardingWidget();
     try {
-      console.log('[CC360 Widget] Checking if booking data exists...');
       const response = await fetch(`${state.apiBase}/api/booking/check?locationId=${state.locationId}`);
-      
       if (!response.ok) {
-        console.error('[CC360 Widget] ❌ Error checking booking data:', response.status);
         window.CC360Widget.showBookingModal();
         return;
       }
-      
       const result = await response.json();
-      console.log('[CC360 Widget] Booking check result:', result);
-      
       if (!result.hasBookingData) {
-        console.log('[CC360 Widget] ✅ No booking data found, showing booking modal');
         window.CC360Widget.showBookingModal();
-      } else {
-        console.log('[CC360 Widget] Booking data already exists - nothing else to show');
       }
     } catch (error) {
-      console.error('[CC360 Widget] ❌ Error checking booking data:', error);
       window.CC360Widget.showBookingModal();
     }
   };
@@ -1752,13 +1632,8 @@
 
       var iframe = document.createElement('iframe');
       iframe.src = 'https://link.mycrmsupport.com/widget/booking/jQxt2PWaO7YlA2Hvn1zx?agency_name=CourseCreator360&agency_owner_email=support@coursecreator360.com&relationship_id=0-040-232';
-      iframe.style.cssText = 'width:100%;min-height:600px;border:none;';
-      iframe.scrolling = 'no';
+      iframe.style.cssText = 'width:100%;height:900px;border:none;';
       calendarContent.appendChild(iframe);
-
-      var embedScript = document.createElement('script');
-      embedScript.src = 'https://link.mycrmsupport.com/js/form_embed.js';
-      calendarContent.appendChild(embedScript);
     };
     
     const skipBtn = document.createElement('button');
@@ -1776,7 +1651,6 @@
     skipBtn.onmouseover = () => { skipBtn.style.color = '#6b7280'; skipBtn.style.textDecoration = 'underline'; };
     skipBtn.onmouseout = () => { skipBtn.style.color = '#9ca3af'; skipBtn.style.textDecoration = 'none'; };
     skipBtn.onclick = () => {
-      console.log('[CC360 Widget] Maybe later button clicked - showing confirmation dialog');
       window.CC360Widget.showBookingCancelDialog(bookingOverlay);
     };
     
@@ -1796,7 +1670,6 @@
       }
     });
     
-    console.log('[CC360 Widget] Booking modal opened');
   };
 
   // ---------------------------------------------------------------------------
@@ -1999,8 +1872,6 @@
         if (!resp.ok) throw new Error(`API error: ${resp.status}`);
 
         const data = await resp.json();
-        console.log('[CC360 Widget] ✅ Appointment booked:', data);
-
         window.CC360Widget.trackSegmentEvent('Booking Completed', {
           calendarId: selectedCalendarId,
           selectedSlot: slotIso,
@@ -2017,10 +1888,9 @@
 
         setTimeout(() => {
           bookingOverlay.remove();
-          window.CC360Widget.hideOnboardingWidget();
+          window.CC360Widget.initializeChecklist();
         }, 3000);
       } catch (e) {
-        console.error('[CC360 Widget] ❌ Booking failed:', e);
         btn.disabled = false;
         btn.textContent = 'Book This Time';
         btn.style.opacity = '1';
@@ -2070,7 +1940,6 @@
     `;
     
     const closeSurvey = () => {
-      console.log('[CC360 Widget] Survey dismissed by user');
       if (surveyOverlay._escKeyHandler) {
         document.removeEventListener('keydown', surveyOverlay._escKeyHandler);
       }
@@ -2149,8 +2018,7 @@
       window.Babel ? Promise.resolve() : loadScript('https://unpkg.com/@babel/standalone/babel.min.js')
     ]).then(() => {
       renderSurvey();
-    }).catch(err => {
-      console.warn('[CC360 Widget] Survey deps failed, skipping survey:', err.message);
+    }).catch(() => {
       surveyOverlay.remove();
       window.CC360Widget.showBookingOrChecklist();
     });
@@ -2181,10 +2049,8 @@
             setStep(step + 1);
           } else {
             setSubmitted(true);
-            console.log("Survey submitted with data:", formData);
             
             try {
-              console.log('[CC360 Widget] Submitting survey to API...');
               const response = await fetch(`${state.apiBase}/api/survey/complete`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -2206,13 +2072,10 @@
               }
               
               const updatedStatus = await response.json();
-              console.log('[CC360 Widget] ✅ Survey completed and saved to database');
-              
               state.currentStatus = updatedStatus;
               
               if (window.userpilot) {
                 try {
-                  console.log('[Userpilot] 📊 Tracking event: survey_completed');
                   window.userpilot.track('survey_completed', {
                     location_id: state.locationId,
                     reason: formData.reason,
@@ -2222,10 +2085,7 @@
                     course_idea: formData.courseIdea || '',
                     completed_at: new Date().toISOString()
                   });
-                  console.log('[Userpilot] ✅ Survey completion event tracked');
-                } catch (e) {
-                  console.error('[Userpilot] ❌ Error tracking survey completion:', e);
-                }
+                } catch (e) {}
               }
               
               window.CC360Widget.trackSegmentEvent('Survey Completed', {
@@ -2247,11 +2107,9 @@
                 }
                 surveyOverlay.remove();
                 
-                console.log('[CC360 Widget] Survey completed - checking booking status');
                 window.CC360Widget.showBookingOrChecklist();
               }, 2000);
             } catch (error) {
-              console.error('[CC360 Widget] ❌ Error submitting survey:', error);
               setSubmitted(false);
               alert('Failed to submit survey. Please try again. If the problem persists, refresh the page.');
             }
@@ -2462,9 +2320,6 @@
     state.widgetElement.classList.add('minimized', 'setup-required');
     document.body.appendChild(state.widgetElement);
 
-    if (errorMessage) {
-      console.error('[CC360 Widget] Setup error:', errorMessage);
-    }
 
     state.widgetElement.innerHTML = `
       <style>
@@ -2562,14 +2417,12 @@
       widget.style.left = margin + 'px';
       widget.style.right = 'auto';
       adjusted = true;
-      console.log('[CC360 Widget] Forced into view - was off left edge');
     }
     
     if (rect.right > window.innerWidth + widget.offsetWidth - 100) {
       widget.style.right = margin + 'px';
       widget.style.left = 'auto';
       adjusted = true;
-      console.log('[CC360 Widget] Forced into view - was off right edge');
     }
     
     if (rect.top < margin) {
@@ -2577,7 +2430,6 @@
       const adjustment = margin - rect.top;
       widget.style.bottom = Math.max(margin, currentBottom - adjustment) + 'px';
       adjusted = true;
-      console.log('[CC360 Widget] Forced into view - was off top');
     }
     
     if (rect.bottom > window.innerHeight - margin) {
@@ -2585,7 +2437,6 @@
       const overflow = rect.bottom - (window.innerHeight - margin);
       widget.style.bottom = (currentBottom + overflow) + 'px';
       adjusted = true;
-      console.log('[CC360 Widget] Forced into view - was off bottom');
     }
     
     if (adjusted) {
@@ -2600,10 +2451,7 @@
 
   window.CC360Widget.showCourseOutlineNotification = function() {
     try {
-      if (localStorage.getItem('cc360_course_outline_notif_dismissed')) {
-        console.log('[CC360 Widget] Course outline notification already dismissed');
-        return;
-      }
+      if (localStorage.getItem('cc360_course_outline_notif_dismissed')) return;
     } catch (e) {}
 
     const existing = document.getElementById('cc360-outline-notif');
@@ -2677,8 +2525,8 @@
       document.head.appendChild(styleEl);
     }
 
-    const VIDEO_SRC = 'https://cc360-pages.s3-website-us-west-2.amazonaws.com/dashboard-screenshots/2026-03-04/course-outline-introduction.mp4';
-    const VTT_SRC = 'https://cc360-pages.s3-website-us-west-2.amazonaws.com/dashboard-screenshots/2026-03-04/course-outline-introduction.vtt';
+    const VIDEO_SRC = 'https://cc360-pages.s3.us-west-2.amazonaws.com/dashboard-screenshots/2026-03-04/course-outline-introduction.mp4';
+    const VTT_SRC = 'https://cc360-pages.s3.us-west-2.amazonaws.com/dashboard-screenshots/2026-03-04/course-outline-introduction.vtt';
 
     const panel = document.createElement('div');
     panel.id = 'cc360-video-panel';
@@ -2789,14 +2637,12 @@
     requestAnimationFrame(() => panel.classList.add('cc360-visible'));
   };
 
-  console.log('[CC360 Widget] UI module loaded');
 })();
 (function() {
   'use strict';
 
   window.CC360Widget = window.CC360Widget || {};
 
-  // Get existing state (set by widget.js entry point before modules load)
   const existingState = window.CC360Widget?.state || {};
   const apiBase = existingState.apiBase || 'http://localhost:5000';
   const skipApiChecks = existingState.skipApiChecks || false;
@@ -2825,25 +2671,19 @@
     widgetStartX: 0,
     widgetStartY: 0,
     hasDragged: false,
-    pollInterval: null,
-    eventSource: null,  // deprecated (SSE removed)
-    sseConnected: false  // deprecated (SSE removed)
+    pollInterval: null
   }, existingState, {
     // Ensure apiBase and skipApiChecks from script attributes take precedence
     apiBase: apiBase,
     skipApiChecks: skipApiChecks
   });
 
-  if (skipApiChecks) {
-    console.log('[CC360 Widget] ⚠️ API checks disabled - manual toggles will persist');
-  }
 
-  window.CC360Widget.fetchWithTimeout = function(url, options, timeoutMs) {
-    timeoutMs = timeoutMs || 8000;
-    var controller = new AbortController();
-    var timer = setTimeout(function() { controller.abort(); }, timeoutMs);
-    var opts = Object.assign({}, options || {}, { signal: controller.signal });
-    return fetch(url, opts).finally(function() { clearTimeout(timer); });
+  window.CC360Widget.fetchWithTimeout = function(url, options, timeoutMs = 8000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const opts = Object.assign({}, options || {}, { signal: controller.signal });
+    return fetch(url, opts).finally(() => clearTimeout(timer));
   };
 
   window.CC360Widget._getLocationFromAppUtils = async function() {
@@ -2851,10 +2691,8 @@
       if (typeof AppUtils === 'undefined' || !AppUtils.Utilities || !AppUtils.Utilities.getCurrentLocation) {
         return null;
       }
-      var loc = AppUtils.Utilities.getCurrentLocation();
-      if (loc && typeof loc.then === 'function') {
-        loc = await loc;
-      }
+      let loc = AppUtils.Utilities.getCurrentLocation();
+      if (loc && typeof loc.then === 'function') loc = await loc;
       return (loc && loc.id) ? loc.id : null;
     } catch (e) {
       return null;
@@ -2875,35 +2713,25 @@
   };
 
   window.CC360Widget.resolveLocationId = async function() {
-    var TIMEOUT_MS = 2500;
-    var POLL_MS = 150;
-    var startedAt = Date.now();
+    const TIMEOUT_MS = 2500;
+    const POLL_MS = 150;
+    const startedAt = Date.now();
 
     while (Date.now() - startedAt < TIMEOUT_MS) {
-      var appUtilsId = await window.CC360Widget._getLocationFromAppUtils();
-      if (appUtilsId) {
-        console.log('[CC360 Widget] Location from AppUtils:', appUtilsId);
-        return appUtilsId;
-      }
+      const appUtilsId = await window.CC360Widget._getLocationFromAppUtils();
+      if (appUtilsId) return appUtilsId;
 
-      var contextId = window.CC360Widget._getLocationFromContext();
-      if (contextId) {
-        console.log('[CC360 Widget] Location from _GHL_CONTEXT:', contextId);
-        return contextId;
-      }
+      const contextId = window.CC360Widget._getLocationFromContext();
+      if (contextId) return contextId;
 
-      await new Promise(function(r) { setTimeout(r, POLL_MS); });
+      await new Promise(resolve => setTimeout(resolve, POLL_MS));
     }
 
-    var urlId = window.CC360Widget._getLocationFromUrl();
-    if (urlId) {
-      console.warn('[CC360 Widget] AppUtils not available after ' + TIMEOUT_MS + 'ms, falling back to URL:', urlId);
-    }
-    return urlId;
+    return window.CC360Widget._getLocationFromUrl();
   };
 
   window.CC360Widget.applyConfig = function(config) {
-    var state = window.CC360Widget.state;
+    const state = window.CC360Widget.state;
     if (!config) return;
     if (config.ghlAppBaseUrl) state.ghlAppBaseUrl = config.ghlAppBaseUrl;
     if (config.userpilotToken) state.userpilotToken = config.userpilotToken;
@@ -2930,27 +2758,18 @@
       const shouldSkip = forceSkipApiChecks !== undefined ? forceSkipApiChecks : state.skipApiChecks;
       const skipParam = shouldSkip ? '&skipApiChecks=true' : '';
       const url = `${state.apiBase}/api/status?locationId=${state.locationId}${skipParam}`;
-      console.log('[CC360 Widget] Fetching status from:', url);
       
       const response = await window.CC360Widget.fetchWithTimeout(url, {}, 8000);
-      console.log('[CC360 Widget] Status response status:', response.status, response.ok);
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('[CC360 Widget] Status fetch failed:', response.status, errorText);
         throw new Error(`Failed to fetch status: ${response.status} ${errorText}`);
       }
       
       state.currentStatus = await response.json();
-      console.log('[CC360 Widget] Status received:', state.currentStatus);
-      console.log('[CC360 Widget] Survey completed:', state.currentStatus.surveyCompleted);
-      console.log('[CC360 Widget] Booking cancelled:', state.currentStatus.bookingCancelled);
-      
       state.shouldShowWidget = state.currentStatus.shouldShowWidget !== false;
-      console.log('[CC360 Widget] shouldShowWidget evaluated to:', state.shouldShowWidget);
       
       if (!state.shouldShowWidget) {
-        console.log('[CC360 Widget] Widget should not be shown (30+ days old or all tasks completed)');
         if (state.widgetElement) {
           state.widgetElement.remove();
           state.widgetElement = null;
@@ -2958,19 +2777,15 @@
         return false;
       }
       
-      console.log('[CC360 Widget] fetchStatus returning true');
       return true;
     } catch (error) {
-      console.error('[CC360 Widget] ❌ Error fetching status:', error);
-      console.error('[CC360 Widget] Error message:', error.message);
-      console.error('[CC360 Widget] Error stack:', error.stack);
+      console.error('[CC360 Widget] Error fetching status:', error.message);
       return false;
     }
   };
 
   window.CC360Widget.checkInstallation = async function() {
-    var state = window.CC360Widget.state;
-    return state.isInstalled;
+    return window.CC360Widget.state.isInstalled;
   };
 
   window.CC360Widget.handleStatusUpdate = async function(newStatus) {
@@ -2980,7 +2795,6 @@
     state.currentStatus = newStatus;
     
     if (!state.currentStatus.shouldShowWidget) {
-      console.log('[CC360 Widget] Widget should no longer be shown, removing...');
       if (state.widgetElement) {
         state.widgetElement.remove();
         state.widgetElement = null;
@@ -2992,18 +2806,12 @@
     window.CC360Widget.renderChecklist(state.currentStatus);
   };
 
-  window.CC360Widget.startSSE = function() {
-    // SSE removed: incompatible with Vercel serverless (60s timeout).
-    // Polling is the primary update mechanism now.
-  };
-
   window.CC360Widget.pollForStatus = async function() {
     const state = window.CC360Widget.state;
     try {
       const shouldShow = await window.CC360Widget.fetchStatus();
       
       if (!shouldShow || !state.currentStatus || !state.shouldShowWidget) {
-        console.log('[CC360 Widget] Widget should no longer be shown, removing...');
         if (state.widgetElement) {
           state.widgetElement.remove();
           state.widgetElement = null;
@@ -3014,7 +2822,7 @@
       
       window.CC360Widget.renderChecklist(state.currentStatus);
     } catch (error) {
-      console.error('[CC360 Widget] Error polling status:', error);
+      console.error('[CC360 Widget] Poll error:', error.message);
     }
   };
 
@@ -3030,7 +2838,6 @@
     }
     
     state.pollInterval = setInterval(window.CC360Widget.pollForStatus, 15000);
-    console.log('[CC360 Widget] Status polling started (every 15 seconds)');
   };
 
   window.CC360Widget.stopStatusUpdates = function() {
@@ -3038,12 +2845,7 @@
     if (state.pollInterval) {
       clearInterval(state.pollInterval);
       state.pollInterval = null;
-      console.log('[CC360 Widget] Status polling stopped');
     }
-  };
-
-  window.CC360Widget.stopStatusPolling = function() {
-    window.CC360Widget.stopStatusUpdates();
   };
 
   window.CC360Widget.minimizeWidget = function() {
@@ -3067,8 +2869,6 @@
     
     const position = window.CC360Widget.getWidgetPosition();
     window.CC360Widget.saveWidgetPosition(position.isRight, position.bottom, widget.style.height);
-    
-    console.log('[CC360 Widget] Widget minimized');
   };
 
   window.CC360Widget.expandWidget = function() {
@@ -3101,11 +2901,8 @@
         const maxBottom = viewportHeight - expandedHeight - margin;
         widget.style.bottom = Math.min(newBottom, maxBottom) + 'px';
         
-        console.log('[CC360 Widget] Adjusted position to fit in viewport');
       }
     }, 50);
-    
-    console.log('[CC360 Widget] Widget expanded');
   };
 
   window.CC360Widget.dismissWidgetPermanently = async function() {
@@ -3114,17 +2911,11 @@
     
     if (window.userpilot) {
       try {
-        console.log('[Userpilot] 📊 Tracking event: widget_dismissed');
         window.userpilot.track('widget_dismissed', {
           location_id: state.locationId,
           dismissed_at: new Date().toISOString()
         });
-        console.log('[Userpilot] ✅ Event tracked successfully');
-      } catch (e) {
-        console.error('[Userpilot] ❌ Error tracking widget dismissal:', e);
-      }
-    } else {
-      console.log('[Userpilot] ⚠️ Userpilot not initialized, skipping event tracking');
+      } catch (e) {}
     }
     
     window.CC360Widget.trackSegmentEvent('Widget Dismissed', {
@@ -3141,15 +2932,12 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ locationId: state.locationId })
         });
-        console.log('[CC360 Widget] Marked as dismissed in database');
       } catch (error) {
-        console.error('[CC360 Widget] Error marking as dismissed:', error);
+        console.error('[CC360 Widget] Dismiss API error:', error.message);
       }
     }
     
-    window.CC360Widget.stopStatusPolling();
-    
-    console.log('[CC360 Widget] Widget dismissed permanently');
+    window.CC360Widget.stopStatusUpdates();
   };
 
   window.CC360Widget.saveWidgetPosition = function(isRight, bottom, height) {
@@ -3215,24 +3003,16 @@
         if (finalRect.bottom > window.innerHeight - margin) {
           const overflow = finalRect.bottom - (window.innerHeight - margin);
           widget.style.bottom = (constrainedBottom + overflow) + 'px';
-          console.log('[CC360 Widget] Adjusted position on restore - was off bottom');
         }
         
         if (finalRect.top < margin) {
           const overflow = margin - finalRect.top;
           widget.style.bottom = (parseInt(widget.style.bottom) - overflow) + 'px';
-          console.log('[CC360 Widget] Adjusted position on restore - was off top');
         }
         
         const finalBottom = parseInt(widget.style.bottom);
         if (finalBottom !== bottom) {
           window.CC360Widget.saveWidgetPosition(position.isRight, finalBottom, widget.style.height);
-          console.log('[CC360 Widget] Position corrected on restore:', {
-            original: bottom,
-            corrected: finalBottom,
-            viewportHeight: window.innerHeight,
-            widgetHeight: widgetHeight
-          });
         }
       };
       
@@ -3323,7 +3103,6 @@
         
         if (movement > dragThreshold && !state.hasDragged) {
           state.hasDragged = true;
-          console.log('[CC360 Widget] Drag detected - movement:', Math.round(movement), 'px');
         }
         
         if (state.hasDragged) {
@@ -3355,8 +3134,6 @@
         widget.classList.remove('dragging');
         
         if (state.hasDragged) {
-          console.log('[CC360 Widget] Drag completed - repositioning and snapping to side');
-          
           const rect = widget.getBoundingClientRect();
           const centerX = rect.left + rect.width / 2;
           const screenCenter = window.innerWidth / 2;
@@ -3386,8 +3163,6 @@
           
           widget.style.bottom = bottomPos + 'px';
           widget.style.top = 'auto';
-          
-          console.log('[CC360 Widget] Snapped to', snapToRight ? 'right' : 'left', 'side at bottom:', bottomPos);
           
           window.CC360Widget.saveWidgetPosition(snapToRight, bottomPos, widget.style.height);
         }
@@ -3462,41 +3237,24 @@
 
   window.CC360Widget.initializeChecklist = async function() {
     const state = window.CC360Widget.state;
-    console.log('[CC360 Widget] Initializing checklist...');
     
     try {
-      var shouldShow;
-      if (state.currentStatus && state.shouldShowWidget) {
-        console.log('[CC360 Widget] Using already-fetched status');
-        shouldShow = true;
-      } else {
-        console.log('[CC360 Widget] Fetching status from API...');
-        shouldShow = await window.CC360Widget.fetchStatus();
-      }
-      console.log('[CC360 Widget] shouldShow:', shouldShow, 'currentStatus:', !!state.currentStatus, 'shouldShowWidget:', state.shouldShowWidget);
+      const shouldShow = (state.currentStatus && state.shouldShowWidget)
+        ? true
+        : await window.CC360Widget.fetchStatus();
       
-      if (!shouldShow || !state.currentStatus || !state.shouldShowWidget) {
-        console.log('[CC360 Widget] Not showing widget - eligibility check failed');
-        console.log('[CC360 Widget] shouldShow:', shouldShow, 'currentStatus:', !!state.currentStatus, 'shouldShowWidget:', state.shouldShowWidget);
-        return;
-      }
+      if (!shouldShow || !state.currentStatus || !state.shouldShowWidget) return;
 
-      console.log('[CC360 Widget] Creating widget element...');
       if (!state.widgetElement) {
         state.widgetElement = window.CC360Widget.createWidget();
         document.body.appendChild(state.widgetElement);
-        console.log('[CC360 Widget] Widget element created and appended to body');
       } else {
         const existingWidget = state.widgetElement;
         state.widgetElement = window.CC360Widget.createWidget();
         existingWidget.replaceWith(state.widgetElement);
-        console.log('[CC360 Widget] Widget element replaced');
       }
       
-      console.log('[CC360 Widget] Rendering checklist...');
       window.CC360Widget.renderChecklist(state.currentStatus);
-      
-      console.log('[CC360 Widget] Setting up drag and resize...');
       window.CC360Widget.setupDragAndResize();
       
       state.isMinimized = false;
@@ -3505,112 +3263,84 @@
       }
       
       setTimeout(() => window.CC360Widget.forceWidgetIntoView(), 150);
-      
-      console.log('[CC360 Widget] Starting status polling...');
       window.CC360Widget.startStatusPolling();
-      
-      console.log('[CC360 Widget] ✅ Checklist initialized successfully');
     } catch (error) {
-      console.error('[CC360 Widget] ❌ Error initializing checklist:', error);
-      console.error('[CC360 Widget] Error stack:', error.stack);
+      console.error('[CC360 Widget] Checklist init failed:', error.message);
     }
   };
 
   window.CC360Widget.init = async function() {
-    var state = window.CC360Widget.state;
-    var initStart = Date.now();
-    console.log('[CC360 Widget] Initializing...');
+    const state = window.CC360Widget.state;
 
     try { localStorage.removeItem('cc360_widget_minimized'); } catch (e) {}
 
-    // ── Phase 1: get location ID (waits for GHL AppUtils, then _GHL_CONTEXT, URL as last resort) ──
-    var locationId = await window.CC360Widget.resolveLocationId();
+    const locationId = await window.CC360Widget.resolveLocationId();
     if (!locationId) {
-      console.error('[CC360 Widget] No location ID found - widget stopped');
+      console.error('[CC360 Widget] No location ID found');
       return;
     }
     state.locationId = locationId;
 
-    // ── Phase 2: single /api/init call (config + verify + install + status) ──
+    let data;
     try {
-      var response = await window.CC360Widget.fetchWithTimeout(
+      const response = await window.CC360Widget.fetchWithTimeout(
         state.apiBase + '/api/init?locationId=' + locationId, {}, 8000
       );
       if (!response.ok) {
         console.error('[CC360 Widget] /api/init failed:', response.status);
         return;
       }
-      var data = await response.json();
-      console.log('[CC360 Widget] Init completed in', Date.now() - initStart, 'ms');
+      data = await response.json();
     } catch (err) {
-      console.error('[CC360 Widget] Init request failed:', err.message);
+      console.error('[CC360 Widget] Init failed:', err.message);
       return;
     }
 
-    // ── Apply config ──
     window.CC360Widget.applyConfig(data.config);
 
-    // ── Check gates ──
-    if (data.show === false) {
-      console.log('[CC360 Widget] Widget not shown:', data.reason);
-      return;
-    }
+    if (data.show === false) return;
 
-    // ── Inject styles (needed by dialogs even if createWidget isn't called) ──
     if (!document.getElementById('cc360-widget-styles')) {
-      var styleEl = document.createElement('style');
+      const styleEl = document.createElement('style');
       styleEl.id = 'cc360-widget-styles';
       styleEl.textContent = window.CC360Widget.getWidgetStyles() + '\n' + window.CC360Widget.getStartScreenStyles();
       document.head.appendChild(styleEl);
     }
 
-    // ── Clean up stale overlays from prior renders ──
     document.querySelectorAll('.cc360-dialog-overlay, #cc360-booking-overlay, #cc360-outline-notif, #cc360-video-panel, #cc360-video-modal-overlay').forEach(function(el) { el.remove(); });
 
-    // ── Process status ──
     if (data.status) {
       state.currentStatus = data.status;
       state.shouldShowWidget = data.status.shouldShowWidget !== false;
     }
 
     state.isInstalled = !!data.installed;
+    if (data.customer) state.customer = data.customer;
 
-    if (data.customer) {
-      state.customer = data.customer;
-      console.log('[CC360 Widget] Customer:', data.customer.name, '| Status:', data.customer.subscriptionStatus);
-    }
-
-    // ── Render: Survey -> Booking ──
     if (!data.installed) {
-      console.log('[CC360 Widget] Not authorized');
       window.cc360WidgetError = data.installError || null;
       window.CC360Widget.showNotAuthorized(data.installError || null);
     } else if (state.currentStatus && state.shouldShowWidget) {
       window.CC360Widget.hideOnboardingWidget();
       if (!state.currentStatus.surveyCompleted) {
-        console.log('[CC360 Widget] Showing survey');
         window.CC360Widget.showSurveyModal();
       } else {
-        console.log('[CC360 Widget] Survey done - routing to booking flow');
         await window.CC360Widget.showBookingOrChecklist();
       }
     }
 
-    // ── Check for pending course outline video (persists across page navigations) ──
     try {
       const pendingVideo = localStorage.getItem('cc360_course_outline_video');
       if (pendingVideo && window.CC360Widget.showCourseOutlineVideo) {
-        console.log('[CC360 Widget] Pending course outline video found, showing player');
         window.CC360Widget.showCourseOutlineVideo();
       }
     } catch (e) {}
 
-    // ── Deferred non-critical work ──
     window.CC360Widget.startSessionTracking();
     if (data.installed && state.currentStatus && state.currentStatus.surveyCompleted) {
       try {
         if (typeof AppUtils !== 'undefined' && AppUtils.Utilities && AppUtils.Utilities.getCurrentUser) {
-          var ghlUser = await AppUtils.Utilities.getCurrentUser();
+          const ghlUser = await AppUtils.Utilities.getCurrentUser();
           if (ghlUser) {
             state.ghlUser = {
               id: ghlUser.id,
@@ -3621,12 +3351,9 @@
               role: ghlUser.role || '',
               type: ghlUser.type || ''
             };
-            console.log('[CC360 Widget] GHL user context gathered for analytics');
           }
         }
-      } catch (e) {
-        console.log('[CC360 Widget] GHL AppUtils not available for analytics context');
-      }
+      } catch (e) {}
       window.CC360Widget.initUserpilot().catch(function() {});
       window.CC360Widget.initSegment().catch(function() {});
       window.CC360Widget.initProfitWell().catch(function() {});
@@ -3676,17 +3403,17 @@
 
   // ── Session tracking ───────────────────────────────────────────────
   async function gatherGHLContext() {
-    var meta = {};
+    const meta = {};
     try {
       if (typeof AppUtils !== 'undefined' && AppUtils.Utilities) {
-        var user = await AppUtils.Utilities.getCurrentUser();
+        const user = await AppUtils.Utilities.getCurrentUser();
         if (user) {
           meta.ghlUserId = user.id;
           meta.userName = user.name || ((user.firstName || '') + ' ' + (user.lastName || '')).trim();
           meta.userEmail = user.email;
           meta.userRole = user.role;
         }
-        var loc = await AppUtils.Utilities.getCurrentLocation();
+        const loc = await AppUtils.Utilities.getCurrentLocation();
         if (loc) {
           meta.locationName = loc.name;
           if (loc.address) {
@@ -3695,9 +3422,7 @@
           }
         }
       }
-    } catch (e) {
-      console.log('[CC360 Widget] GHL AppUtils not available, skipping context enrichment');
-    }
+    } catch (e) {}
     return Object.keys(meta).length > 0 ? meta : undefined;
   }
 
@@ -3718,11 +3443,8 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ locationId, metadata }),
     }).then(r => r.json()).then(d => {
-      console.log('[CC360 Widget] Session started', d.session?.id || '', metadata ? '(with GHL context)' : '');
       state._currentSessionId = d.session?.id || null;
-    }).catch(e => {
-      console.warn('[CC360 Widget] Session login failed:', e.message);
-    });
+    }).catch(() => {});
 
     // ── Page-level tracking via GHL route change events ──
     var _lastPageEnteredAt = Date.now();
@@ -3773,7 +3495,6 @@
     sendPageView(window.location.pathname, window.location.href, document.title, 0);
     window.addEventListener('routeLoaded', onRouteChange);
     window.addEventListener('routeChangeEvent', onRouteChange);
-    console.log('[CC360 Widget] Page tracking enabled (GHL route events)');
 
     // ── Screenshot-based recording (html2canvas) ──
     (function initScreenshotRecording() {
@@ -3819,16 +3540,10 @@
       var h2cScript = document.createElement('script');
       h2cScript.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
       h2cScript.onload = function() {
-        if (typeof html2canvas === 'undefined') {
-          console.warn('[CC360 Widget] html2canvas not available');
-          return;
-        }
+        if (typeof html2canvas === 'undefined') return;
         state._screenshotTimer = setInterval(captureFrame, CAPTURE_INTERVAL);
-        console.log('[CC360 Widget] Screenshot recording started (every 2s)');
       };
-      h2cScript.onerror = function() {
-        console.warn('[CC360 Widget] Failed to load html2canvas CDN');
-      };
+      h2cScript.onerror = function() {};
       document.head.appendChild(h2cScript);
 
       state._flushScreenshots = flushFrames;
@@ -3865,6 +3580,4 @@
   window.addEventListener('beforeunload', () => {
     window.CC360Widget.stopStatusUpdates();
   });
-
-  console.log('[CC360 Widget] Core module loaded');
 })();

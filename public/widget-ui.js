@@ -250,7 +250,8 @@
       const result = await response.json();
 
       if (result && result.hasBookingData) {
-        console.log('[CC360 Widget] Booking already exists - nothing else to show');
+        console.log('[CC360 Widget] Booking already exists - showing checklist');
+        window.CC360Widget.initializeChecklist();
         return;
       }
 
@@ -389,8 +390,8 @@
     closeBtn.onclick = () => {
       confirmOverlay.remove();
       bookingOverlay.remove();
-      console.log('[CC360 Widget] Booking modal dismissed (X button) - closing without checklist');
-      window.CC360Widget.hideOnboardingWidget();
+      console.log('[CC360 Widget] Booking modal dismissed (X button) - showing checklist');
+      window.CC360Widget.initializeChecklist();
     };
     
     dialogContent.appendChild(closeBtn);
@@ -404,8 +405,8 @@
         permanentRemoval: false,
         reason: 'temporary_dismiss'
       });
-      console.log('[CC360 Widget] Booking modal dismissed - closing without checklist');
-      window.CC360Widget.hideOnboardingWidget();
+      console.log('[CC360 Widget] Booking modal dismissed - showing checklist');
+      window.CC360Widget.initializeChecklist();
     });
     
     document.getElementById('cc360-booking-cancel-remove').addEventListener('click', async () => {
@@ -446,8 +447,8 @@
       if (e.target === confirmOverlay) {
         confirmOverlay.remove();
         bookingOverlay.remove();
-        console.log('[CC360 Widget] Booking modal dismissed (overlay click) - closing without checklist');
-        window.CC360Widget.hideOnboardingWidget();
+        console.log('[CC360 Widget] Booking modal dismissed (overlay click) - showing checklist');
+        window.CC360Widget.initializeChecklist();
       }
     });
   };
@@ -873,7 +874,7 @@
 
         setTimeout(() => {
           bookingOverlay.remove();
-          window.CC360Widget.hideOnboardingWidget();
+          window.CC360Widget.initializeChecklist();
         }, 3000);
       } catch (e) {
         console.error('[CC360 Widget] ❌ Booking failed:', e);
