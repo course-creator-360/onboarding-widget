@@ -635,6 +635,7 @@
         animation: cc360Pulse 2s infinite;
       }
       @keyframes cc360Pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+      @keyframes cc360-spin { to { transform: rotate(360deg); } }
 
       .cc360-outline-notif-close {
         width: 28px;

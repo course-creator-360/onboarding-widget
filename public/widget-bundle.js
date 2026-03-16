@@ -635,6 +635,7 @@
         animation: cc360Pulse 2s infinite;
       }
       @keyframes cc360Pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+      @keyframes cc360-spin { to { transform: rotate(360deg); } }
 
       .cc360-outline-notif-close {
         width: 28px;
@@ -1234,6 +1235,17 @@
             <div class="cc360-checkbox"></div>
             <div class="cc360-checklist-content">
               <div class="cc360-checklist-title">${item.title}</div>
+            </div>
+          </div>
+        `;
+      }
+
+      if (item.key === 'courseCreated' && !item.completed) {
+        return `
+          <div class="cc360-checklist-item" style="cursor: default; opacity: 0.85;">
+            <div class="cc360-spinner" style="width:22px;height:22px;border:3px solid #e5e7eb;border-top-color:#0475FF;border-radius:50%;animation:cc360-spin 0.8s linear infinite;flex-shrink:0;"></div>
+            <div class="cc360-checklist-content">
+              <div class="cc360-checklist-title" style="color:#0475FF;font-style:italic;">Generating your course outline...</div>
             </div>
           </div>
         `;
