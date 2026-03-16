@@ -896,5 +896,4 @@
     `;
   };
 
-  console.log('[CC360 Widget] Styles module loaded');
 })();

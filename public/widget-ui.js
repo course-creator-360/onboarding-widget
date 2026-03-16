@@ -1536,8 +1536,8 @@
       document.head.appendChild(styleEl);
     }
 
-    const VIDEO_SRC = 'https://cc360-pages.s3-website-us-west-2.amazonaws.com/dashboard-screenshots/2026-03-04/course-outline-introduction.mp4';
-    const VTT_SRC = 'https://cc360-pages.s3-website-us-west-2.amazonaws.com/dashboard-screenshots/2026-03-04/course-outline-introduction.vtt';
+    const VIDEO_SRC = 'https://cc360-pages.s3.us-west-2.amazonaws.com/dashboard-screenshots/2026-03-04/course-outline-introduction.mp4';
+    const VTT_SRC = 'https://cc360-pages.s3.us-west-2.amazonaws.com/dashboard-screenshots/2026-03-04/course-outline-introduction.vtt';
 
     const panel = document.createElement('div');
     panel.id = 'cc360-video-panel';

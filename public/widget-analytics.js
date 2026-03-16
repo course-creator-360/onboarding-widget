@@ -4,53 +4,30 @@
   window.CC360Widget = window.CC360Widget || {};
 
   window.CC360Widget.initUserpilot = async function() {
-    var state = window.CC360Widget.state;
-    if (!state.userpilotToken) {
-      console.log('[Userpilot] Skipping - no token available');
-      return;
-    }
-
-    if (!state.locationId) {
-      console.log('[Userpilot] Skipping - no location ID');
-      return;
-    }
-
-    console.log('[Userpilot] Initializing with token:', state.userpilotToken.substring(0, 8) + '...');
+    const state = window.CC360Widget.state;
+    if (!state.userpilotToken || !state.locationId) return;
 
     try {
-      if (typeof window.userpilot !== 'undefined') {
-        console.log('[Userpilot] SDK already loaded');
-      } else {
-        console.log('[Userpilot] Loading SDK...');
+      if (typeof window.userpilot === 'undefined') {
         await new Promise(function(resolve, reject) {
-          var script = document.createElement('script');
+          const script = document.createElement('script');
           script.src = 'https://js.userpilot.io/sdk/latest.js';
           script.async = true;
-          script.onload = function() {
-            console.log('[Userpilot] SDK loaded successfully');
-            resolve();
-          };
-          script.onerror = function(e) {
-            console.error('[Userpilot] SDK load failed:', e);
-            reject(e);
-          };
+          script.onload = resolve;
+          script.onerror = reject;
           document.head.appendChild(script);
         });
-
         await new Promise(function(resolve) { setTimeout(resolve, 100); });
       }
 
-      if (typeof window.userpilot === 'undefined') {
-        console.error('[Userpilot] SDK not available after loading');
-        return;
-      }
+      if (typeof window.userpilot === 'undefined') return;
 
       window.userpilot.init(state.userpilotToken);
 
-      var ghlUser = state.ghlUser || {};
-      var customer = state.customer || {};
+      const ghlUser = state.ghlUser || {};
+      const customer = state.customer || {};
 
-      var userData = {
+      const userData = {
         id: state.locationId,
         email: ghlUser.email || customer.email || (state.locationId + '@placeholder.com'),
         name: ghlUser.name || customer.name || state.locationId,
@@ -62,37 +39,22 @@
         payment_integrated: state.currentStatus?.paymentIntegrated || false
       };
 
-      console.log('[Userpilot] Identifying user:', userData.id);
       window.userpilot.identify(userData.id, userData);
-      console.log('[Userpilot] identify() called successfully');
-
     } catch (error) {
-      console.error('[Userpilot] Failed to initialize:', error);
+      console.error('[Userpilot] Init failed:', error.message);
     }
   };
 
   window.CC360Widget.initSegment = async function() {
-    var state = window.CC360Widget.state;
-    if (!state.segmentWriteKey) {
-      console.log('[Segment] Skipping - no write key available');
-      return;
-    }
-
-    if (!state.locationId) {
-      console.log('[Segment] Skipping - no location ID');
-      return;
-    }
-
-    console.log('[Segment] Initializing with write key:', state.segmentWriteKey.substring(0, 8) + '...');
+    const state = window.CC360Widget.state;
+    if (!state.segmentWriteKey || !state.locationId) return;
 
     try {
       if (typeof window.analytics !== 'undefined' && window.analytics.initialized) {
-        console.log('[Segment] Analytics already initialized');
       } else {
-        var analytics = window.analytics = window.analytics || [];
+        const analytics = window.analytics = window.analytics || [];
         if (!analytics.initialize) {
           if (analytics.invoked) {
-            console.error('[Segment] Snippet included twice');
           } else {
             analytics.invoked = true;
             analytics.methods = ["trackSubmit","trackClick","trackLink","trackForm","pageview","identify","reset","group","track","ready","alias","debug","page","once","off","on","addSourceMiddleware","addIntegrationMiddleware","setAnonymousId","addDestinationMiddleware"];
@@ -120,26 +82,25 @@
             analytics._writeKey = state.segmentWriteKey;
             analytics.SNIPPET_VERSION = "4.15.3";
             analytics.load(state.segmentWriteKey);
-            console.log('[Segment] Analytics.js loading...');
           }
         }
 
         await new Promise(function(resolve) { setTimeout(resolve, 500); });
       }
 
-      var ghlUser = state.ghlUser || {};
-      var customer = state.customer || {};
+      const ghlUser = state.ghlUser || {};
+      const customer = state.customer || {};
 
-      var userId = ghlUser.id || state.locationId;
-      var userEmail = ghlUser.email || customer.email || '';
-      var userName = ghlUser.name || customer.name || '';
-      var firstName = ghlUser.firstName || '';
-      var lastName = ghlUser.lastName || '';
-      var userRole = ghlUser.role || '';
-      var locationId = state.locationId;
-      var customerName = customer.name || '';
-      var subscriptionStatus = customer.subscriptionStatus || '';
-      var customerCreatedAt = customer.createdAt || '';
+      const userId = ghlUser.id || state.locationId;
+      const userEmail = ghlUser.email || customer.email || '';
+      const userName = ghlUser.name || customer.name || '';
+      const firstName = ghlUser.firstName || '';
+      const lastName = ghlUser.lastName || '';
+      const userRole = ghlUser.role || '';
+      const locationId = state.locationId;
+      const customerName = customer.name || '';
+      const subscriptionStatus = customer.subscriptionStatus || '';
+      const customerCreatedAt = customer.createdAt || '';
 
       if (window.analytics && typeof window.analytics.identify === 'function') {
         window.analytics.identify(userId, {
@@ -158,7 +119,6 @@
           environment: 'production',
           role: userRole
         });
-        console.log('[Segment] Called analytics.identify() for', userId);
       }
 
       if (window.analytics && typeof window.analytics.page === 'function') {
@@ -166,77 +126,48 @@
           locationId: locationId,
           onboardingStatus: state.currentStatus?.allTasksCompleted ? 'completed' : 'active'
         });
-        console.log('[Segment] Tracked page view');
       }
-
     } catch (error) {
-      console.error('[Segment] Failed to initialize:', error);
+      console.error('[Segment] Init failed:', error.message);
     }
   };
 
   window.CC360Widget.initProfitWell = async function() {
-    var state = window.CC360Widget.state;
-    if (!state.profitWellAuthToken) {
-      console.log('[ProfitWell] Skipping - no auth token available');
-      return;
-    }
+    const state = window.CC360Widget.state;
+    if (!state.profitWellAuthToken) return;
 
-    var stripeCustomerId = state.customer && state.customer.stripeCustomerId;
-    if (!stripeCustomerId) {
-      console.log('[ProfitWell] Skipping - no Stripe customer ID available');
-      return;
-    }
-
-    console.log('[ProfitWell] Initializing...');
+    const stripeCustomerId = state.customer && state.customer.stripeCustomerId;
+    if (!stripeCustomerId) return;
 
     try {
-      if (typeof window.profitwell !== 'undefined') {
-        console.log('[ProfitWell] SDK already loaded');
-      } else {
+      if (typeof window.profitwell === 'undefined') {
         await new Promise(function(resolve, reject) {
-          var script = document.createElement('script');
+          const script = document.createElement('script');
           script.id = 'profitwell-js';
           script.src = 'https://public.profitwell.com/js/profitwell.js?auth=' + state.profitWellAuthToken;
           script.async = true;
           script.setAttribute('data-pw-auth', state.profitWellAuthToken);
-          script.onload = function() {
-            console.log('[ProfitWell] SDK loaded successfully');
-            resolve();
-          };
-          script.onerror = function(e) {
-            console.error('[ProfitWell] SDK load failed:', e);
-            reject(e);
-          };
+          script.onload = resolve;
+          script.onerror = reject;
           document.head.appendChild(script);
         });
-
         await new Promise(function(resolve) { setTimeout(resolve, 200); });
       }
 
-      if (typeof window.profitwell === 'undefined') {
-        console.error('[ProfitWell] SDK not available after loading');
-        return;
-      }
+      if (typeof window.profitwell === 'undefined') return;
 
       window.profitwell('start', { user_id: stripeCustomerId });
-      console.log('[ProfitWell] Started with Stripe customer:', stripeCustomerId);
-
     } catch (error) {
-      console.error('[ProfitWell] Failed to initialize:', error);
+      console.error('[ProfitWell] Init failed:', error.message);
     }
   };
 
   window.CC360Widget.trackSegmentEvent = function(eventName, properties) {
-    var state = window.CC360Widget.state;
-    if (!window.analytics || typeof window.analytics.track !== 'function') {
-      console.warn('[Segment] Analytics not available for tracking:', eventName);
-      return;
-    }
+    const state = window.CC360Widget.state;
+    if (!window.analytics || typeof window.analytics.track !== 'function') return;
 
-    var eventProperties = Object.assign({ location_id: state.locationId }, properties || {});
+    const eventProperties = Object.assign({ location_id: state.locationId }, properties || {});
     window.analytics.track(eventName, eventProperties);
-    console.log('[Segment] Tracked event:', eventName, eventProperties);
   };
 
-  console.log('[CC360 Widget] Analytics module loaded');
 })();

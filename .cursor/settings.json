@@ -1,0 +1,46 @@
+{
+  "plugins": {
+    "vercel": {
+      "enabled": false
+    },
+    "cursor-team-kit": {
+      "enabled": false
+    },
+    "parallel": {
+      "enabled": false
+    },
+    "prisma": {
+      "enabled": true
+    },
+    "sentry": {
+      "enabled": false
+    },
+    "stripe": {
+      "enabled": false
+    },
+    "box": {
+      "enabled": false
+    },
+    "neon-postgres": {
+      "enabled": false
+    },
+    "notion-workspace": {
+      "enabled": false
+    },
+    "posthog": {
+      "enabled": false
+    },
+    "figma": {
+      "enabled": false
+    },
+    "datadog": {
+      "enabled": false
+    },
+    "snowflake-cursor-plugin": {
+      "enabled": false
+    },
+    "functions": {
+      "enabled": false
+    }
+  }
+}
