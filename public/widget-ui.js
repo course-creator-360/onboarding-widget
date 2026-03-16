@@ -81,7 +81,8 @@
     
     var courseNotifPending = false;
     try {
-      courseNotifPending = status.courseCreated && !localStorage.getItem('cc360_course_outline_notif_dismissed');
+      var notifKey = 'cc360_course_outline_notif_dismissed_' + (state.locationId || '');
+      courseNotifPending = status.courseCreated && !localStorage.getItem(notifKey);
     } catch (e) {}
 
     if (courseNotifPending && !document.getElementById('cc360-outline-notif')) {
@@ -1457,7 +1458,8 @@
 
   window.CC360Widget.showCourseOutlineNotification = function() {
     try {
-      if (localStorage.getItem('cc360_course_outline_notif_dismissed')) {
+      var notifKey = 'cc360_course_outline_notif_dismissed_' + (window.CC360Widget.state?.locationId || '');
+      if (localStorage.getItem(notifKey)) {
         console.log('[CC360 Widget] Course outline notification already dismissed');
         return;
       }
@@ -1503,7 +1505,7 @@
       notif.style.transition = 'opacity .3s, transform .3s';
       notif.style.opacity = '0';
       notif.style.transform = 'translateY(12px) scale(.96)';
-      try { localStorage.setItem('cc360_course_outline_notif_dismissed', 'true'); } catch (e) {}
+      try { localStorage.setItem(notifKey, 'true'); } catch (e) {}
       setTimeout(() => {
         notif.remove();
         var s = window.CC360Widget.state;
@@ -1512,7 +1514,7 @@
     }
 
     document.getElementById('cc360-outline-watch-btn').addEventListener('click', () => {
-      try { localStorage.setItem('cc360_course_outline_notif_dismissed', 'true'); } catch (e) {}
+      try { localStorage.setItem(notifKey, 'true'); } catch (e) {}
       notif.remove();
       window.CC360Widget.showCourseOutlineVideo();
     });
