@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { cancelBooking } from '../db';
+import { cancelBooking, updateOnboardingStatus } from '../db';
 import { sseBroker } from '../sse';
 import { getCC360AdminConfig } from '../cc360-admin';
 
@@ -70,6 +70,28 @@ router.post('/booking/cancel', async (req, res) => {
     console.error('[Booking Cancel] Error cancelling booking:', error);
     res.status(500).json({ 
       error: 'Failed to cancel booking',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+router.post('/booking/reset', async (req, res) => {
+  const { locationId } = req.body as { locationId?: string };
+
+  if (!locationId) {
+    return res.status(400).json({ error: 'locationId is required' });
+  }
+
+  try {
+    console.log(`[Booking Reset] Resetting bookingCancelled for ${locationId}`);
+    const status = await updateOnboardingStatus(locationId, { bookingCancelled: false });
+    await sseBroker.broadcastStatus(locationId);
+    console.log(`[Booking Reset] ✅ Booking reset successfully for ${locationId}`);
+    res.json(status);
+  } catch (error) {
+    console.error('[Booking Reset] Error resetting booking:', error);
+    res.status(500).json({
+      error: 'Failed to reset booking',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }

@@ -3529,6 +3529,16 @@
           height: window.innerHeight,
           x: window.scrollX,
           y: window.scrollY,
+          onclone: function(clonedDoc) {
+            var imgs = clonedDoc.querySelectorAll('img');
+            var loc = window.location;
+            for (var i = 0; i < imgs.length; i++) {
+              try {
+                var u = new URL(imgs[i].src, loc.href);
+                if (u.origin !== loc.origin) imgs[i].src = '';
+              } catch (e) {}
+            }
+          },
         }).then(function(canvas) {
           var data = canvas.toDataURL('image/jpeg', 0.5);
           frameBuffer.push({ data: data, timestamp: new Date().toISOString() });
