@@ -1412,6 +1412,7 @@
 
   window.CC360Widget.showBookingCancelDialog = function(bookingOverlay) {
     const state = window.CC360Widget.state;
+    const calendarWasShown = bookingOverlay && bookingOverlay._calendarShown;
     const confirmOverlay = document.createElement('div');
     confirmOverlay.className = 'cc360-dialog-overlay cc360-dialog-overlay--high';
     
@@ -1421,18 +1422,33 @@
     const closeBtn = document.createElement('button');
     closeBtn.innerHTML = '×';
     closeBtn.className = 'cc360-dialog-close';
-    dialogContent.innerHTML = `
-      <h3 class="cc360-dialog-title">Remove Booking Reminder?</h3>
-      <p class="cc360-dialog-message">
-        Are you sure you want to remove the booking reminder? You won't see it again, but you can always book a call later from your dashboard.
-      </p>
-      <div class="cc360-dialog-buttons">
-        <button id="cc360-booking-cancel-dismiss" class="cc360-dialog-btn cc360-dialog-btn-secondary">Dismiss</button>
-        <button id="cc360-booking-cancel-remove" class="cc360-dialog-btn cc360-dialog-btn-danger">Remove Forever</button>
-      </div>
-    `;
+
+    if (calendarWasShown) {
+      dialogContent.innerHTML = `
+        <h3 class="cc360-dialog-title">Did you schedule your call?</h3>
+        <p class="cc360-dialog-message">
+          If you already booked your onboarding call, great! If not, you can always come back later.
+        </p>
+        <div class="cc360-dialog-buttons">
+          <button id="cc360-booking-cancel-dismiss" class="cc360-dialog-btn cc360-dialog-btn-secondary">Not yet, remind me later</button>
+          <button id="cc360-booking-cancel-remove" class="cc360-dialog-btn cc360-dialog-btn-primary" style="background:linear-gradient(135deg,#0E325E 0%,#0475FF 100%);color:#fff;border:none;">Yes, I booked!</button>
+        </div>
+      `;
+    } else {
+      dialogContent.innerHTML = `
+        <h3 class="cc360-dialog-title">Not ready to book?</h3>
+        <p class="cc360-dialog-message">
+          No worries! We'll remind you later. You can always book a call from your dashboard.
+        </p>
+        <div class="cc360-dialog-buttons">
+          <button id="cc360-booking-cancel-dismiss" class="cc360-dialog-btn cc360-dialog-btn-secondary">Remind me later</button>
+          <button id="cc360-booking-cancel-remove" class="cc360-dialog-btn cc360-dialog-btn-danger">No thanks</button>
+        </div>
+      `;
+    }
     
     closeBtn.onclick = () => {
+      if (bookingOverlay._cleanupMessageListener) bookingOverlay._cleanupMessageListener();
       confirmOverlay.remove();
       bookingOverlay.remove();
       window.CC360Widget.initializeChecklist();
@@ -1443,6 +1459,7 @@
     document.body.appendChild(confirmOverlay);
     
     document.getElementById('cc360-booking-cancel-dismiss').addEventListener('click', () => {
+      if (bookingOverlay._cleanupMessageListener) bookingOverlay._cleanupMessageListener();
       confirmOverlay.remove();
       bookingOverlay.remove();
       window.CC360Widget.trackSegmentEvent('Booking Modal Dismissed', {
@@ -1453,8 +1470,17 @@
     });
     
     document.getElementById('cc360-booking-cancel-remove').addEventListener('click', async () => {
+      if (bookingOverlay._cleanupMessageListener) bookingOverlay._cleanupMessageListener();
       confirmOverlay.remove();
       bookingOverlay.remove();
+
+      if (calendarWasShown) {
+        window.CC360Widget.trackSegmentEvent('Booking Confirmed Via Dialog', {
+          reason: 'user_confirmed_booked'
+        });
+        window.CC360Widget.initializeChecklist();
+        return;
+      }
       
       window.CC360Widget.trackSegmentEvent('Booking Cancelled', { 
         permanentRemoval: true,
@@ -1480,6 +1506,7 @@
     
     confirmOverlay.addEventListener('click', (e) => {
       if (e.target === confirmOverlay) {
+        if (bookingOverlay._cleanupMessageListener) bookingOverlay._cleanupMessageListener();
         confirmOverlay.remove();
         bookingOverlay.remove();
         window.CC360Widget.initializeChecklist();
@@ -1635,6 +1662,26 @@
       iframe.src = 'https://link.mycrmsupport.com/widget/booking/jQxt2PWaO7YlA2Hvn1zx?agency_name=CourseCreator360&agency_owner_email=support@coursecreator360.com&relationship_id=0-040-232';
       iframe.style.cssText = 'width:100%;height:calc(85vh - 60px);border:none;';
       calendarContent.appendChild(iframe);
+
+      var embedScript = document.createElement('script');
+      embedScript.src = 'https://link.mycrmsupport.com/js/form_embed.js';
+      calendarContent.appendChild(embedScript);
+
+      bookingOverlay._calendarShown = true;
+
+      function onCalendarMessage(e) {
+        if (!e.origin || e.origin.indexOf('mycrmsupport.com') === -1) return;
+        var msg = typeof e.data === 'string' ? e.data : JSON.stringify(e.data || '');
+        if (/scheduled|confirmed|appointment.*booked|formSubmit/i.test(msg)) {
+          window.removeEventListener('message', onCalendarMessage);
+          bookingOverlay.remove();
+          window.CC360Widget.initializeChecklist();
+        }
+      }
+      window.addEventListener('message', onCalendarMessage);
+      bookingOverlay._cleanupMessageListener = function() {
+        window.removeEventListener('message', onCalendarMessage);
+      };
     };
     
     const skipBtn = document.createElement('button');
