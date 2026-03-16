@@ -168,7 +168,7 @@
         `;
       }
 
-      if (item.key === 'courseCreated' && !item.completed) {
+      if (item.key === 'courseCreated' && !item.completed && status.surveyCompleted) {
         return `
           <div class="cc360-checklist-item" style="cursor: default; opacity: 0.85;">
             <div class="cc360-spinner" style="width:22px;height:22px;border:3px solid #e5e7eb;border-top-color:#0475FF;border-radius:50%;animation:cc360-spin 0.8s linear infinite;flex-shrink:0;"></div>
