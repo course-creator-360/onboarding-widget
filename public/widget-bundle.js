@@ -1611,7 +1611,7 @@
     
     const calendarContent = document.createElement('div');
     calendarContent.id = 'cc360-booking-calendar';
-    calendarContent.style.cssText = 'padding: 0; max-height: 700px; overflow-y: auto; display: none; position: relative;';
+    calendarContent.style.cssText = 'padding: 0; display: none; position: relative;';
     
     scheduleBtn.onclick = () => {
       initialContent.style.display = 'none';
@@ -1633,7 +1633,7 @@
 
       var iframe = document.createElement('iframe');
       iframe.src = 'https://link.mycrmsupport.com/widget/booking/jQxt2PWaO7YlA2Hvn1zx?agency_name=CourseCreator360&agency_owner_email=support@coursecreator360.com&relationship_id=0-040-232';
-      iframe.style.cssText = 'width:100%;height:900px;border:none;';
+      iframe.style.cssText = 'width:100%;height:calc(85vh - 60px);border:none;';
       calendarContent.appendChild(iframe);
     };
     
