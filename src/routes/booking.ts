@@ -5,23 +5,7 @@ import { getCC360AdminConfig } from '../cc360-admin';
 
 const router = Router();
 
-// Onboarding calendar: internal reps 9–5 MT; Extendly overflow + after-hours (Notion ticket: Extendly overflow routing)
 const ONBOARDING_PRIMARY_CALENDAR_ID = process.env.ONBOARDING_PRIMARY_CALENDAR_ID || 'k0yrAymNvet7hUvzBxTh';
-const ONBOARDING_EXTENDLY_CALENDAR_ID = process.env.ONBOARDING_EXTENDLY_CALENDAR_ID || '';
-const BUSINESS_HOURS_MT = { start: 9, end: 17 }; // 9 AM - 5 PM Mountain
-
-function isSlotInBusinessHoursMT(isoSlot: string): boolean {
-  const d = new Date(isoSlot);
-  const mtStr = d.toLocaleString('en-US', { hour: '2-digit', hour12: false, timeZone: 'America/Denver' });
-  const mt = parseInt(mtStr, 10);
-  return mt >= BUSINESS_HOURS_MT.start && mt < BUSINESS_HOURS_MT.end;
-}
-
-function parseSlotsByDate(data: { slots?: Record<string, string[]> }): Record<string, string[]> {
-  const raw = data.slots ?? (data as unknown as Record<string, string[]>);
-  if (typeof raw !== 'object') return {};
-  return raw;
-}
 
 router.post('/booking/cancel', async (req, res) => {
   const { locationId } = req.body as { locationId?: string };
@@ -171,7 +155,7 @@ router.get('/booking/calendars', async (_req, res) => {
 });
 
 router.get('/booking/slots', async (req, res) => {
-  const { calendarId, startDate, endDate, timezone, overflow } = req.query as Record<string, string>;
+  const { calendarId, startDate, endDate, timezone } = req.query as Record<string, string>;
 
   if (!calendarId || !startDate || !endDate) {
     return res.status(400).json({ error: 'calendarId, startDate and endDate are required' });
@@ -181,12 +165,6 @@ router.get('/booking/slots', async (req, res) => {
 
   if (!apiKey) {
     return res.status(503).json({ error: 'Calendar service not configured' });
-  }
-
-  const useOverflow = overflow === '1' || overflow === 'true';
-  const isOnboardingPrimary = calendarId === ONBOARDING_PRIMARY_CALENDAR_ID;
-  if (useOverflow && isOnboardingPrimary && ONBOARDING_EXTENDLY_CALENDAR_ID) {
-    return handleSlotsWithOverflow(req, res, { startDate, endDate, timezone });
   }
 
   try {
@@ -210,85 +188,6 @@ router.get('/booking/slots', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-
-async function handleSlotsWithOverflow(
-  req: import('express').Request,
-  res: import('express').Response,
-  params: { startDate: string; endDate: string; timezone?: string }
-) {
-  const { apiKey, apiBaseUrl } = getCC360AdminConfig();
-  const { startDate, endDate, timezone } = params;
-
-  try {
-    const qsBase = new URLSearchParams({ startDate, endDate });
-    if (timezone) qsBase.set('timezone', timezone);
-
-    const [primaryRes, extendlyRes] = await Promise.all([
-      fetch(`${apiBaseUrl}/api/calendars/free-slots?${new URLSearchParams({ ...Object.fromEntries(qsBase), calendarId: ONBOARDING_PRIMARY_CALENDAR_ID })}`, {
-        headers: { 'x-api-key': apiKey! }
-      }),
-      fetch(`${apiBaseUrl}/api/calendars/free-slots?${new URLSearchParams({ ...Object.fromEntries(qsBase), calendarId: ONBOARDING_EXTENDLY_CALENDAR_ID })}`, {
-        headers: { 'x-api-key': apiKey! }
-      })
-    ]);
-
-    if (!primaryRes.ok) {
-      const text = await primaryRes.text();
-      console.error(`[Booking Slots Overflow] Primary ❌ ${primaryRes.status}: ${text}`);
-      return res.status(primaryRes.status).json({ error: 'Failed to fetch primary slots' });
-    }
-    if (!extendlyRes.ok) {
-      const text = await extendlyRes.text();
-      console.error(`[Booking Slots Overflow] Extendly ❌ ${extendlyRes.status}: ${text}`);
-      return res.status(extendlyRes.status).json({ error: 'Failed to fetch overflow slots' });
-    }
-
-    const primaryByDate = parseSlotsByDate(await primaryRes.json());
-    const extendlyByDate = parseSlotsByDate(await extendlyRes.json());
-
-    const merged: Record<string, Array<{ iso: string; calendarId: string; source: 'internal' | 'extendly' }>> = {};
-    const allDates = new Set([...Object.keys(primaryByDate), ...Object.keys(extendlyByDate)]);
-
-    for (const dateStr of Array.from(allDates).sort()) {
-      const primarySlots = primaryByDate[dateStr] ?? [];
-      const extendlySlots = extendlyByDate[dateStr] ?? [];
-      const internal: Array<{ iso: string; calendarId: string; source: 'internal' | 'extendly' }> = [];
-      const extendlyAfterHours: Array<{ iso: string; calendarId: string; source: 'internal' | 'extendly' }> = [];
-      const extendlyInBusinessHours: Array<{ iso: string; calendarId: string; source: 'internal' | 'extendly' }> = [];
-
-      for (const iso of primarySlots) {
-        if (isSlotInBusinessHoursMT(iso)) {
-          internal.push({ iso, calendarId: ONBOARDING_PRIMARY_CALENDAR_ID, source: 'internal' });
-        }
-      }
-      for (const iso of extendlySlots) {
-        if (isSlotInBusinessHoursMT(iso)) {
-          extendlyInBusinessHours.push({ iso, calendarId: ONBOARDING_EXTENDLY_CALENDAR_ID, source: 'extendly' });
-        } else {
-          extendlyAfterHours.push({ iso, calendarId: ONBOARDING_EXTENDLY_CALENDAR_ID, source: 'extendly' });
-        }
-      }
-
-      merged[dateStr] = [
-        ...internal,
-        ...extendlyAfterHours,
-        ...(internal.length === 0 ? extendlyInBusinessHours : [])
-      ].sort((a, b) => a.iso.localeCompare(b.iso));
-    }
-
-    const slotsForWidget: Record<string, string[]> = {};
-    const slotMeta: Record<string, Array<{ calendarId: string; source: 'internal' | 'extendly' }>> = {};
-    for (const [dateStr, arr] of Object.entries(merged)) {
-      slotsForWidget[dateStr] = arr.map(s => s.iso);
-      slotMeta[dateStr] = arr.map(s => ({ calendarId: s.calendarId, source: s.source }));
-    }
-
-    res.json({ slots: slotsForWidget, slotMeta });
-  } catch (error) {
-    console.error('[Booking Slots Overflow] Error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-}
 
 router.post('/booking/book', async (req, res) => {
   const { calendarId, contactId, selectedSlot, selectedTimezone, title, notes, locationId } = req.body;

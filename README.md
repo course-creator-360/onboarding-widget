@@ -19,6 +19,7 @@ GHL Dashboard  ──▶  This Widget (beryl)            ──▶  CC360 Custom
 ### Authentication
 
 This widget authenticates to cc360-customers-admin using an API key sent as the `x-api-key` header. Configure via:
+
 - `CC360_CUSTOMERS_API_KEY` (or `CC360_CUSTOMERS_ADMIN_API_KEY`)
 - `CC360_CUSTOMERS_ADMIN_API_BASE_URL` (defaults to `https://cc360-customers-admin.vercel.app`)
 
@@ -26,19 +27,21 @@ These are resolved in `src/cc360-admin.ts`.
 
 ### What this widget proxies to cc360-customers-admin
 
-| Widget Route | Admin Endpoint | Purpose |
-|---|---|---|
-| `GET /api/location/verify` | `GET /api/customers?locationId=` | Check if location is a CC360 customer |
-| `GET /api/location/validate` | `GET /api/customers?locationId=` | Validate location for installation |
-| `GET /api/location-context` | `GET /api/customers?locationId=` | Fetch customer context |
-| `GET /api/installation/check` | `GET /api/customers?locationId=` | Background sync of sub-account data |
-| `GET /api/status` | `GET /api/customers?locationId=` | Sync `courseOutlineGenerated` field |
-| `POST /api/survey/complete` | `POST /api/customers/survey` | Submit survey responses |
-| `GET /api/booking/check` | `GET /api/customers/booking?locationId=` | Check if customer already booked |
-| `POST /api/booking/cancel` | `POST /api/customers/survey` | Mark booking as cancelled |
-| `GET /api/booking/calendars` | `GET /api/calendars/free-slots` | List calendars |
-| `GET /api/booking/slots` | `GET /api/calendars/free-slots?calendarId=` | Get free time slots. With `overflow=1` and onboarding primary calendar, merges internal (9–5 MT) + Extendly overflow/after-hours and returns `slotMeta` (calendarId/source per slot). |
-| `POST /api/booking/book` | `POST /api/calendars/book` | Book appointment, then syncs booking data to `POST /api/customers/booking` |
+
+| Widget Route                  | Admin Endpoint                              | Purpose                                                                    |
+| ----------------------------- | ------------------------------------------- | -------------------------------------------------------------------------- |
+| `GET /api/location/verify`    | `GET /api/customers?locationId=`            | Check if location is a CC360 customer                                      |
+| `GET /api/location/validate`  | `GET /api/customers?locationId=`            | Validate location for installation                                         |
+| `GET /api/location-context`   | `GET /api/customers?locationId=`            | Fetch customer context                                                     |
+| `GET /api/installation/check` | `GET /api/customers?locationId=`            | Background sync of sub-account data                                        |
+| `GET /api/status`             | `GET /api/customers?locationId=`            | Sync `courseOutlineGenerated` field                                        |
+| `POST /api/survey/complete`   | `POST /api/customers/survey`                | Submit survey responses                                                    |
+| `GET /api/booking/check`      | `GET /api/customers/booking?locationId=`    | Check if customer already booked                                           |
+| `POST /api/booking/cancel`    | `POST /api/customers/survey`                | Mark booking as cancelled                                                  |
+| `GET /api/booking/calendars`  | `GET /api/calendars/free-slots`             | List calendars                                                             |
+| `GET /api/booking/slots`      | `GET /api/calendars/free-slots?calendarId=` | Get free time slots for the specified calendar.                            |
+| `POST /api/booking/book`      | `POST /api/calendars/book`                  | Book appointment, then syncs booking data to `POST /api/customers/booking` |
+
 
 ### Reverse notification (admin → widget)
 
@@ -53,14 +56,12 @@ After course outline generation, cc360-customers-admin calls this widget's `POST
 
 ### Extendly overflow routing (onboarding calendar)
 
-When the widget requests slots with `overflow=1` for the primary onboarding calendar and `ONBOARDING_EXTENDLY_CALENDAR_ID` is set, the backend:
+Routing is handled client-side based on the user's current time in Mountain Time:
 
-- **9:00 AM–5:00 PM Mountain Time**: Shows only internal (primary) calendar slots; if none, shows Extendly slots as overflow.
-- **Outside 9–5 MT**: Shows only Extendly calendar slots (after-hours).
+- **9:00 AM–5:00 PM MT, weekdays**: Shows the native CC360 slot-picker (internal reps via GHL calendar). If no internal slots are available, a fallback button offers the Extendly iframe calendar (overflow).
+- **After hours / weekends**: Shows the Extendly iframe calendar directly (`link.mycrmsupport.com`).
 
-Each slot is returned with `slotMeta` (calendarId and source: `internal` | `extendly`) so the widget books on the correct calendar and can label slots (e.g. “(Extendly)”). Booking ownership is visible via the calendarId stored in `bookingData` (admin can map calendarId to Internal vs Extendly).
-
-Env: `ONBOARDING_PRIMARY_CALENDAR_ID` (defaults to current onboarding calendar), `ONBOARDING_EXTENDLY_CALENDAR_ID` (set to Extendly GHL calendar ID to enable).
+Extendly bookings fire webhooks to `cc360-customers-admin`, which detects the Extendly payload format and tags `onboardingCallSource: "extendly"`. Internal bookings via the native slot-picker are tagged `onboardingCallSource: "cc360"`. The admin dashboard shows color-coded badges for booking ownership.
 
 ---
 
@@ -147,90 +148,81 @@ make help           # Show all available commands
 
 #### Create App in GHL Marketplace
 
-1. Go to **https://marketplace.gohighlevel.com/**
+1. Go to **[https://marketplace.gohighlevel.com/](https://marketplace.gohighlevel.com/)**
 2. Navigate to **"My Apps"** → **"Create New App"**
 3. Fill in basic information:
-   - **App Name**: `CourseCreator360 Onboarding Widget`
-   - **Description**: `Onboarding checklist for new CC360 users`
-   - **Category**: `Tools & Utilities`
+  - **App Name**: `CourseCreator360 Onboarding Widget`
+  - **Description**: `Onboarding checklist for new CC360 users`
+  - **Category**: `Tools & Utilities`
 
 #### Configure OAuth Settings
 
 1. Go to **Advanced Settings → Auth**
 2. Set **Redirect URI**:
-   ```
+  ```
    http://localhost:4002/oauth/callback
-   ```
+  ```
    (For production: `https://your-domain.com/oauth/callback`)
-
 3. Select **OAuth Scopes**:
-   - ✅ `courses.readonly`
-   - ✅ `funnels/funnel.readonly`
-   - ✅ `funnels/page.readonly`
-   - ✅ `products.readonly`
-   - ✅ `products/prices.readonly`
-   - ✅ `payments/orders.readonly`
-   - ✅ `payments/transactions.readonly`
-   - ✅ `payments/custom-provider.readonly`
-
+  - ✅ `courses.readonly`
+  - ✅ `funnels/funnel.readonly`
+  - ✅ `funnels/page.readonly`
+  - ✅ `products.readonly`
+  - ✅ `products/prices.readonly`
+  - ✅ `payments/orders.readonly`
+  - ✅ `payments/transactions.readonly`
+  - ✅ `payments/custom-provider.readonly`
 4. **Save** and copy your credentials:
-   - Client ID
-   - Client Secret
+  - Client ID
+  - Client Secret
 
 ### 2. Local Development
 
 #### Option A: Using Docker (Recommended)
 
 1. **Copy environment template:**
-   ```bash
+  ```bash
    cp env.template .env
-   ```
-
+  ```
 2. **Edit `.env` with your credentials:**
-   ```env
+  ```env
    PORT=4002
    NODE_ENV=development
-   
+
    # GHL OAuth Credentials
    GHL_CLIENT_ID=your_client_id_here
    GHL_CLIENT_SECRET=your_client_secret_here
    GHL_REDIRECT_URI=http://localhost:4002/oauth/callback
-   
+
    # Database (auto-configured by Docker)
    DATABASE_URL=postgresql://user:password@postgres:5432/onboarding?schema=public
-   ```
-
+  ```
 3. **Start the server:**
-   ```bash
+  ```bash
    docker-compose up --build
-   ```
-
+  ```
 4. **Verify it's running:**
-   ```bash
+  ```bash
    curl http://localhost:4002/api/healthz
    # Should return: {"ok":true}
-   ```
+  ```
 
 #### Option B: Without Docker
 
 1. **Install dependencies:**
-   ```bash
+  ```bash
    npm install
-   ```
-
+  ```
 2. **Set up PostgreSQL** (locally or use cloud service)
-
 3. **Update `.env`** with your database URL
-
 4. **Run migrations:**
-   ```bash
+  ```bash
    npm run db:migrate
-   ```
-
+  ```
 5. **Start dev server:**
-   ```bash
+  ```bash
    npm run dev
-   ```
+  ```
 
 ### 3. Agency Authorization
 
@@ -246,20 +238,17 @@ This is a **ONE-TIME setup** that allows the widget to work for ALL sub-accounts
 #### Setup Steps
 
 1. **Open the demo page:**
-   ```
+  ```
    http://localhost:4002
-   ```
-
+  ```
 2. **Click "🔑 Setup Agency OAuth"**
-
 3. **Authorize in GoHighLevel:**
-   - Select a location or agency-wide option
-   - Review permissions
-   - Click "Allow"
-
+  - Select a location or agency-wide option
+  - Review permissions
+  - Click "Allow"
 4. **Verify authorization:**
-   - Success message appears
-   - Click "Check Agency Status" → Should show "✓ Authorized"
+  - Success message appears
+  - Click "Check Agency Status" → Should show "✓ Authorized"
 
 #### OAuth Callback Redirect
 
@@ -271,6 +260,7 @@ The OAuth callback automatically redirects back to the original page after autho
 - **Console Logs**: Clear logging for debugging redirect issues
 
 **Flow:**
+
 ```
 User clicks "Setup Agency OAuth"
   ↓
@@ -292,38 +282,34 @@ Retrieve returnUrl from state cookie
 #### Add to GHL Custom Values
 
 1. **Go to Agency Settings:**
-   ```
+  ```
    GHL Agency Dashboard → Settings → Custom Values
-   ```
-
+  ```
 2. **Add Custom JavaScript:**
-   - Click "Add Custom Value" → Select "JavaScript"
-
+  - Click "Add Custom Value" → Select "JavaScript"
 3. **Paste this code:**
-
-   ```html
+  ```html
    <script>
    (function() {
      'use strict';
-     
+
      // Extract locationId from GHL dashboard URL
      const match = window.location.pathname.match(/\/location\/([^\/]+)/);
      if (!match) return;
-     
+
      const locationId = match[1];
      console.log('[CC360] Loading widget for location:', locationId);
-     
+
      // Load widget script
      const script = document.createElement('script');
      script.src = 'http://localhost:4002/widget.js';  // Update for production
      script.setAttribute('data-location', locationId);
      script.setAttribute('data-api', 'http://localhost:4002');  // Update for production
-     
+
      document.body.appendChild(script);
    })();
    </script>
-   ```
-
+  ```
 4. **Apply to "All Locations"** and **Save**
 
 ---
@@ -343,12 +329,14 @@ The app automatically detects Vercel environment and configures URLs accordingly
 3. Select plan (free tier available) and create
 
 Vercel automatically injects these environment variables:
+
 - `DATABASE_URL` or `POSTGRES_PRISMA_URL` → pooled connection for queries
 - `POSTGRES_URL` → direct connection for migrations
 
 **Option B: External Database (Neon, Supabase, etc.)**
 
 Set in Vercel → Settings → Environment Variables:
+
 ```bash
 DATABASE_URL=postgresql://user:password@host:5432/dbname?schema=public&connection_limit=5&pool_timeout=10&connect_timeout=10
 POSTGRES_URL=postgresql://user:password@host:5432/dbname?schema=public
@@ -357,6 +345,7 @@ POSTGRES_URL=postgresql://user:password@host:5432/dbname?schema=public
 **Connection Pooling for Serverless:**
 
 For external databases, add connection pooling parameters to prevent timeouts:
+
 - `connection_limit=5` - Max connections per serverless function
 - `pool_timeout=10` - Timeout for acquiring connection (seconds)
 - `connect_timeout=10` - TCP connection timeout (seconds)
@@ -384,6 +373,7 @@ SKIP_BUILD_MIGRATIONS=true
 ```
 
 **Generate secure migration secret:**
+
 ```bash
 openssl rand -base64 32
 ```
@@ -401,6 +391,7 @@ vercel --prod
 Or push to your connected Git repository (Vercel auto-deploys).
 
 The deployment process:
+
 1. Installs dependencies (`npm install`)
 2. Generates Prisma Client (`npx prisma generate`)
 3. **Runs database migrations automatically** (`prisma migrate deploy`)
@@ -469,10 +460,12 @@ USERPILOT_STAGE_TOKEN=your_staging_app_token          # Staging app token
 Userpilot is fully integrated for both server-side and client-side tracking:
 
 **Server-Side (Backend):**
+
 - Tracks webhook events: `domain_connected`, `course_created`, `payment_integrated`
 - Requires: `USERPILOT_API_KEY` in environment variables
 
 **Client-Side (Widget):**
+
 - Identifies users with GHL location context (name, email, company, etc.)
 - Tracks widget interactions: `widget_dismissed`, `survey_completed`
 - Requires: `USERPILOT_TOKEN` in environment variables
@@ -482,6 +475,7 @@ The widget automatically fetches the token from your backend configuration - no 
 ### Environment Auto-Detection
 
 The app automatically detects its environment:
+
 - **Local**: `http://localhost:4002`
 - **Vercel**: `https://{VERCEL_URL}` (auto-detected)
 - **Custom**: Set `APP_BASE_URL` to override
@@ -495,6 +489,7 @@ The app automatically detects its environment:
 The app uses **Prisma ORM** with **PostgreSQL** for cloud-ready, type-safe database operations.
 
 **Why Prisma?**
+
 - Type-safe database access with auto-completion
 - Migrations via dedicated endpoint
 - Async operations for scalability
@@ -577,26 +572,25 @@ npm run db:studio
 
 1. Edit `prisma/schema.prisma`
 2. Create migration:
-   ```bash
+  ```bash
    npx prisma migrate dev --name your_change_name
-   ```
+  ```
 3. Prisma will automatically:
-   - Create migration file in `prisma/migrations/`
-   - Apply it to local database
-   - Regenerate Prisma Client
+  - Create migration file in `prisma/migrations/`
+  - Apply it to local database
+  - Regenerate Prisma Client
 
 #### Production
 
 1. After deploying code with new migrations:
-   ```bash
+  ```bash
    curl -X POST https://your-app.vercel.app/api/migrate \
      -H "x-vercel-migrate-secret: your-secure-random-secret"
-   ```
-
+  ```
 2. The endpoint will:
-   - Run all pending migrations
-   - Update the database schema
-   - Return success/error response
+  - Run all pending migrations
+  - Update the database schema
+  - Return success/error response
 
 **Important:** Migrations are NOT run automatically in production. You must trigger them manually via the `/api/migrate` endpoint after each deployment that includes schema changes.
 
@@ -654,12 +648,14 @@ The widget automatically tracks newly created sub-accounts under the agency. Whe
 5. ✅ Maintains the agency relationship
 
 **Key Benefits:**
+
 - 🎯 **Automatic Discovery**: No manual registration needed
 - 📊 **Analytics Ready**: Track widget adoption across sub-accounts
 - 🔍 **Full Visibility**: See all sub-accounts using the widget
 - ⏰ **Activity Monitoring**: Track when sub-accounts last accessed the widget
 
 **Console Logs:**
+
 ```
 [Installation Check] ✨ NEW SUB-ACCOUNT DETECTED ✨
 [Installation Check] Location: Client Business (loc_abc123)
@@ -668,6 +664,7 @@ The widget automatically tracks newly created sub-accounts under the agency. Whe
 ```
 
 **Example Usage:**
+
 ```javascript
 // Get all sub-accounts for an agency
 const response = await fetch('/api/sub-accounts?accountId=agency_xyz789');
@@ -683,6 +680,7 @@ console.log(`New sub-accounts this week: ${data.stats.lastWeek}`);
 ### How It Works
 
 **Flow Diagram:**
+
 ```
 ┌─────────────────────────────────────────┐
 │ 1. Sub-Account User Logs Into GHL      │
@@ -726,6 +724,7 @@ console.log(`New sub-accounts this week: ${data.stats.lastWeek}`);
 ```
 
 **Data Captured for Each Sub-Account:**
+
 ```typescript
 {
   id: "cuid_abc123",                    // Unique identifier
@@ -754,6 +753,7 @@ GET /api/sub-accounts?accountId=agency_xyz789
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -787,6 +787,7 @@ GET /api/sub-accounts/verify/:locationId
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -808,6 +809,7 @@ GET /api/sub-accounts/stats/:accountId
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -837,6 +839,7 @@ POST /api/sub-accounts/:locationId/deactivate
 The widget supports advanced user interaction:
 
 #### Dragging
+
 - **Drag Handle**: Click and drag the header to move
 - **Smart Snapping**: Auto-snaps to left or right side
 - **Viewport Boundaries**: Constrained to stay visible
@@ -844,11 +847,13 @@ The widget supports advanced user interaction:
 - **Position Persistence**: Remembers position across page reloads
 
 #### Resizing
+
 - **Resize Handle**: Subtle handle at top (visible on hover)
 - **Height Constraints**: 200px min, 90% viewport max
 - **Height Persistence**: Remembers height across reloads
 
 #### Touch Support
+
 - Full support for mobile/tablet devices
 - Touch gestures work same as mouse
 
@@ -876,17 +881,20 @@ window.cc360Widget.reload();
 The app automatically refreshes OAuth tokens without requiring re-authorization.
 
 **How it works:**
+
 1. Checks if token expires within 5 minutes
 2. Uses refresh_token to get new access_token
 3. Updates database automatically
 4. API calls use fresh token
 
 **When refresh happens:**
+
 - Widget loads and token is expiring
 - API status check runs
 - Any API call that needs authentication
 
 **Logs to watch for:**
+
 ```
 [GHL API] Agency token expired, refreshing...
 [GHL API] Token refreshed successfully, expires at: [timestamp]
@@ -912,32 +920,30 @@ The widget can be configured to only display for a specific location ID using th
 You can find the location ID in several ways:
 
 1. **From the GHL Dashboard URL:**
-   ```
+  ```
    https://app.gohighlevel.com/v2/location/loc_abc123xyz/dashboard
                                           └─────┬──────┘
                                            Location ID
-   ```
-
+  ```
 2. **From Browser Console:**
-   Open the GHL dashboard and check the console logs:
-   ```
-   [CC360 Widget] Using auto-detected location ID: loc_abc123xyz
-   ```
+  Open the GHL dashboard and check the console logs:
 
 #### Step 2: Set the Environment Variable
 
 **Local Development (.env):**
+
 ```bash
 WIDGET_LOCATION_ID_FILTER=loc_abc123xyz
 ```
 
 **Vercel (Production/Staging):**
+
 1. Go to your Vercel project dashboard
 2. Navigate to **Settings** → **Environment Variables**
 3. Add a new variable:
-   - **Name:** `WIDGET_LOCATION_ID_FILTER`
-   - **Value:** `loc_abc123xyz` (your specific location ID)
-   - **Environment:** Choose `Production`, `Preview`, or `Development` as needed
+  - **Name:** `WIDGET_LOCATION_ID_FILTER`
+  - **Value:** `loc_abc123xyz` (your specific location ID)
+  - **Environment:** Choose `Production`, `Preview`, or `Development` as needed
 4. Click **Save**
 5. **Redeploy** your application for the changes to take effect
 
@@ -946,32 +952,30 @@ WIDGET_LOCATION_ID_FILTER=loc_abc123xyz
 After deploying with the filter enabled, the widget will:
 
 1. **Show only for the specified location:**
-   - When a user from the matching location opens the app, they'll see the widget
-   - Console logs will show: `✅ Location filter check passed`
-
+  - When a user from the matching location opens the app, they'll see the widget
+  - Console logs will show: `✅ Location filter check passed`
 2. **Hide for all other locations:**
-   - When a user from a different location opens the app, the widget won't appear
-   - Console logs will show: `🚫 Location filter active - widget will not show`
+  - When a user from a different location opens the app, the widget won't appear
+  - Console logs will show: `🚫 Location filter active - widget will not show`
 
 ### Disabling the Filter
 
 To show the widget for **all authorized locations** again:
 
 1. **Remove or comment out** the environment variable:
-   ```bash
+  ```bash
    # WIDGET_LOCATION_ID_FILTER=loc_abc123xyz
-   ```
-
+  ```
 2. Or **set it to an empty value**:
-   ```bash
+  ```bash
    WIDGET_LOCATION_ID_FILTER=
-   ```
-
+  ```
 3. Redeploy your application
 
 ### Console Logging
 
 **When Filter is Active and Location Matches:**
+
 ```
 [CC360 Widget] 🔧 Fetching config from: https://your-app.com/api/config
 [CC360 Widget] ✅ Config received: { widgetLocationFilter: "loc_abc123xyz", ... }
@@ -981,6 +985,7 @@ To show the widget for **all authorized locations** again:
 ```
 
 **When Filter is Active but Location Doesn't Match:**
+
 ```
 [CC360 Widget] 🔧 Fetching config from: https://your-app.com/api/config
 [CC360 Widget] ✅ Config received: { widgetLocationFilter: "loc_abc123xyz", ... }
@@ -993,6 +998,7 @@ To show the widget for **all authorized locations** again:
 ```
 
 **When No Filter is Set (Default Behavior):**
+
 ```
 [CC360 Widget] 🔧 Fetching config from: https://your-app.com/api/config
 [CC360 Widget] ✅ Config received: { widgetLocationFilter: null, ... }
@@ -1023,6 +1029,7 @@ Control whether the "Connect Payments" step appears in the onboarding widget.
 **Default:** `true` (enabled)
 
 **Options:**
+
 - `true` - Show the "Connect Payments" checklist item
 - `false` - Hide the "Connect Payments" checklist item
 
@@ -1035,6 +1042,7 @@ Control whether the "Connect a Domain" step appears in the onboarding widget.
 **Default:** `true` (enabled)
 
 **Options:**
+
 - `true` - Show the "Connect a Domain" checklist item
 - `false` - Hide the "Connect a Domain" checklist item
 
@@ -1061,9 +1069,9 @@ FEATURE_CONNECT_DOMAIN_ENABLED=false
 1. Go to your Vercel project dashboard
 2. Navigate to **Settings** → **Environment Variables**
 3. Add a new variable:
-   - **Name:** `FEATURE_CONNECT_PAYMENTS_ENABLED`
-   - **Value:** `true` or `false`
-   - **Environment:** Choose `Production`, `Preview`, or `Development` as needed
+  - **Name:** `FEATURE_CONNECT_PAYMENTS_ENABLED`
+  - **Value:** `true` or `false`
+  - **Environment:** Choose `Production`, `Preview`, or `Development` as needed
 4. Click **Save**
 5. **Redeploy** your application for the changes to take effect
 
@@ -1072,26 +1080,22 @@ FEATURE_CONNECT_DOMAIN_ENABLED=false
 #### Flow
 
 1. **Application Start:**
-   - Environment variable `FEATURE_CONNECT_PAYMENTS_ENABLED` is read
-   - Default is `true` if not set or set to any value other than `"false"`
-
+  - Environment variable `FEATURE_CONNECT_PAYMENTS_ENABLED` is read
+  - Default is `true` if not set or set to any value other than `"false"`
 2. **Widget Initialization:**
-   - Widget calls `/api/config` endpoint
-   - Receives `featureFlags` object in response
-   - Stores flags in widget state
-
+  - Widget calls `/api/config` endpoint
+  - Receives `featureFlags` object in response
+  - Stores flags in widget state
 3. **Checklist Rendering:**
-   - All checklist items are defined with optional `featureFlag` property
-   - Items are filtered based on feature flag values
-   - Only enabled items are rendered in the UI
-
+  - All checklist items are defined with optional `featureFlag` property
+  - Items are filtered based on feature flag values
+  - Only enabled items are rendered in the UI
 4. **Progress Calculation:**
-   - Progress is calculated based on enabled items only
-   - Example: If Connect Payments is disabled, progress shows "2/3" instead of "2/4"
-
+  - Progress is calculated based on enabled items only
+  - Example: If Connect Payments is disabled, progress shows "2/3" instead of "2/4"
 5. **Completion Detection:**
-   - Completion logic checks only enabled tasks
-   - Widget shows completion dialog when all enabled tasks are done
+  - Completion logic checks only enabled tasks
+  - Widget shows completion dialog when all enabled tasks are done
 
 #### When a Feature Flag is Disabled
 
@@ -1109,6 +1113,7 @@ FEATURE_CONNECT_PAYMENTS_ENABLED=true
 ```
 
 **Result:**
+
 - Checklist shows: ✓ Sign in, Connect Payments, Create Course, Connect Domain
 - Progress: "0/4" → "4/4"
 - Completion: All 4 tasks must be done
@@ -1120,6 +1125,7 @@ FEATURE_CONNECT_PAYMENTS_ENABLED=false
 ```
 
 **Result:**
+
 - Checklist shows: ✓ Sign in, Create Course, Connect Domain (no Connect Payments)
 - Progress: "0/3" → "3/3"
 - Completion: Only 3 tasks must be done
@@ -1132,6 +1138,7 @@ FEATURE_CONNECT_DOMAIN_ENABLED=false
 ```
 
 **Result:**
+
 - Checklist shows: ✓ Sign in, Connect Payments, Create Course (no Connect Domain)
 - Progress: "0/3" → "3/3"
 - Completion: Only 3 tasks must be done
@@ -1145,6 +1152,7 @@ FEATURE_CONNECT_DOMAIN_ENABLED=false
 ```
 
 **Result:**
+
 - Checklist shows: ✓ Sign in, Create Course
 - Progress: "0/2" → "2/2"
 - Completion: Only 2 tasks must be done
@@ -1152,6 +1160,7 @@ FEATURE_CONNECT_DOMAIN_ENABLED=false
 ### Use Cases
 
 **Disable Connect Payments when:**
+
 - You want to simplify onboarding for users who don't need payment integration
 - Running a pilot program without payment features
 - Certain sub-accounts don't require payment setup
@@ -1160,6 +1169,7 @@ FEATURE_CONNECT_DOMAIN_ENABLED=false
 - Customer-specific customization needs
 
 **Disable Connect Domain when:**
+
 - Users will use the default subdomain provided by the platform
 - Domain setup is handled separately outside the onboarding flow
 - You want to simplify onboarding for users who don't have a custom domain
@@ -1181,24 +1191,21 @@ FEATURE_CONNECT_DOMAIN_ENABLED=false
 #### Local Testing
 
 1. Edit `.env` file:
-   ```bash
+  ```bash
    FEATURE_CONNECT_PAYMENTS_ENABLED=false
-   ```
-
+  ```
 2. Restart the development server:
-   ```bash
+  ```bash
    make restart
-   ```
-
+  ```
 3. Open the widget in a browser:
-   ```bash
+  ```bash
    make open
-   ```
-
+  ```
 4. Verify:
-   - "Connect Payments" item is not shown
-   - Progress bar shows "X/3" instead of "X/4"
-   - Console shows: `🚩 Feature flags received: { connectPaymentsEnabled: false }`
+  - "Connect Payments" item is not shown
+  - Progress bar shows "X/3" instead of "X/4"
+  - Console shows: `🚩 Feature flags received: { connectPaymentsEnabled: false }`
 
 #### Production Testing (Vercel)
 
@@ -1344,13 +1351,11 @@ Add documentation for the new feature flag in this README section.
 In GHL Marketplace → Your App → Webhooks:
 
 1. **Webhook URL**: `https://your-app.vercel.app/api/webhooks/ghl`
-
 2. **Subscribe to events**:
-   - ✅ `ProductCreate` - Course/product creation
-   - ✅ `ProductUpdate` - Course/product updates
-   - ✅ `ProductDelete` - Course/product deletion
-   - ✅ `ExternalAuthConnected` - Payment integration
-
+  - ✅ `ProductCreate` - Course/product creation
+  - ✅ `ProductUpdate` - Course/product updates
+  - ✅ `ProductDelete` - Course/product deletion
+  - ✅ `ExternalAuthConnected` - Payment integration
 3. **Required OAuth Scope**: `products.readonly`
 
 ### Webhook Event Mapping
@@ -1393,11 +1398,13 @@ curl "http://localhost:4002/api/status?locationId=test_location_123"
 **Widget Initialization (Efficient ✅):**
 
 When a location loads the widget:
+
 ```
 User opens GHL dashboard → Widget detects locationId → Direct API lookup
 ```
 
 **Code Flow:**
+
 ```typescript
 // 1. Widget detects location from URL/context
 const locationId = detectLocationFromContext();
@@ -1416,6 +1423,7 @@ const validation = await validateLocationId(locationId);
 **Location Validation (Efficient ✅):**
 
 The `validateLocationId()` function uses direct lookup:
+
 - Makes a GET request to GHL API: `GET /locations/{locationId}`
 - GHL instantly returns whether the location exists and belongs to your agency
 - No iteration, no fetching lists, just a single lookup
@@ -1423,24 +1431,28 @@ The `validateLocationId()` function uses direct lookup:
 **Sub-Account Registration (Efficient ✅):**
 
 When a new sub-account is detected:
+
 - After validation succeeds, register in our database
 - Database Writes: 1 upsert to `sub_accounts` table
 - API Calls: 0 (already validated above)
 
 #### Performance Comparison
 
-| Operation | Old (Bad) Approach | New (Good) Approach |
-|-----------|-------------------|---------------------|
-| Validate 1 location | Fetch 1000 locations → Find match | Direct lookup: 1 API call |
-| Widget init | Fetch all → Check if location in list | Direct lookup: 1 API call |
-| Check 100 different locations | Fetch 1000 × 100 times | 100 direct lookups |
-| API calls for validation | 1000+ locations/request | 1 location/request |
+
+| Operation                     | Old (Bad) Approach                    | New (Good) Approach       |
+| ----------------------------- | ------------------------------------- | ------------------------- |
+| Validate 1 location           | Fetch 1000 locations → Find match     | Direct lookup: 1 API call |
+| Widget init                   | Fetch all → Check if location in list | Direct lookup: 1 API call |
+| Check 100 different locations | Fetch 1000 × 100 times                | 100 direct lookups        |
+| API calls for validation      | 1000+ locations/request               | 1 location/request        |
+
 
 #### Best Practices
 
 **✅ DO Use These Functions:**
 
 For individual location validation:
+
 - `validateLocationId(locationId)` - Checks if location belongs to agency
 - `searchLocationById(locationId)` - Gets location details
 - `getLocation(locationId)` - Gets location with SDK client
@@ -1448,11 +1460,13 @@ For individual location validation:
 **❌ DON'T Use This Function:**
 
 For location validation:
+
 - `getAgencyLocations()` - Fetches ALL locations (expensive!)
 
 **📝 When to Use `getAgencyLocations()`:**
 
 ONLY use when you actually need ALL locations:
+
 - Admin dashboard showing all sub-accounts
 - Bulk operations on all locations
 - Analytics/reporting across all locations
@@ -1465,16 +1479,19 @@ ONLY use when you actually need ALL locations:
 The app uses a Prisma Client singleton pattern to optimize for serverless environments:
 
 **Connection Pooling:**
+
 - Reuses Prisma Client instances across serverless invocations
 - Prevents connection pool exhaustion
 - Handles cold starts efficiently
 
 **For Vercel Postgres:**
+
 - Use `POSTGRES_PRISMA_URL` (already pooled)
 - Vercel automatically handles connection pooling
 
 **For External Databases:**
 Add connection pool parameters to `DATABASE_URL`:
+
 ```
 ?connection_limit=5&pool_timeout=10&connect_timeout=10
 ```
@@ -1488,6 +1505,7 @@ Add connection pool parameters to `DATABASE_URL`:
 #### Database Connection Issues
 
 Ensure PostgreSQL container is running:
+
 ```bash
 docker-compose ps
 docker-compose logs postgres
@@ -1523,6 +1541,7 @@ docker-compose down && docker-compose up --build
 **Cause**: Redirect URI mismatch
 
 **Solution**:
+
 1. Check GHL Marketplace redirect URI matches `.env` exactly
 2. No trailing slashes
 3. Use `http` for localhost, `https` for production
@@ -1533,6 +1552,7 @@ docker-compose down && docker-compose up --build
 **Cause**: Agency not authorized
 
 **Solution**:
+
 ```bash
 make agency-setup  # Run OAuth flow
 ```
@@ -1544,6 +1564,7 @@ Or visit `http://localhost:4002` and click "Setup Agency OAuth"
 **Cause**: Return URL not preserved or invalid
 
 **Solution**:
+
 1. Check browser console for redirect logs
 2. Verify state cookie contains returnUrl
 3. Check Vercel logs for redirect attempts
@@ -1554,6 +1575,7 @@ Or visit `http://localhost:4002` and click "Setup Agency OAuth"
 #### Widget Doesn't Appear
 
 **Check**:
+
 1. Custom Values applied to locations
 2. URLs in widget code are correct
 3. JavaScript console for errors (F12)
@@ -1562,6 +1584,7 @@ Or visit `http://localhost:4002` and click "Setup Agency OAuth"
 #### Checklist Not Updating
 
 **Check**:
+
 1. Webhooks configured in GHL Marketplace
 2. Status polling active (check browser console for polling logs)
 3. Server logs: `make logs`
@@ -1573,6 +1596,7 @@ Or visit `http://localhost:4002` and click "Setup Agency OAuth"
 **Cause**: `VERCEL_URL` not detected or `APP_BASE_URL` not set
 
 **Solution**:
+
 - Ensure Vercel environment variables are set
 - Set `APP_BASE_URL` manually if needed
 - Clear browser cache
@@ -1580,6 +1604,7 @@ Or visit `http://localhost:4002` and click "Setup Agency OAuth"
 #### Environment Variables Not Working
 
 **Solution**:
+
 1. After changing env vars in Vercel, **redeploy**
 2. Go to Deployments → Latest → Redeploy
 3. Or push a new commit
@@ -1591,46 +1616,50 @@ Or visit `http://localhost:4002` and click "Setup Agency OAuth"
 **Cause**: Serverless environment doesn't have writable home directory for npm/npx
 
 **Solution**:
+
 1. ✅ Code has been updated to use local Prisma binary instead of npx
 2. Set `SKIP_BUILD_MIGRATIONS=true` in Vercel environment variables
 3. Rebuild and redeploy
 4. After deployment, run migrations via endpoint:
-   ```bash
+  ```bash
    curl -X POST https://your-app.vercel.app/api/migrate \
      -H "x-vercel-migrate-secret: your-secret"
-   ```
+  ```
 
 **Error 2**: `Can't reach database server at db.prisma.io:5432`
 
 **Cause**: `DATABASE_URL` environment variable is not set or using placeholder value
 
 **Solution**:
+
 1. Check Vercel → Settings → Environment Variables
 2. If using Vercel Postgres: Ensure database is linked to project (auto-injects `DATABASE_URL` and `POSTGRES_URL`)
 3. If using external database: Set `DATABASE_URL` and `POSTGRES_URL` manually
 4. Redeploy after adding environment variables (Vercel → Deployments → Redeploy)
 5. Verify connection string format:
-   ```
+  ```
    postgresql://user:password@host:5432/dbname?schema=public
-   ```
+  ```
 
 **Error 3**: Migration timeout or hanging
 
 **Cause**: Database connection slow or migrations taking too long
 
 **Solution**:
+
 1. Check database is accessible from Vercel (firewall/IP restrictions)
 2. Increase timeout in `vercel.json` (already set to 60s for migrate endpoint)
 3. Or run migrations manually via database client:
-   ```bash
+  ```bash
    DATABASE_URL="your_url" npx prisma migrate deploy
-   ```
+  ```
 
 **Error 4**: Database connection timeout in serverless
 
 **Cause**: Connection pool exhaustion or cold start timeout
 
 **Solution**:
+
 1. Ensure using pooled connection (`POSTGRES_PRISMA_URL` for Vercel Postgres)
 2. Add connection pooling params for external databases
 3. Check Prisma Client singleton pattern is working
@@ -1851,6 +1880,7 @@ The widget builds dashboard URLs dynamically based on `data-location`:
 ## Support
 
 For issues or questions:
+
 1. Check this README
 2. Review server logs: `make logs`
 3. Check browser console for errors (F12)

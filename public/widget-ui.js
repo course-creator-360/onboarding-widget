@@ -624,42 +624,18 @@
       header.style.display = 'none';
       calendarContent.innerHTML = '';
 
-      var backBtn = document.createElement('button');
-      backBtn.innerHTML = '← Back';
-      backBtn.style.cssText = 'position:sticky;top:0;left:0;background:#f3f4f6;border:none;padding:8px 16px;border-radius:6px;font-size:0.9rem;color:#374151;cursor:pointer;transition:all 0.2s;z-index:10;margin:16px;';
-      backBtn.onmouseover = function() { backBtn.style.background = '#e5e7eb'; };
-      backBtn.onmouseout = function() { backBtn.style.background = '#f3f4f6'; };
-      backBtn.onclick = function() {
-        calendarContent.style.display = 'none';
-        initialContent.style.display = 'block';
-        header.style.display = 'block';
-      };
-      calendarContent.appendChild(backBtn);
+      var now = new Date();
+      var mtHourStr = now.toLocaleString('en-US', { hour: '2-digit', hour12: false, timeZone: 'America/Denver' });
+      var mtHour = parseInt(mtHourStr, 10);
+      var mtDayStr = now.toLocaleString('en-US', { weekday: 'short', timeZone: 'America/Denver' });
+      var isWeekday = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].indexOf(mtDayStr) !== -1;
+      var isBusinessHours = isWeekday && mtHour >= 9 && mtHour < 17;
 
-      var iframe = document.createElement('iframe');
-      iframe.src = 'https://link.mycrmsupport.com/widget/booking/jQxt2PWaO7YlA2Hvn1zx?agency_name=CourseCreator360&agency_owner_email=support@coursecreator360.com&relationship_id=0-040-232';
-      iframe.style.cssText = 'width:100%;height:calc(85vh - 60px);border:none;';
-      calendarContent.appendChild(iframe);
-
-      var embedScript = document.createElement('script');
-      embedScript.src = 'https://link.mycrmsupport.com/js/form_embed.js';
-      calendarContent.appendChild(embedScript);
-
-      bookingOverlay._calendarShown = true;
-
-      function onCalendarMessage(e) {
-        if (!e.origin || e.origin.indexOf('mycrmsupport.com') === -1) return;
-        var msg = typeof e.data === 'string' ? e.data : JSON.stringify(e.data || '');
-        if (/scheduled|confirmed|appointment.*booked|formSubmit/i.test(msg)) {
-          window.removeEventListener('message', onCalendarMessage);
-          bookingOverlay.remove();
-          window.CC360Widget.initializeChecklist();
-        }
+      if (isBusinessHours) {
+        window.CC360Widget.loadSlotPicker(calendarContent, bookingOverlay);
+      } else {
+        window.CC360Widget.showExtendlyIframe(calendarContent, bookingOverlay);
       }
-      window.addEventListener('message', onCalendarMessage);
-      bookingOverlay._cleanupMessageListener = function() {
-        window.removeEventListener('message', onCalendarMessage);
-      };
     };
     
     const skipBtn = document.createElement('button');
@@ -701,7 +677,53 @@
   };
 
   // ---------------------------------------------------------------------------
-  // Native slot-picker for booking (replaces the old iframe approach)
+  // Extendly iframe calendar (after-hours / overflow fallback)
+  // ---------------------------------------------------------------------------
+  window.CC360Widget.showExtendlyIframe = function(container, bookingOverlay) {
+    container.innerHTML = '';
+
+    var backBtn = document.createElement('button');
+    backBtn.innerHTML = '← Back';
+    backBtn.style.cssText = 'position:sticky;top:0;left:0;background:#f3f4f6;border:none;padding:8px 16px;border-radius:6px;font-size:0.9rem;color:#374151;cursor:pointer;transition:all 0.2s;z-index:10;margin:16px;';
+    backBtn.onmouseover = function() { backBtn.style.background = '#e5e7eb'; };
+    backBtn.onmouseout = function() { backBtn.style.background = '#f3f4f6'; };
+    backBtn.onclick = function() {
+      container.style.display = 'none';
+      var init = document.getElementById('cc360-booking-initial');
+      var hdr = container.parentElement.querySelector('div[style*="border-bottom"]');
+      if (init) init.style.display = 'block';
+      if (hdr) hdr.style.display = 'block';
+    };
+    container.appendChild(backBtn);
+
+    var iframe = document.createElement('iframe');
+    iframe.src = 'https://link.mycrmsupport.com/widget/booking/jQxt2PWaO7YlA2Hvn1zx?agency_name=CourseCreator360&agency_owner_email=support@coursecreator360.com&relationship_id=0-040-232';
+    iframe.style.cssText = 'width:100%;height:calc(85vh - 60px);border:none;';
+    container.appendChild(iframe);
+
+    var embedScript = document.createElement('script');
+    embedScript.src = 'https://link.mycrmsupport.com/js/form_embed.js';
+    container.appendChild(embedScript);
+
+    bookingOverlay._calendarShown = true;
+
+    function onCalendarMessage(e) {
+      if (!e.origin || e.origin.indexOf('mycrmsupport.com') === -1) return;
+      var msg = typeof e.data === 'string' ? e.data : JSON.stringify(e.data || '');
+      if (/scheduled|confirmed|appointment.*booked|formSubmit/i.test(msg)) {
+        window.removeEventListener('message', onCalendarMessage);
+        bookingOverlay.remove();
+        window.CC360Widget.initializeChecklist();
+      }
+    }
+    window.addEventListener('message', onCalendarMessage);
+    bookingOverlay._cleanupMessageListener = function() {
+      window.removeEventListener('message', onCalendarMessage);
+    };
+  };
+
+  // ---------------------------------------------------------------------------
+  // Native slot-picker for booking (internal reps, business hours)
   // ---------------------------------------------------------------------------
   window.CC360Widget.loadSlotPicker = async function(container, bookingOverlay) {
     const state = window.CC360Widget.state;
@@ -766,7 +788,6 @@
           endDate: fmtDate(twoWeeksOut),
           timezone: tz
         });
-        qs.set('overflow', '1');
         const resp = await fetch(`${state.apiBase}/api/booking/slots?${qs}`);
         const data = await resp.json();
         const slots = data.slots || data;
@@ -798,9 +819,24 @@
 
       const dateKeys = Object.keys(slots).sort();
       if (!dateKeys.length) {
-        const empty = document.createElement('p');
-        empty.textContent = 'No available slots in this period.';
-        empty.style.cssText = 'text-align:center;color:#9ca3af;font-size:0.875rem;padding:16px 0;';
+        const empty = document.createElement('div');
+        empty.style.cssText = 'text-align:center;padding:16px 0;';
+
+        const emptyMsg = document.createElement('p');
+        emptyMsg.textContent = 'No available slots with our internal team in this period.';
+        emptyMsg.style.cssText = 'color:#9ca3af;font-size:0.875rem;margin-bottom:16px;';
+        empty.appendChild(emptyMsg);
+
+        const extendlyBtn = document.createElement('button');
+        extendlyBtn.textContent = 'Book with our extended team instead';
+        extendlyBtn.style.cssText = 'padding:12px 24px;font-size:0.875rem;font-weight:600;background:linear-gradient(135deg,#0E325E,#0475FF);color:#fff;border:none;border-radius:8px;cursor:pointer;transition:all 0.2s;box-shadow:0 4px 14px rgba(4,117,255,0.3);';
+        extendlyBtn.onmouseover = () => { extendlyBtn.style.transform = 'translateY(-1px)'; extendlyBtn.style.boxShadow = '0 6px 18px rgba(4,117,255,0.4)'; };
+        extendlyBtn.onmouseout = () => { extendlyBtn.style.transform = 'translateY(0)'; extendlyBtn.style.boxShadow = '0 4px 14px rgba(4,117,255,0.3)'; };
+        extendlyBtn.onclick = () => {
+          window.CC360Widget.showExtendlyIframe(container, bookingOverlay);
+        };
+        empty.appendChild(extendlyBtn);
+
         slotsWrap.appendChild(empty);
         return;
       }

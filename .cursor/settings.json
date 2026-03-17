@@ -25,7 +25,7 @@
       "enabled": false
     },
     "notion-workspace": {
-      "enabled": false
+      "enabled": true
     },
     "posthog": {
       "enabled": false
