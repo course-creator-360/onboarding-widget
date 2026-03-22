@@ -105,6 +105,7 @@ Extendly bookings fire webhooks to `cc360-customers-admin`, which detects the Ex
 - [Architecture & Performance](#architecture--performance)
 - [Troubleshooting](#troubleshooting)
 - [Development](#development)
+- [Speed Insights Setup](#speed-insights-setup)
 
 ---
 
@@ -1848,6 +1849,19 @@ The widget builds dashboard URLs dynamically based on `data-location`:
 - **Connect Payments** → `https://app.coursecreator360.com/v2/location/{locationId}/payments/integrations`
 - **Create a Course** → `https://app.coursecreator360.com/v2/location/{locationId}/memberships/courses/products-v2`
 - **Connect a Domain** → `https://app.coursecreator360.com/v2/location/{locationId}/settings/domain`
+
+---
+
+## Speed Insights Setup
+
+For monitoring and optimizing your application's performance with Vercel Speed Insights, see the comprehensive guide in [SPEED_INSIGHTS.md](./SPEED_INSIGHTS.md).
+
+This guide covers:
+- How to enable Speed Insights in Vercel
+- Installing the `@vercel/speed-insights` package
+- Integrating Speed Insights into your frontend application
+- Deploying to Vercel and viewing performance metrics
+- Framework-specific instructions (Next.js, React, Node.js, and more)
 
 ---
 
